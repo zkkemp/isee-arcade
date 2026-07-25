@@ -1,15 +1,16 @@
 /**
- * Structural validation of the question bank.
+ * Structural validation of the fixed-text question bank.
  *
- * Cannot catch a wrong answer key (that needs a human or a second model), but it
- * does catch every mechanical failure: duplicate ids, a 3-choice question, an
- * `answer` pointing past the end of `choices`, a reading question that lost its
- * passage, smart quotes that render as mojibake on iOS.
+ * Cannot catch a wrong answer key (that needs a human), but it does catch every
+ * mechanical failure: duplicate ids, a 3-choice question, an `answer` pointing
+ * past the end of `choices`, a reading question that lost its passage, smart
+ * quotes that render as mojibake on iOS, and — since the vocabulary was written
+ * by six independent authors — the same target word defined twice.
  *
- * The bank files are pure data, so they're evaluated by stripping the type-only
- * import and the annotation rather than compiling the whole project.
+ * Templated math lives in scripts/check-logic.ts instead, because it has to be
+ * executed rather than read.
  *
- * Run: node scripts/check-questions.mjs
+ * Run: npm run check:questions
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -20,9 +21,13 @@ const BANK_DIR = join(HERE, '..', 'lib', 'questions');
 
 const FILES = [
   { file: 'verbal.ts', subject: 'verbal', prefix: 'vb', kinds: ['synonym', 'sentence_completion'] },
-  { file: 'quantitative.ts', subject: 'quantitative', prefix: 'qr', kinds: ['quant_reasoning'] },
-  { file: 'math.ts', subject: 'math', prefix: 'ma', kinds: ['math_achievement'] },
   { file: 'reading.ts', subject: 'reading', prefix: 'rc', kinds: ['reading'] },
+  { file: 'vocab/ab.ts', subject: 'verbal', prefix: 'vc-ab', kinds: ['synonym'] },
+  { file: 'vocab/cd.ts', subject: 'verbal', prefix: 'vc-cd', kinds: ['synonym'] },
+  { file: 'vocab/eh.ts', subject: 'verbal', prefix: 'vc-eh', kinds: ['synonym'] },
+  { file: 'vocab/im.ts', subject: 'verbal', prefix: 'vc-im', kinds: ['synonym'] },
+  { file: 'vocab/nr.ts', subject: 'verbal', prefix: 'vc-nr', kinds: ['synonym'] },
+  { file: 'vocab/sz.ts', subject: 'verbal', prefix: 'vc-sz', kinds: ['synonym'] },
 ];
 
 function loadBank(file) {
@@ -35,6 +40,8 @@ function loadBank(file) {
 const errors = [];
 const warnings = [];
 const seenIds = new Set();
+/** Synonym target word -> where it was first defined, for cross-file dupes. */
+const seenWords = new Map();
 let total = 0;
 const answerTally = [0, 0, 0, 0];
 
@@ -53,7 +60,7 @@ for (const spec of FILES) {
   }
 
   const fileTally = [0, 0, 0, 0];
-  const passageWords = new Map();
+  const passageTexts = new Map();
 
   bank.forEach((q, i) => {
     const at = `${spec.file}[${i}] (${q?.id ?? 'no id'})`;
@@ -64,14 +71,12 @@ for (const spec of FILES) {
       return;
     }
 
-    // Identity
     if (typeof q.id !== 'string' || !q.id.startsWith(`${spec.prefix}-`)) {
       errors.push(`${at}: id must start with "${spec.prefix}-"`);
     }
     if (seenIds.has(q.id)) errors.push(`${at}: duplicate id`);
     seenIds.add(q.id);
 
-    // Taxonomy
     if (q.subject !== spec.subject) {
       errors.push(`${at}: subject is "${q.subject}", expected "${spec.subject}"`);
     }
@@ -79,7 +84,6 @@ for (const spec of FILES) {
       errors.push(`${at}: kind "${q.kind}" not one of ${spec.kinds.join(', ')}`);
     }
 
-    // Prompt + explanation
     if (typeof q.prompt !== 'string' || q.prompt.trim().length < 2) {
       errors.push(`${at}: prompt missing or too short`);
     }
@@ -87,7 +91,16 @@ for (const spec of FILES) {
       errors.push(`${at}: explain missing or too short`);
     }
 
-    // Choices + answer key
+    // Six authors wrote the vocabulary independently. The same word defined
+    // twice means one of them silently wasted a slot, and she would see it as
+    // a repeat.
+    if (q.kind === 'synonym' && typeof q.prompt === 'string') {
+      const word = q.prompt.trim().toUpperCase();
+      const prior = seenWords.get(word);
+      if (prior) errors.push(`${at}: target word "${word}" already defined in ${prior}`);
+      else seenWords.set(word, spec.file);
+    }
+
     if (!Array.isArray(q.choices) || q.choices.length !== 4) {
       errors.push(`${at}: needs exactly 4 choices, has ${q.choices?.length}`);
     } else {
@@ -108,23 +121,21 @@ for (const spec of FILES) {
       answerTally[q.answer] += 1;
     }
 
-    // Difficulty
     if (![1, 2, 3].includes(q.difficulty)) {
       errors.push(`${at}: difficulty must be 1, 2, or 3 — got ${q.difficulty}`);
     }
 
-    // Passage rules
     if (spec.subject === 'reading') {
       if (typeof q.passage !== 'string' || q.passage.trim().length < 100) {
         errors.push(`${at}: reading question needs a passage`);
       } else {
         const words = q.passage.trim().split(/\s+/).length;
         if (words > 130) warnings.push(`${at}: passage is ${words} words (target <= 120)`);
-        const prev = passageWords.get(q.passageId);
+        const prev = passageTexts.get(q.passageId);
         if (prev !== undefined && prev !== q.passage) {
           errors.push(`${at}: passageId "${q.passageId}" has two different passage texts`);
         }
-        passageWords.set(q.passageId, q.passage);
+        passageTexts.set(q.passageId, q.passage);
       }
       if (typeof q.passageId !== 'string' || q.passageId === '') {
         errors.push(`${at}: reading question needs a passageId`);
@@ -144,19 +155,22 @@ for (const spec of FILES) {
   const pcts = fileTally.map((n) => Math.round((n / bank.length) * 100));
   const skewed = pcts.some((p) => p > 40);
   console.log(
-    `${spec.file.padEnd(18)} ${String(bank.length).padStart(3)} questions   ` +
+    `${spec.file.padEnd(16)} ${String(bank.length).padStart(3)} questions   ` +
       `answer spread ${pcts.map((p) => `${p}%`).join(' / ')}${skewed ? '  <- skewed' : ''}`,
   );
   if (skewed) {
     warnings.push(`${spec.file}: answer index distribution is skewed (${pcts.join('/')})`);
   }
   if (spec.subject === 'reading') {
-    console.log(`${''.padEnd(18)} ${passageWords.size} distinct passages`);
+    console.log(`${''.padEnd(16)} ${passageTexts.size} distinct passages`);
   }
 }
 
-console.log(`\ntotal: ${total} questions`);
-console.log(`overall answer spread: ${answerTally.map((n) => Math.round((n / total) * 100) + '%').join(' / ')}`);
+console.log(`\ntotal fixed-text questions: ${total}`);
+console.log(`distinct vocabulary words: ${seenWords.size}`);
+console.log(
+  `overall answer spread: ${answerTally.map((n) => Math.round((n / total) * 100) + '%').join(' / ')}`,
+);
 
 if (warnings.length) {
   console.log(`\n${warnings.length} warning(s):`);
@@ -165,7 +179,8 @@ if (warnings.length) {
 
 if (errors.length) {
   console.error(`\n${errors.length} ERROR(S):`);
-  for (const e of errors) console.error(`  x ${e}`);
+  for (const e of errors.slice(0, 40)) console.error(`  x ${e}`);
+  if (errors.length > 40) console.error(`  … and ${errors.length - 40} more`);
   process.exit(1);
 }
 

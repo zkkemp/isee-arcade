@@ -16,6 +16,11 @@ export type Question = {
   passage?: string;
   /** Groups questions that share a passage so we don't repeat one in a session. */
   passageId?: string;
+  /**
+   * Family label for templated questions, e.g. "add unlike fractions". Used to
+   * serve a retry of the same shape after a wrong answer.
+   */
+  topic?: string;
   prompt: string;
   /** Exactly four choices. */
   choices: [string, string, string, string];

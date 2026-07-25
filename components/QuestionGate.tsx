@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Question } from '@/lib/questions/types';
 import { SUBJECT_LABELS } from '@/lib/questions/types';
 
-/** Seconds the Continue button stays locked after a wrong answer. */
-const EXPLAIN_LOCK_SECONDS = 4;
+/** Seconds the advance button stays locked after a wrong answer. */
+const EXPLAIN_LOCK_SECONDS = 3;
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const;
 
@@ -18,20 +18,24 @@ const SUBJECT_COLORS: Record<Question['subject'], string> = {
 
 export type QuestionGateProps = {
   question: Question;
-  /** Why the gate opened, e.g. "Level 2 clear". */
-  label: string;
-  /** Points awarded for a correct answer, shown in the reward line. */
+  /** Why play stopped, e.g. "You got squashed" or "Bank 2 reached". */
+  headline: string;
+  /** What happens next, e.g. "Answer one question to get back in." */
+  subhead: string;
   reward: number;
-  /** True when a correct answer will hand back a life. */
-  grantsLife: boolean;
   onAnswered: (correct: boolean) => void;
 };
 
+/**
+ * Takes the whole screen rather than sitting inside the game box: reading
+ * passages need the room, and on a phone a modal inside a short canvas is
+ * unreadable.
+ */
 export default function QuestionGate({
   question,
-  label,
+  headline,
+  subhead,
   reward,
-  grantsLife,
   onAnswered,
 }: QuestionGateProps) {
   const [picked, setPicked] = useState<number | null>(null);
@@ -45,8 +49,8 @@ export default function QuestionGate({
     (i: number) => {
       if (picked !== null) return;
       setPicked(i);
-      // A wrong answer holds the explanation on screen. This is the whole point of
-      // the app: you do not get to button-mash past the thing you just missed.
+      // A wrong answer holds the explanation on screen. There is no skipping it,
+      // and the next question will be the same kind.
       if (i !== question.answer) setLock(EXPLAIN_LOCK_SECONDS);
     },
     [picked, question.answer],
@@ -58,9 +62,9 @@ export default function QuestionGate({
     return () => clearTimeout(t);
   }, [lock]);
 
-  const canContinue = answered && lock <= 0;
+  const canAdvance = answered && lock <= 0;
 
-  // Keyboard play: 1-4 or A-D to answer, Enter to continue.
+  // Keyboard play: 1-4 or A-D to answer, Enter to advance.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!answered) {
@@ -77,63 +81,67 @@ export default function QuestionGate({
         }
         return;
       }
-      if (e.key === 'Enter' && canContinue) {
+      if (e.key === 'Enter' && canAdvance) {
         e.preventDefault();
         onAnswered(correct);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [answered, canContinue, choose, correct, onAnswered]);
+  }, [answered, canAdvance, choose, correct, onAnswered]);
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm">
-      <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#141425] shadow-2xl">
-        {/* Header */}
-        <div
-          className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3"
-          style={{ background: `linear-gradient(90deg, ${accent}22, transparent)` }}
-        >
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#0b0b16]/97 backdrop-blur-md">
+      {/* Header */}
+      <div
+        className="flex-shrink-0 border-b border-white/10 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3"
+        style={{ background: `linear-gradient(180deg, ${accent}22, transparent)` }}
+      >
+        <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3">
           <div className="min-w-0">
+            <div className="truncate text-base font-bold text-white">{headline}</div>
+            <div className="truncate text-xs text-white/50">{subhead}</div>
+          </div>
+          <div className="flex-shrink-0 text-right">
             <div
-              className="text-[11px] font-bold uppercase tracking-widest"
+              className="text-[10px] font-bold uppercase tracking-widest"
               style={{ color: accent }}
             >
               {SUBJECT_LABELS[question.subject]}
             </div>
-            <div className="truncate text-xs text-white/50">{label}</div>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-1">
-            {[1, 2, 3].map((d) => (
-              <span
-                key={d}
-                title={`Difficulty ${question.difficulty} of 3`}
-                className="h-2 w-4 rounded-full"
-                style={{
-                  background: d <= question.difficulty ? accent : 'rgba(255,255,255,0.15)',
-                }}
-              />
-            ))}
+            <div className="mt-1 flex justify-end gap-1">
+              {[1, 2, 3].map((d) => (
+                <span
+                  key={d}
+                  className="h-1.5 w-4 rounded-full"
+                  style={{
+                    background: d <= question.difficulty ? accent : 'rgba(255,255,255,0.18)',
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      {/* Body */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="mx-auto w-full max-w-2xl">
           {question.passage && (
-            <p className="mb-4 whitespace-pre-line rounded-xl border border-white/10 bg-black/30 p-3 text-[15px] leading-relaxed text-white/80">
+            <p className="mb-4 whitespace-pre-line rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-[16px] leading-relaxed text-white/80">
               {question.passage}
             </p>
           )}
 
-          <p className="mb-4 text-lg font-semibold leading-snug text-white">{question.prompt}</p>
+          <p className="mb-4 text-xl font-semibold leading-snug text-white">{question.prompt}</p>
 
-          <div className="grid gap-2">
+          <div className="grid gap-2.5">
             {question.choices.map((choice, i) => {
               const isAnswer = i === question.answer;
               const isPicked = i === picked;
 
               let cls =
-                'border-white/15 bg-white/5 text-white/90 active:scale-[0.99] hover:border-white/30 hover:bg-white/10';
+                'border-white/15 bg-white/[0.06] text-white/90 active:scale-[0.99] hover:border-white/30 hover:bg-white/[0.1]';
               if (answered) {
                 if (isAnswer) cls = 'border-emerald-400/70 bg-emerald-400/15 text-emerald-100';
                 else if (isPicked) cls = 'border-rose-400/70 bg-rose-400/15 text-rose-100';
@@ -146,14 +154,14 @@ export default function QuestionGate({
                   type="button"
                   onClick={() => choose(i)}
                   disabled={answered}
-                  className={`flex items-start gap-3 rounded-xl border px-3 py-3 text-left text-[15px] leading-snug transition ${cls}`}
+                  className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left text-[17px] leading-snug transition ${cls}`}
                 >
-                  <span className="mt-[1px] flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border border-current text-xs font-bold opacity-80">
+                  <span className="mt-[2px] flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl border border-current text-xs font-bold opacity-75">
                     {LETTERS[i]}
                   </span>
                   <span className="flex-1">{choice}</span>
-                  {answered && isAnswer && <span className="text-sm">✓</span>}
-                  {answered && isPicked && !isAnswer && <span className="text-sm">✕</span>}
+                  {answered && isAnswer && <span className="text-base">✓</span>}
+                  {answered && isPicked && !isAnswer && <span className="text-base">✕</span>}
                 </button>
               );
             })}
@@ -161,7 +169,7 @@ export default function QuestionGate({
 
           {answered && (
             <div
-              className={`mt-4 rounded-xl border p-3 ${
+              className={`mt-4 rounded-2xl border p-4 ${
                 correct
                   ? 'border-emerald-400/40 bg-emerald-400/10'
                   : 'border-amber-400/40 bg-amber-400/10'
@@ -174,29 +182,36 @@ export default function QuestionGate({
               >
                 {correct ? 'Correct!' : 'Not quite — here is why'}
               </div>
-              <p className="text-[15px] leading-relaxed text-white/85">{question.explain}</p>
-              {correct && (
-                <p className="mt-2 text-xs font-semibold text-emerald-200/90">
-                  +{reward} points{grantsLife ? ' and an extra life' : ''}
+              <p className="text-[16px] leading-relaxed text-white/85">{question.explain}</p>
+              {correct ? (
+                <p className="mt-2 text-xs font-semibold text-emerald-200/90">+{reward} points</p>
+              ) : (
+                <p className="mt-2 text-xs font-semibold text-amber-200/90">
+                  You will get another one like this.
                 </p>
               )}
             </div>
           )}
         </div>
+      </div>
 
-        {/* Footer */}
-        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
-          <span className="text-xs text-white/40">
-            {answered ? 'Read the explanation, then keep playing.' : 'Answer to keep playing.'}
-          </span>
+      {/* Footer */}
+      <div className="flex-shrink-0 border-t border-white/10 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto w-full max-w-2xl">
           <button
             type="button"
             onClick={() => onAnswered(correct)}
-            disabled={!canContinue}
-            className="rounded-xl px-5 py-2.5 text-sm font-bold text-[#101020] transition disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ background: canContinue ? accent : 'rgba(255,255,255,0.25)' }}
+            disabled={!canAdvance}
+            className="w-full rounded-2xl px-5 py-4 text-base font-bold text-[#101020] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ background: canAdvance ? accent : 'rgba(255,255,255,0.22)' }}
           >
-            {!answered ? 'Pick an answer' : lock > 0 ? `Continue in ${lock}` : 'Continue'}
+            {!answered
+              ? 'Pick an answer'
+              : lock > 0
+                ? `Read the explanation… ${lock}`
+                : correct
+                  ? 'Keep playing'
+                  : 'Next question'}
           </button>
         </div>
       </div>

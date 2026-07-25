@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { GAME_LIST } from '@/lib/games';
-import { QUESTIONS_BY_ID } from '@/lib/questions';
+import { questionById } from '@/lib/questions';
 import { SUBJECT_LABELS, type Subject } from '@/lib/questions/types';
 import {
   accuracy,
@@ -130,7 +130,7 @@ export default function ProgressPage() {
               </p>
               <ul className="mb-6 space-y-2">
                 {reviewIds.slice(0, 12).map((id) => {
-                  const q = QUESTIONS_BY_ID.get(id);
+                  const q = questionById(id);
                   if (!q) return null;
                   return (
                     <li

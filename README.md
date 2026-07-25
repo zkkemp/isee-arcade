@@ -1,8 +1,8 @@
 # ISEE Arcade
 
-Three arcade games that stop mid-play and make you answer an ISEE question before
-you can keep going. Built for **ISEE Lower Level** (the level taken by students in
-grades 4–5 applying for grade 5–6 admission).
+Three arcade games with real sprite art that stop **when you die or clear a level**
+and make you answer an ISEE question before you carry on. Built for **ISEE Lower
+Level** (taken by students in grades 4–5 applying for grade 5–6 admission).
 
 ## Running it
 
@@ -45,51 +45,72 @@ keep strangers from stumbling in.
 
 ## How the study gate works
 
-The games are real games — you can lose. The learning is wired into the reward
-loop rather than bolted on:
+The games are real games and you can lose. The learning is wired into the reward
+loop rather than interrupting play:
 
 | Event | Behavior |
 | --- | --- |
-| Gate trigger | Road Hopper: each bank reached. Byte Snake: every 5 snacks. Coin Runner: every 10 coins + each flag. |
-| Correct answer | +50 points and an extra life (up to 2 above the game's starting lives). |
-| Wrong answer | The explanation appears and **Continue stays locked for 4 seconds**. You cannot button-mash past a question you just missed. |
-| Last life lost | A question appears instead of Game Over. Get it right and you're back in; get it wrong and the run ends. |
-| Missed questions | Go into a review pool and resurface in later sessions until answered correctly. |
+| **Never mid-play** | A question never breaks up a run. Play is uninterrupted. |
+| Death | A question appears instead of Game Over. |
+| Level cleared | A question before the next level. |
+| Correct | +50 points, straight back into the game. |
+| **Wrong** | You get **another question of the same kind**, and another, until you get one right. A missed reading passage means another reading passage. A missed fraction question means the same kind of fraction question with different numbers. |
+| Runs | Never truly end. Answering is how you get back in, so she stops when she wants to. |
 
-Two other things run quietly in the background:
+Two things run quietly in the background:
 
-- **Adaptive difficulty** — recent accuracy above 85% pulls harder questions; below
+- **Adaptive difficulty** - recent accuracy above 85% pulls harder questions; below
   50% eases off.
-- **Spaced repetition** — roughly a third of gates draw from the review pool of
+- **Spaced repetition** - roughly a third of gates draw from the pool of
   previously missed questions.
 
 Progress is stored in `localStorage` on the device. There is no account, no server,
 and no data leaves the device. `/progress` shows accuracy by subject, the review
-pool, and high scores — that page is meant for a parent to glance at.
+pool, and high scores - that page is for a parent to glance at.
 
 ## Question bank
 
-220 hand-written questions in `lib/questions/`:
+Two kinds of question, because they need different treatment.
+
+**Fixed text** (620 questions) - a synonym cannot be parameterized:
 
 | File | Count | Contents |
 | --- | --- | --- |
+| `vocab/{ab,cd,eh,im,nr,sz}.ts` | 510 | Synonyms, partitioned by first letter |
 | `verbal.ts` | 70 | 40 synonyms + 30 sentence completions |
-| `quantitative.ts` | 55 | Quantitative Reasoning — patterns, estimation, probability, logic |
-| `math.ts` | 55 | Math Achievement — fractions, decimals, percents, geometry, measurement |
 | `reading.ts` | 40 | 20 short passages, 2 questions each |
+
+550 distinct vocabulary words in total.
+
+**Templates** (70 families) - math and quantitative reasoning **regenerate their
+numbers every single time**:
+
+| File | Count | Contents |
+| --- | --- | --- |
+| `mathTemplates.ts` | 40 | Math Achievement - fractions, decimals, percents, geometry, measurement |
+| `quantTemplates.ts` | 30 | Quantitative Reasoning - patterns, estimation, probability, ratios |
+
+This is the point: seeing `1/3 + 1/6` enough times makes the answer recall rather
+than arithmetic. A template keeps the shape and rebuilds the numbers, so the work
+has to be done again. It also makes the wrong-answer retry meaningful - you get the
+same shape with new numbers rather than a second crack at the same values.
+
+A generated instance carries its **template's** id, so the review pool tracks the
+family rather than one instance.
 
 ### Adding questions
 
-Append to the relevant file following the `Question` type in
-`lib/questions/types.ts`, then run:
+Fixed text: append to the relevant file following the `Question` type in
+`lib/questions/types.ts`. Templates: add a `QuestionTemplate` using the helpers in
+`lib/questions/templates.ts` (`randInt`, `pick`, `buildChoices`, `frac`, `money`).
+Then:
 
 ```bash
-npm run check:questions
+npm run check
 ```
 
-That validates ids, choice counts, answer-key ranges, duplicate choices, passage
-integrity, non-ASCII characters, and answer-index distribution. It **cannot** tell
-you that an answer key is factually wrong — check new questions by hand.
+Neither check can tell you an answer key is factually wrong - verify new questions
+by hand.
 
 ## Scripts
 
@@ -102,10 +123,18 @@ you that an answer key is factually wrong — check new questions by hand.
 | `npm run check:logic` | Level geometry, question picker, progress bookkeeping |
 | `npm run icons` | Regenerate PWA icons from `scripts/make-icons.mjs` |
 
-`check:logic` is the one worth knowing about: Coin Runner's levels are generated
-procedurally, so it validates 30 levels for unjumpable pits, coins embedded in
-walls, enemies standing over holes, and an unreachable flag — failures that would
-make a level unwinnable and that no type check would catch.
+`check:logic` is the one worth knowing about. It executes things that cannot be
+verified by reading them:
+
+- **Level geometry** - 30 generated levels checked for unjumpable pits, coins
+  embedded in walls, enemies standing over holes, and unreachable flags. Any of
+  those makes a level unwinnable, and no type check would catch it.
+- **Every template x 300 seeds** - asserts the generator never throws, the four
+  choices are distinct *as values* (so `1/7` and `2/14` can't both be offered),
+  the marked answer is the computed one, the explanation references the generated
+  numbers, and regenerating actually changes them.
+- **The retry path** - a wrong answer must lead to the same kind of question, and
+  a templated retry must produce different numbers.
 
 ## Layout
 
@@ -115,25 +144,47 @@ app/
   play/[game]/        one route per game
   progress/           parent-facing progress view
 components/
-  GameShell.tsx       score, lives, gating, HUD — owns everything but the canvas
-  QuestionGate.tsx    the interrupt modal
-  TouchControls.tsx   on-screen d-pad / run-jump buttons
+  GameShell.tsx       score, gating, HUD - owns everything but the canvas
+  QuestionGate.tsx    the full-screen question view
+  TouchOverlay.tsx    touch zones layered over the canvas
+  PasscodeGate.tsx    optional passcode wrapper
   games/              Frogger.tsx, Snake.tsx, Platformer.tsx
 lib/
-  questions/          the bank + adaptive picker
+  questions/          fixed bank, templates, adaptive picker
+  sprites.ts          atlas loading + frame drawing
   progress.ts         localStorage, streaks, spaced-repetition bookkeeping
   platformerLevel.ts  procedural level generation (pure, so it can be validated)
   useCanvasGame.ts    retina canvas + delta-timed loop that pauses on a gate
   input.ts            one input surface for keyboard and touch
+public/assets/sprites/  Kenney atlases (CC0) + frame maps
 ```
 
-Games are deliberately dumb about scoring: they call `api.addScore`,
-`api.lifeLost`, and `api.requestGate`, and `GameShell` owns the rest. Adding a
-fourth game means writing one canvas component and adding an entry to
-`lib/games.ts`.
+Games are deliberately dumb about scoring: they call `api.addScore`, `api.died`,
+and `api.requestGate`, and `GameShell` owns the rest. Adding a fourth game means
+writing one canvas component and adding an entry to `lib/games.ts`.
 
 ## Controls
 
-Arrow keys or WASD; Space to jump in Coin Runner; `1`–`4` or `A`–`D` to answer a
-question, Enter to continue. On touch devices the on-screen controls appear
-automatically.
+**Touch** - controls sit on top of the game, not in a small pad underneath:
+
+- *Coin Runner*: hold the arrows in the bottom-left to run; **tap anywhere on the
+  right half of the screen to jump**. No aiming for a small target.
+- *Road Hopper / Byte Snake*: **tap the edge of the play area** in the direction you
+  want to move.
+
+**Keyboard** - arrow keys or WASD, Space to jump in Coin Runner. In a question,
+`1`-`4` or `A`-`D` to answer and Enter to advance.
+
+## Art credits
+
+Sprites are from [Kenney](https://kenney.nl), released under
+**CC0 1.0 (public domain)** - no attribution required, but credited anyway because
+it is good work:
+
+- *New Platformer Pack* - terrain, characters, coins, flags, enemies, backgrounds,
+  and the frog and log bridge used by Road Hopper
+- *Racing Pack* - the top-down cars in Road Hopper
+
+Only the frames actually used are committed: four atlas PNGs plus JSON frame maps
+and five car PNGs, about 290 KB total. License texts are alongside them in
+`public/assets/sprites/`.

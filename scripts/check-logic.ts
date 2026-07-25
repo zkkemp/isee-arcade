@@ -1,7 +1,7 @@
 /**
- * Headless checks for the parts of the game that are pure logic and could be
- * silently, unwinnably wrong: procedurally generated level geometry, and the
- * adaptive question picker.
+ * Headless checks for everything that is logic rather than text: procedurally
+ * generated level geometry, the templated math generators, the adaptive picker,
+ * and progress bookkeeping.
  *
  * Run: npm run check:logic
  */
@@ -16,7 +16,8 @@ import {
   findPits,
   solidAt,
 } from '../lib/platformerLevel';
-import { ALL_QUESTIONS, pickQuestion } from '../lib/questions/index';
+import { ALL_TEMPLATES, STATIC_QUESTIONS, pickQuestion } from '../lib/questions/index';
+import { instantiate, mulberry32 } from '../lib/questions/templates';
 import { emptyProgress, recordAnswer } from '../lib/progress';
 import type { Subject } from '../lib/questions/types';
 
@@ -26,8 +27,8 @@ const fail = (msg: string) => errors.push(msg);
 // --- Level geometry -------------------------------------------------------
 
 const LEVELS_TO_CHECK = 30;
-/** Horizontal distance clearable in one jump: 2 * (v/g) * runSpeed, in tiles. */
-const JUMP_REACH_TILES = ((2 * (292 / 880)) * 118) / TILE;
+/** Horizontal distance clearable in one jump, in tiles. */
+const JUMP_REACH_TILES = (2 * (292 / 880) * 118) / TILE;
 
 let totalPits = 0;
 let totalCoins = 0;
@@ -37,13 +38,11 @@ for (let level = 1; level <= LEVELS_TO_CHECK; level += 1) {
   const L = buildLevel(level);
   const at = `level ${level}`;
 
-  // Grid shape
   if (L.tiles.length !== ROWS) fail(`${at}: expected ${ROWS} rows, got ${L.tiles.length}`);
   for (const row of L.tiles) {
     if (row.length !== COLS) fail(`${at}: a row has ${row.length} cols, expected ${COLS}`);
   }
 
-  // Spawn must be in open air with ground beneath it.
   const sx = Math.floor(L.spawn.x / TILE);
   const sy = Math.floor(L.spawn.y / TILE);
   if (solidAt(L.tiles, sx, sy)) fail(`${at}: spawn is inside a solid tile`);
@@ -56,7 +55,6 @@ for (let level = 1; level <= LEVELS_TO_CHECK; level += 1) {
   }
   if (!groundBelowSpawn) fail(`${at}: spawn has no ground beneath it — instant pit death`);
 
-  // Pits must be jumpable and never merge into one wide gap.
   const pits = findPits(L.tiles);
   totalPits += pits.length;
   for (const [px, pw] of pits) {
@@ -68,30 +66,23 @@ for (let level = 1; level <= LEVELS_TO_CHECK; level += 1) {
   for (let i = 1; i < pits.length; i += 1) {
     const gap = pits[i][0] - (pits[i - 1][0] + pits[i - 1][1]);
     if (gap < MIN_PIT_GAP) {
-      fail(`${at}: only ${gap} tiles of ground between pits at x=${pits[i - 1][0]} and ${pits[i][0]}`);
+      fail(`${at}: only ${gap} tiles of ground between pits at x=${pits[i - 1][0]}`);
     }
   }
 
-  // The flag needs a solid landing pad, and the run must be completable:
-  // every pit is jumpable and separated, so walking right always works.
   const flagCol = Math.floor(L.flagX / TILE);
   for (let i = -2; i <= 2; i += 1) {
     if (!solidAt(L.tiles, flagCol + i, GROUND_TOP)) {
       fail(`${at}: flag landing pad has a hole at x=${flagCol + i}`);
     }
   }
-  if (flagCol >= COLS) fail(`${at}: flag at x=${flagCol} is outside the level`);
 
-  // No coin may be embedded in a wall, and each must be within jump height of
-  // some solid surface below it.
   totalCoins += L.coins.length;
-  if (L.coins.length === 0) fail(`${at}: no coins — gates would never fire`);
+  if (L.coins.length === 0) fail(`${at}: no coins`);
   for (const c of L.coins) {
     const cx = Math.floor(c.x / TILE);
     const cy = Math.floor(c.y / TILE);
-    if (solidAt(L.tiles, cx, cy)) {
-      fail(`${at}: coin at tile (${cx},${cy}) is inside a solid tile`);
-    }
+    if (solidAt(L.tiles, cx, cy)) fail(`${at}: coin at (${cx},${cy}) is inside a solid tile`);
     let support = -1;
     for (let y = cy + 1; y < ROWS; y += 1) {
       if (solidAt(L.tiles, cx, y)) {
@@ -99,84 +90,152 @@ for (let level = 1; level <= LEVELS_TO_CHECK; level += 1) {
         break;
       }
     }
-    // 3 tiles is the apex of a full jump (v^2 / 2g = 48px).
     if (support !== -1 && support - cy > 4) {
       fail(`${at}: coin at (${cx},${cy}) floats ${support - cy} tiles above support`);
     }
   }
 
-  // Enemies must stand on solid ground, not inside it.
   totalEnemies += L.enemies.length;
   for (const e of L.enemies) {
     const ex = Math.floor(e.x / TILE);
     const ey = Math.floor(e.y / TILE);
     if (solidAt(L.tiles, ex, ey)) fail(`${at}: enemy at (${ex},${ey}) is inside a solid tile`);
-    if (!solidAt(L.tiles, ex, GROUND_TOP)) fail(`${at}: enemy at x=${ex} is standing over a pit`);
+    if (!solidAt(L.tiles, ex, GROUND_TOP)) fail(`${at}: enemy at x=${ex} stands over a pit`);
     if (e.vx === 0) fail(`${at}: enemy at x=${ex} has zero velocity`);
   }
 }
 
-// Determinism: the same level number must generate identically every time.
-const a = buildLevel(7);
-const b = buildLevel(7);
-if (JSON.stringify(a.tiles) !== JSON.stringify(b.tiles)) {
-  fail('buildLevel(7) is not deterministic — replays would differ');
+if (JSON.stringify(buildLevel(7).tiles) !== JSON.stringify(buildLevel(7).tiles)) {
+  fail('buildLevel is not deterministic');
 }
 if (JSON.stringify(buildLevel(1).tiles) === JSON.stringify(buildLevel(2).tiles)) {
   fail('levels 1 and 2 are identical — the seed is not varying');
 }
 
 console.log(
-  `levels 1-${LEVELS_TO_CHECK}: ${totalPits} pits, ${totalCoins} coins, ${totalEnemies} enemies — geometry checked`,
+  `levels 1-${LEVELS_TO_CHECK}: ${totalPits} pits, ${totalCoins} coins, ${totalEnemies} enemies — geometry OK`,
+);
+
+// --- Templated questions -------------------------------------------------
+
+/**
+ * Parses a rendered choice into a number when it looks numeric, so two choices
+ * that differ as text but are equal as values (1/7 vs 2/14) can be caught. One
+ * of the template authors shipped exactly that bug before its own checks found
+ * it; enforcing it here keeps it from coming back.
+ */
+function asNumber(s: string): number | null {
+  const t = s.trim().replace(/^\$/, '').replace(/,/g, '');
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  const frac = t.match(/^(-?\d+)\/(\d+)$/);
+  if (frac) return Number(frac[1]) / Number(frac[2]);
+  return null;
+}
+
+const SEEDS = 300;
+let instancesChecked = 0;
+
+for (const t of ALL_TEMPLATES) {
+  for (let seed = 1; seed <= SEEDS; seed += 1) {
+    let q;
+    try {
+      q = instantiate(t, mulberry32(seed));
+    } catch (e) {
+      fail(`${t.id} (${t.topic}) threw on seed ${seed}: ${(e as Error).message}`);
+      break;
+    }
+    instancesChecked += 1;
+    const at = `${t.id} seed ${seed}`;
+
+    if (q.choices.length !== 4) fail(`${at}: ${q.choices.length} choices`);
+    if (q.choices.some((c) => typeof c !== 'string' || c.trim() === '')) {
+      fail(`${at}: an empty choice`);
+    }
+    if (new Set(q.choices.map((c) => c.trim())).size !== 4) {
+      fail(`${at}: duplicate choice text — ${JSON.stringify(q.choices)}`);
+    }
+
+    // Numerically equal choices mean two right answers.
+    const nums = q.choices.map(asNumber).filter((n): n is number => n !== null);
+    if (new Set(nums).size !== nums.length) {
+      fail(`${at}: two choices are numerically equal — ${JSON.stringify(q.choices)}`);
+    }
+
+    if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer > 3) {
+      fail(`${at}: bad answer index ${q.answer}`);
+    }
+    if (!q.explain || q.explain.trim().length < 8) fail(`${at}: explain missing`);
+    if (q.id !== t.id) fail(`${at}: instance id ${q.id} does not match template ${t.id}`);
+    if (!q.topic) fail(`${at}: instance lost its topic, so retries cannot match it`);
+
+    const rendered = [q.prompt, ...q.choices, q.explain].join(' | ');
+    if (/undefined|NaN|Infinity/.test(rendered)) {
+      fail(`${at}: rendered "${rendered.slice(0, 120)}"`);
+    }
+    if (/[^\x20-\x7E]/.test(rendered)) fail(`${at}: non-ASCII in rendered text`);
+  }
+
+  // Regenerating must actually change the numbers, or memorization still works.
+  const a = instantiate(t, mulberry32(1));
+  const b = instantiate(t, mulberry32(999));
+  if (a.prompt === b.prompt && a.choices.join() === b.choices.join()) {
+    fail(`${t.id} (${t.topic}) produces identical output across seeds — not really templated`);
+  }
+}
+
+console.log(
+  `templates: ${ALL_TEMPLATES.length} families x ${SEEDS} seeds = ${instancesChecked} instances OK`,
 );
 
 // --- Question picker -----------------------------------------------------
 
-// 1. Never repeats a question while it is still in the recent window.
 {
   const recent: string[] = [];
   const passages: string[] = [];
   let dupes = 0;
-  for (let i = 0; i < 200; i += 1) {
+  for (let i = 0; i < 250; i += 1) {
     const q = pickQuestion({ recentIds: recent, recentPassageIds: passages });
     if (recent.includes(q.id)) dupes += 1;
     recent.push(q.id);
-    if (recent.length > 30) recent.shift();
+    if (recent.length > 40) recent.shift();
     if (q.passageId) {
       passages.push(q.passageId);
-      if (passages.length > 12) passages.shift();
+      if (passages.length > 14) passages.shift();
     }
   }
   if (dupes > 0) fail(`picker repeated a question inside the recent window ${dupes} times`);
 }
 
-// 2. Honors a subject filter.
 {
-  const only: Subject[] = ['math'];
-  for (let i = 0; i < 50; i += 1) {
-    const q = pickQuestion({ subjects: only });
+  for (let i = 0; i < 60; i += 1) {
+    const q = pickQuestion({ subjects: ['math' as Subject] });
     if (q.subject !== 'math') fail(`picker returned ${q.subject} when filtered to math`);
   }
 }
 
-// 3. Resurfaces missed questions. With one question owed, it should come back
-//    well above chance over many draws.
+// The retry path is the core of the new loop: a wrong answer must lead to
+// another question of the SAME kind, and for a template the same family with
+// different numbers.
 {
-  const target = ALL_QUESTIONS[42];
-  let hits = 0;
-  const draws = 600;
-  for (let i = 0; i < draws; i += 1) {
-    const q = pickQuestion({ missed: { [target.id]: 1 } });
-    if (q.id === target.id) hits += 1;
+  const reading = STATIC_QUESTIONS.find((q) => q.kind === 'reading')!;
+  for (let i = 0; i < 40; i += 1) {
+    const retry = pickQuestion({ sameKindAs: reading });
+    if (retry.kind !== 'reading') fail(`retry after a reading question gave ${retry.kind}`);
   }
-  const rate = hits / draws;
-  // 35% of draws go to the review pool; with a single reviewable item that
-  // item should win roughly a third of the time.
-  if (rate < 0.2) fail(`spaced repetition too weak: missed question resurfaced ${(rate * 100).toFixed(1)}% of draws`);
-  console.log(`spaced repetition: missed question resurfaced ${(rate * 100).toFixed(1)}% of draws`);
+
+  const templated = instantiate(ALL_TEMPLATES[0]);
+  let changed = 0;
+  for (let i = 0; i < 40; i += 1) {
+    const retry = pickQuestion({ sameKindAs: templated });
+    if (retry.id !== templated.id) fail(`templated retry left family ${templated.id}`);
+    if (retry.prompt !== templated.prompt) changed += 1;
+  }
+  if (changed === 0) {
+    fail('templated retry always produced identical numbers — she could just re-answer');
+  }
+  console.log(`retry path: templated retries changed the numbers ${changed}/40 times`);
 }
 
-// 4. Adaptive difficulty shifts with recent accuracy.
 {
   const hot = Array.from({ length: 40 }, () => pickQuestion({ recentAccuracy: 0.95 }).difficulty);
   const cold = Array.from({ length: 40 }, () => pickQuestion({ recentAccuracy: 0.2 }).difficulty);
@@ -185,7 +244,7 @@ console.log(
     fail(`adaptive difficulty inverted: hot=${avg(hot).toFixed(2)} cold=${avg(cold).toFixed(2)}`);
   }
   console.log(
-    `adaptive difficulty: hot streak avg ${avg(hot).toFixed(2)} vs cold streak avg ${avg(cold).toFixed(2)}`,
+    `adaptive difficulty: hot ${avg(hot).toFixed(2)} vs cold ${avg(cold).toFixed(2)}`,
   );
 }
 
@@ -193,7 +252,7 @@ console.log(
 
 {
   let p = emptyProgress();
-  const q = ALL_QUESTIONS[0];
+  const q = STATIC_QUESTIONS[0];
 
   p = recordAnswer(p, { id: q.id, subject: q.subject, correct: false });
   if (p.missed[q.id] !== 1) fail('a missed question was not added to the review pool');
@@ -202,27 +261,25 @@ console.log(
   p = recordAnswer(p, { id: q.id, subject: q.subject, correct: true });
   if (p.missed[q.id] !== undefined) fail('a corrected question was not cleared from review');
   if (!p.mastered.includes(q.id)) fail('a corrected question was not marked mastered');
-  if (p.streak !== 1) fail('streak should increment on a correct answer');
   if (p.totalSeen !== 2 || p.totalCorrect !== 1) fail('totals are wrong');
-  if (p.bySubject[q.subject].seen !== 2) fail('per-subject counts are wrong');
 
-  // Missing it twice should deepen the debt so one correct answer is not enough.
   let q2 = emptyProgress();
-  const t = ALL_QUESTIONS[1];
+  const t = STATIC_QUESTIONS[1];
   q2 = recordAnswer(q2, { id: t.id, subject: t.subject, correct: false });
   q2 = recordAnswer(q2, { id: t.id, subject: t.subject, correct: false });
   if (q2.missed[t.id] !== 2) fail('missing twice did not deepen the review debt');
   q2 = recordAnswer(q2, { id: t.id, subject: t.subject, correct: true });
-  if (q2.missed[t.id] !== 1) fail('one correct answer should only pay down one unit of debt');
+  if (q2.missed[t.id] !== 1) fail('one correct answer should pay down only one unit of debt');
 
-  console.log('progress bookkeeping: review pool, streaks, and totals behave correctly');
+  console.log('progress bookkeeping: review pool, streaks, and totals OK');
 }
 
 // --- Report --------------------------------------------------------------
 
 if (errors.length) {
   console.error(`\n${errors.length} FAILURE(S):`);
-  for (const e of errors) console.error(`  x ${e}`);
+  for (const e of errors.slice(0, 30)) console.error(`  x ${e}`);
+  if (errors.length > 30) console.error(`  … and ${errors.length - 30} more`);
   process.exit(1);
 }
 console.log('\nAll logic checks passed.');

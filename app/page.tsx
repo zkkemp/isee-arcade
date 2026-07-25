@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import ProgressStrip from '@/components/ProgressStrip';
 import { GAME_LIST } from '@/lib/games';
-import { ALL_QUESTIONS, countBySubject } from '@/lib/questions';
+import { TEMPLATE_COUNT, TOTAL_FAMILIES, countBySubject } from '@/lib/questions';
 import { SUBJECT_LABELS, type Subject } from '@/lib/questions/types';
 
 export default function Home() {
@@ -69,14 +69,16 @@ export default function Home() {
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <h3 className="mb-2 text-sm font-bold text-white">How it works</h3>
         <ul className="space-y-1.5 text-sm text-white/60">
-          <li>· Play normally. Every so often the game freezes for one question.</li>
-          <li>· Answer correctly for +50 points and an extra life.</li>
-          <li>· Miss one and the explanation stays up for a few seconds. No skipping it.</li>
-          <li>· Lose your last life and one right answer buys you back in.</li>
-          <li>· Missed questions come back later until they stick.</li>
+          <li>· Play uninterrupted. Questions never break up a run.</li>
+          <li>· A question comes when you die, or when you clear a level.</li>
+          <li>· Get it right for +50 points, then straight back into the game.</li>
+          <li>· Get it wrong and you get another one of the same kind, until you get it right.</li>
+          <li>· Runs never really end — answering is how you get back in.</li>
+          <li>· Math questions build new numbers every time, so there is nothing to memorize.</li>
         </ul>
         <p className="mt-3 text-xs text-white/35">
-          {ALL_QUESTIONS.length} ISEE Lower Level questions · progress saved on this device
+          {TOTAL_FAMILIES} ISEE Lower Level question families · {TEMPLATE_COUNT} of them generate
+          fresh numbers each time · progress saved on this device
         </p>
       </div>
 

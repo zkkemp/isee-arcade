@@ -2,6 +2,14 @@
 
 import { useEffect, useRef } from 'react';
 import type { GameCanvasProps } from '@/lib/games';
+import {
+  CAR_NAMES,
+  animFrame,
+  drawFrame,
+  drawRotated,
+  useSprites,
+  type SpriteSet,
+} from '@/lib/sprites';
 import { useCanvasGame } from '@/lib/useCanvasGame';
 
 const COLS = 13;
@@ -26,26 +34,26 @@ type LaneSpec = {
   speed: number;
   len: number;
   gap: number;
-  color: string;
+  /** Car sprite name, for road lanes. */
+  car?: string;
 };
 
 type Obstacle = { x: number; len: number };
-
 type Lane = LaneSpec & { obstacles: Obstacle[]; span: number };
 
 const LANE_SPECS: LaneSpec[] = [
   // River: ride these or drown.
-  { row: 1, kind: 'log', dir: 1, speed: 2.0, len: 3, gap: 6, color: '#8b5e34' },
-  { row: 2, kind: 'log', dir: -1, speed: 2.6, len: 2, gap: 5, color: '#a06b3c' },
-  { row: 3, kind: 'log', dir: 1, speed: 1.5, len: 4, gap: 7, color: '#7a5230' },
-  { row: 4, kind: 'log', dir: -1, speed: 3.0, len: 2, gap: 5, color: '#a06b3c' },
-  { row: 5, kind: 'log', dir: 1, speed: 2.2, len: 3, gap: 6, color: '#8b5e34' },
+  { row: 1, kind: 'log', dir: 1, speed: 2.0, len: 3, gap: 6 },
+  { row: 2, kind: 'log', dir: -1, speed: 2.6, len: 2, gap: 5 },
+  { row: 3, kind: 'log', dir: 1, speed: 1.5, len: 4, gap: 7 },
+  { row: 4, kind: 'log', dir: -1, speed: 3.0, len: 2, gap: 5 },
+  { row: 5, kind: 'log', dir: 1, speed: 2.2, len: 3, gap: 6 },
   // Road: avoid these or get squashed.
-  { row: 7, kind: 'car', dir: -1, speed: 2.6, len: 2, gap: 5, color: '#ff5d5d' },
-  { row: 8, kind: 'car', dir: 1, speed: 3.4, len: 1, gap: 4, color: '#ffd166' },
-  { row: 9, kind: 'car', dir: -1, speed: 4.2, len: 1, gap: 6, color: '#c77dff' },
-  { row: 10, kind: 'car', dir: 1, speed: 2.1, len: 3, gap: 6, color: '#4ea8ff' },
-  { row: 11, kind: 'car', dir: -1, speed: 3.0, len: 2, gap: 5, color: '#ff8fab' },
+  { row: 7, kind: 'car', dir: -1, speed: 2.6, len: 2, gap: 5, car: CAR_NAMES[0] },
+  { row: 8, kind: 'car', dir: 1, speed: 3.4, len: 1, gap: 4, car: CAR_NAMES[1] },
+  { row: 9, kind: 'car', dir: -1, speed: 4.2, len: 1, gap: 6, car: CAR_NAMES[4] },
+  { row: 10, kind: 'car', dir: 1, speed: 2.1, len: 3, gap: 6, car: CAR_NAMES[2] },
+  { row: 11, kind: 'car', dir: -1, speed: 3.0, len: 2, gap: 5, car: CAR_NAMES[3] },
 ];
 
 function buildLanes(level: number): Lane[] {
@@ -80,6 +88,7 @@ type State = {
   hop: number;
   dying: number;
   splash: { x: number; y: number } | null;
+  animTime: number;
 };
 
 function freshState(level: number): State {
@@ -92,11 +101,18 @@ function freshState(level: number): State {
     hop: 0,
     dying: 0,
     splash: null,
+    animTime: 0,
   };
 }
 
 export default function Frogger({ paused, input, api, restartToken }: GameCanvasProps) {
   const stateRef = useRef<State>(freshState(1));
+  const sprites = useSprites();
+  const spritesRef = useRef<SpriteSet | null>(null);
+  useEffect(() => {
+    spritesRef.current = sprites;
+  }, [sprites]);
+
   useEffect(() => {
     stateRef.current = freshState(1);
   }, [restartToken]);
@@ -107,6 +123,7 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
     active: !paused,
     step: (ctx, dt) => {
       const s = stateRef.current;
+      s.animTime += dt;
 
       // --- update ---
       for (const lane of s.lanes) {
@@ -132,17 +149,17 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
           if (tap === 'up' && s.row > 0) {
             s.row -= 1;
             s.x = Math.round(s.x);
-            s.hop = 0.12;
+            s.hop = 0.14;
           } else if (tap === 'down' && s.row < START_ROW) {
             s.row += 1;
             s.x = Math.round(s.x);
-            s.hop = 0.12;
+            s.hop = 0.14;
           } else if (tap === 'left') {
             s.x = Math.max(0, Math.round(s.x) - 1);
-            s.hop = 0.12;
+            s.hop = 0.14;
           } else if (tap === 'right') {
             s.x = Math.min(COLS - 1, Math.round(s.x) + 1);
-            s.hop = 0.12;
+            s.hop = 0.14;
           }
 
           // Award forward progress once per row, not per hop back and forth.
@@ -158,7 +175,6 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
         const lane = s.lanes.find((l) => l.row === s.row);
 
         if (s.row === GOAL_ROW) {
-          // Made it across.
           api.addScore(100);
           const nextLevel = s.level + 1;
           stateRef.current = freshState(nextLevel);
@@ -170,12 +186,12 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
             if (s.x < -0.4 || s.x > COLS - 0.6) {
               s.dying = 0.5;
               s.splash = { x: s.x, y: s.row };
-              api.lifeLost();
+              api.died('You drifted off the log');
             }
           } else {
             s.dying = 0.5;
             s.splash = { x: s.x, y: s.row };
-            api.lifeLost();
+            api.died('You fell in the water');
           }
         } else if (lane?.kind === 'car') {
           const hit = lane.obstacles.some(
@@ -184,68 +200,73 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
           if (hit) {
             s.dying = 0.5;
             s.splash = { x: s.x, y: s.row };
-            api.lifeLost();
+            api.died('You got squashed');
           }
         }
       }
 
-      // --- draw ---
-      draw(ctx, stateRef.current);
+      draw(ctx, stateRef.current, spritesRef.current);
     },
   });
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="block h-auto w-full touch-none"
-      style={{ aspectRatio: `${W} / ${H}`, imageRendering: 'pixelated' }}
-    />
-  );
+  return <canvas ref={canvasRef} className="block h-full w-full touch-none" />;
 }
 
-function roundRect(
+function drawGrassRow(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
+  sp: SpriteSet,
+  row: number,
+  frame: string,
 ) {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
+  for (let c = 0; c < COLS; c += 1) {
+    drawFrame(ctx, sp.tiles, frame, c * CELL, row * CELL, CELL, CELL);
+  }
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: State) {
-  // Terrain
+function draw(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
+  // --- water base, drawn under everything in the river band ---
+  const water = ctx.createLinearGradient(0, RIVER_ROWS[0] * CELL, 0, (MEDIAN_ROW + 1) * CELL);
+  water.addColorStop(0, '#2b7fd4');
+  water.addColorStop(1, '#1f5fa8');
+
   ctx.fillStyle = '#0b1020';
   ctx.fillRect(0, 0, W, H);
 
-  ctx.fillStyle = '#1f6f43';
-  ctx.fillRect(0, GOAL_ROW * CELL, W, CELL);
-  ctx.fillRect(0, MEDIAN_ROW * CELL, W, CELL);
-  ctx.fillRect(0, START_ROW * CELL, W, CELL);
-
-  ctx.fillStyle = '#123a6b';
-  ctx.fillRect(0, RIVER_ROWS[0] * CELL, W, RIVER_ROWS.length * CELL);
-  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-  ctx.lineWidth = 1;
-  for (const row of RIVER_ROWS) {
-    ctx.beginPath();
-    ctx.moveTo(0, row * CELL + CELL / 2);
-    ctx.lineTo(W, row * CELL + CELL / 2);
-    ctx.stroke();
+  if (!sp) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('loading art…', W / 2, H / 2);
+    ctx.textAlign = 'left';
+    return;
   }
 
-  ctx.fillStyle = '#26262e';
+  // --- banks and median ---
+  drawGrassRow(ctx, sp, GOAL_ROW, 'terrain_grass_block_top');
+  drawGrassRow(ctx, sp, MEDIAN_ROW, 'terrain_grass_block_top');
+  drawGrassRow(ctx, sp, START_ROW, 'terrain_grass_block_top');
+
+  // --- river with moving surface highlights ---
+  ctx.fillStyle = water;
+  ctx.fillRect(0, RIVER_ROWS[0] * CELL, W, RIVER_ROWS.length * CELL);
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.lineWidth = 2;
+  for (const row of RIVER_ROWS) {
+    const drift = (s.animTime * 22 * (row % 2 === 0 ? 1 : -1)) % 40;
+    for (let x = -40; x < W + 40; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x + drift, row * CELL + CELL * 0.35);
+      ctx.lineTo(x + drift + 14, row * CELL + CELL * 0.35);
+      ctx.stroke();
+    }
+  }
+
+  // --- road ---
+  ctx.fillStyle = '#3b3b45';
   ctx.fillRect(0, ROAD_ROWS[0] * CELL, W, ROAD_ROWS.length * CELL);
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  ctx.setLineDash([10, 12]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([12, 14]);
   for (let i = 1; i < ROAD_ROWS.length; i += 1) {
     const y = (ROAD_ROWS[0] + i) * CELL;
     ctx.beginPath();
@@ -255,13 +276,13 @@ function draw(ctx: CanvasRenderingContext2D, s: State) {
   }
   ctx.setLineDash([]);
 
-  // Goal bank marker
-  ctx.fillStyle = 'rgba(255,255,255,0.12)';
-  for (let c = 0; c < COLS; c += 2) {
-    ctx.fillRect(c * CELL + 6, 6, CELL - 12, CELL - 12);
+  // --- goal markers ---
+  const flagName = animFrame(['flag_green_a', 'flag_green_b'], s.animTime, 4);
+  for (let c = 1; c < COLS; c += 3) {
+    drawFrame(ctx, sp.tiles, flagName, c * CELL, GOAL_ROW * CELL - 6, CELL, CELL);
   }
 
-  // Obstacles
+  // --- obstacles ---
   for (const lane of s.lanes) {
     const y = lane.row * CELL;
     for (const o of lane.obstacles) {
@@ -270,52 +291,52 @@ function draw(ctx: CanvasRenderingContext2D, s: State) {
       if (px > W || px + pw < 0) continue;
 
       if (lane.kind === 'log') {
-        ctx.fillStyle = lane.color;
-        roundRect(ctx, px + 1, y + 5, pw - 2, CELL - 10, 6);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(0,0,0,0.18)';
-        for (let i = 1; i < o.len; i += 1) {
-          ctx.fillRect(px + i * CELL - 1, y + 6, 2, CELL - 12);
+        // Repeat the log-bridge tile across the length so joints line up.
+        for (let i = 0; i < o.len; i += 1) {
+          drawFrame(ctx, sp.tiles, 'bridge_logs', px + i * CELL, y + 3, CELL, CELL - 6);
         }
       } else {
-        ctx.fillStyle = lane.color;
-        roundRect(ctx, px + 2, y + 4, pw - 4, CELL - 8, 5);
-        ctx.fill();
-        // Windshield hints direction of travel.
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
-        const wsW = Math.min(8, pw / 3);
-        const wsX = lane.dir > 0 ? px + pw - wsW - 5 : px + 5;
-        ctx.fillRect(wsX, y + 9, wsW, CELL - 18);
+        const img = lane.car ? sp.cars[lane.car] : undefined;
+        if (img) {
+          // Car art points up; a quarter turn makes it face along the lane.
+          const angle = lane.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+          const carLen = pw - 6;
+          const carW = CELL - 6;
+          drawRotated(ctx, img, px + pw / 2, y + CELL / 2, carW, carLen, angle);
+        }
       }
     }
   }
 
-  // Player
+  // --- player ---
   if (s.dying > 0 && s.splash) {
     const t = 1 - s.dying / 0.5;
     ctx.strokeStyle = `rgba(255,255,255,${1 - t})`;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(s.splash.x * CELL + CELL / 2, s.splash.y * CELL + CELL / 2, 6 + t * 16, 0, Math.PI * 2);
+    ctx.arc(s.splash.x * CELL + CELL / 2, s.splash.y * CELL + CELL / 2, 6 + t * 18, 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    const pop = s.hop > 0 ? 3 : 0;
-    const px = s.x * CELL;
-    const py = s.row * CELL;
-    ctx.fillStyle = '#3ddc84';
-    roundRect(ctx, px + 4 - pop / 2, py + 4 - pop / 2, CELL - 8 + pop, CELL - 8 + pop, 8);
-    ctx.fill();
-    ctx.fillStyle = '#0b1020';
-    ctx.beginPath();
-    ctx.arc(px + 11, py + 12, 2.6, 0, Math.PI * 2);
-    ctx.arc(px + 21, py + 12, 2.6, 0, Math.PI * 2);
-    ctx.fill();
+    const hopping = s.hop > 0;
+    const lift = hopping ? 5 : 0;
+    const size = CELL - 4 + (hopping ? 4 : 0);
+    drawFrame(
+      ctx,
+      sp.enemies,
+      hopping ? 'frog_jump' : 'frog_idle',
+      s.x * CELL + (CELL - size) / 2,
+      s.row * CELL + (CELL - size) / 2 - lift,
+      size,
+      size,
+    );
   }
 
-  // Level badge
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
+  // --- HUD ---
+  ctx.fillStyle = 'rgba(0,0,0,0.34)';
+  ctx.fillRect(0, H - 18, W, 18);
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = 'right';
-  ctx.fillText(`BANK ${s.level}`, W - 8, H - 10);
+  ctx.fillText(`BANK ${s.level}`, W - 6, H - 6);
   ctx.textAlign = 'left';
 }
