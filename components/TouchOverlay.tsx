@@ -69,22 +69,6 @@ export default function TouchOverlay({
 
   if (disabled) return null;
 
-  const hold = (dir: Direction) => ({
-    onPointerDown: (e: React.PointerEvent) => {
-      e.preventDefault();
-      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-      setShowHint(false);
-      input.press(dir);
-    },
-    onPointerUp: (e: React.PointerEvent) => {
-      e.preventDefault();
-      input.release(dir);
-    },
-    onPointerCancel: () => input.release(dir),
-    onLostPointerCapture: () => input.release(dir),
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
-  });
-
   const tap = (dir: Direction) => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault();
@@ -95,9 +79,11 @@ export default function TouchOverlay({
   });
 
   if (scheme === 'run-jump') {
+    // Only the jump zone lives over the canvas now. The run buttons moved to a
+    // strip below it, because when they sat on the canvas the playfield had to be
+    // squeezed down to thumb level to stay clear of them.
     return (
       <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
-        {/* Whole right side jumps. No aiming required. */}
         <button
           type="button"
           aria-label="Jump"
@@ -120,22 +106,6 @@ export default function TouchOverlay({
             </span>
           )}
         </button>
-
-        {/* Move buttons, bottom-left, thumb-sized. */}
-        <div className="absolute bottom-5 left-4 flex gap-3">
-          {(['left', 'right'] as const).map((dir) => (
-            <button
-              key={dir}
-              type="button"
-              aria-label={dir === 'left' ? 'Move left' : 'Move right'}
-              className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-2 bg-white/25 text-2xl font-bold text-white shadow-lg backdrop-blur-md transition active:scale-90 active:bg-white/40"
-              style={{ borderColor: 'rgba(255,255,255,0.7)' }}
-              {...hold(dir)}
-            >
-              {dir === 'left' ? '◀' : '▶'}
-            </button>
-          ))}
-        </div>
       </div>
     );
   }

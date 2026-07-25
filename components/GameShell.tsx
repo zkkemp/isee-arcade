@@ -3,9 +3,15 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import QuestionGate from './QuestionGate';
+import RunJumpBar from './RunJumpBar';
 import TouchOverlay from './TouchOverlay';
 import type { GameApi, GameComponent, GameMeta } from '@/lib/games';
 import { useDifficulty } from '@/lib/difficulty';
+import {
+  clearPendingGate,
+  loadPendingGate,
+  savePendingGate,
+} from '@/lib/pendingGate';
 import { InputController, bindKeyboard } from '@/lib/input';
 import { pickQuestion } from '@/lib/questions';
 import type { Question, QuestionKind } from '@/lib/questions/types';
@@ -40,8 +46,13 @@ const OWED_BASE = 2;
 /** Wrong answers in a row after which one extra correct answer is required. */
 const WRONG_STREAK_PENALTY = 3;
 
-/** Screen pixels the run/jump buttons occupy. Games keep gameplay above this. */
-const RUN_JUMP_INSET = 118;
+/**
+ * The run/jump buttons used to sit on top of the canvas, so games reserved a band
+ * at the bottom to stay clear of them. That pushed the whole playfield down to
+ * thumb level and wasted the top half of the screen on sky. The buttons now have
+ * their own strip below the canvas, so nothing needs reserving.
+ */
+const RUN_JUMP_INSET = 0;
 
 type GateReason = 'death' | 'level';
 
@@ -97,6 +108,25 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     progressRef.current = p;
     setProgress(p);
     setBest(p.highScores[meta.id] ?? 0);
+
+    // A question owed from a previous session is restored before play can start,
+    // including when it was owed in a different game. Quitting is not an escape.
+    const pending = loadPendingGate();
+    if (pending) {
+      gateOpenRef.current = true;
+      owedRef.current = pending.owed;
+      wrongStreakRef.current = pending.wrongStreak;
+      setOwed(pending.owed);
+      setGate({
+        question: pending.question,
+        reason: pending.reason,
+        label:
+          pending.gameId === meta.id
+            ? pending.label
+            : `Unfinished question from ${pending.gameId}`,
+        attempt: pending.attempt,
+      });
+    }
   }, [meta.id]);
 
   useEffect(() => bindKeyboard(input), [input]);
@@ -107,6 +137,21 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     },
     [],
   );
+
+  // Mirror the live gate to storage so a reload cannot shake it off. Keyed on the
+  // gate itself, so it also captures the raised bar after wrong answers.
+  useEffect(() => {
+    if (!gate) return;
+    savePendingGate({
+      gameId: meta.id,
+      reason: gate.reason,
+      label: gate.label,
+      attempt: gate.attempt,
+      owed: owedRef.current,
+      wrongStreak: wrongStreakRef.current,
+      question: gate.question,
+    });
+  }, [gate, meta.id]);
 
   const flashStatus = useCallback((text: string | null, ms = 1700) => {
     setStatus(text);
@@ -265,6 +310,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
       gateOpenRef.current = false;
       setGate(null);
+      clearPendingGate();
       flashStatus(
         rewards.length > 0
           ? rewards.join(' - ')
@@ -278,6 +324,9 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   );
 
   const restart = useCallback(() => {
+    // Deliberately does NOT clear a pending question: restarting would otherwise
+    // be a one-tap way out of answering.
+    if (gateOpenRef.current) return;
     scoreRef.current = 0;
     gateOpenRef.current = false;
     passesRef.current = 0;
@@ -366,10 +415,14 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         </button>
       </header>
 
-      {/* Stage — fills every pixel left over. Each game decides what to do with
-          the space: the platformer widens its view, the grid games centre a board. */}
-      <div className="relative min-h-0 flex-1 px-2 pb-2">
-        <div className="relative h-full w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
+      {/* Stage. For run/jump games the canvas is a window near the top and the
+          controls get their own strip; a narrow portrait screen cannot show both a
+          useful view width and little sky, so the canvas stops trying to fill the
+          height. Grid games keep the full area and centre their board. */}
+      <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1">
+        <div
+          className="relative w-full flex-1 overflow-hidden rounded-2xl bg-black shadow-2xl"
+        >
           <Game
             paused={paused}
             input={input}
@@ -425,6 +478,12 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             />
           )}
         </div>
+
+        {meta.controls === 'run-jump' && (
+          <div className="pt-2">
+            <RunJumpBar input={input} accent={meta.accent} disabled={paused} />
+          </div>
+        )}
       </div>
 
       <p className="hidden flex-shrink-0 pb-1 text-center text-xs text-white/25 md:block">

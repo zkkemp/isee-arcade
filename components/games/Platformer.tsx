@@ -42,7 +42,7 @@ const TARGET_VIEW_W = 18 * TILE;
  * give: without this the ground sits in a thin strip at the bottom under a
  * screenful of empty sky.
  */
-const MAX_SKY_FACTOR = 1.3;
+const MAX_SKY_FACTOR = 1.12;
 
 type Spark = { x: number; y: number; vx: number; vy: number; life: number };
 /** A coin knocked out of a block: pops up, then vanishes. Already scored. */
