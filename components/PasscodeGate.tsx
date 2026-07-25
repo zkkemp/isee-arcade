@@ -8,6 +8,8 @@ import {
   sha256Hex,
 } from '@/lib/passcode';
 
+const LENGTH = 4;
+
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
 
 /**
@@ -34,20 +36,32 @@ export default function PasscodeGate({ children }: { children: React.ReactNode }
     setChecked(true);
   }, []);
 
-  const submit = async (code: string) => {
-    const hash = await sha256Hex(code);
-    if (hash === PASSCODE_HASH) {
-      try {
-        window.localStorage.setItem(UNLOCK_KEY, hash);
-      } catch {
-        // Not fatal — they just get asked again next launch.
+  // Checking happens here rather than in the tap handler. Two fast taps land in
+  // one React batch, so a handler that read `entry` from its own render closure
+  // saw a stale value and silently dropped a digit — which a kid drumming on an
+  // iPad hits constantly.
+  useEffect(() => {
+    if (entry.length < LENGTH) return;
+    let cancelled = false;
+    void (async () => {
+      const hash = await sha256Hex(entry);
+      if (cancelled) return;
+      if (hash === PASSCODE_HASH) {
+        try {
+          window.localStorage.setItem(UNLOCK_KEY, hash);
+        } catch {
+          // Not fatal — they just get asked again next launch.
+        }
+        setUnlocked(true);
+        return;
       }
-      setUnlocked(true);
-      return;
-    }
-    setWrong(true);
-    setEntry('');
-  };
+      setWrong(true);
+      setEntry('');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [entry]);
 
   const press = (key: string) => {
     setWrong(false);
@@ -56,9 +70,8 @@ export default function PasscodeGate({ children }: { children: React.ReactNode }
       return;
     }
     if (key === '') return;
-    const next = (entry + key).slice(0, 8);
-    setEntry(next);
-    if (next.length >= 4) void submit(next);
+    // Functional update so batched taps accumulate instead of overwriting.
+    setEntry((e) => (e + key).slice(0, LENGTH));
   };
 
   if (unlocked) return <>{children}</>;
@@ -76,7 +89,7 @@ export default function PasscodeGate({ children }: { children: React.ReactNode }
       </div>
 
       <div className="mb-6 flex gap-3" aria-label={`${entry.length} digits entered`}>
-        {[0, 1, 2, 3].map((i) => (
+        {Array.from({ length: LENGTH }, (_, i) => (
           <span
             key={i}
             className="h-4 w-4 rounded-full border transition"
