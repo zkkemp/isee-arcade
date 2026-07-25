@@ -22,6 +22,27 @@ Note: iOS bakes the standalone display mode and scope into the icon **at install
 time**. If you later change `public/manifest.webmanifest`, delete the home-screen
 icon and re-add it, or the old settings stick.
 
+## Passcode
+
+The deployed site is behind a 4-digit passcode so a random visitor with the link
+can't load it. Enter it once per device and it's remembered.
+
+To change it:
+
+```bash
+npm run passcode -- 1234
+```
+
+That prints a `NEXT_PUBLIC_PASSCODE_SHA256=...` line. Set that variable in the
+Vercel project settings and redeploy. Leaving it unset disables the gate entirely,
+which is why `npm run dev` doesn't ask for a passcode locally.
+
+**This is a speed bump, not security.** The app is a static site, so the check runs
+in the browser and someone determined could bypass it by reading the bundle. Storing
+a hash rather than the plaintext at least keeps the passcode out of the shipped
+JavaScript. There's no personal data in the app to protect — the point is just to
+keep strangers from stumbling in.
+
 ## How the study gate works
 
 The games are real games — you can lose. The learning is wired into the reward

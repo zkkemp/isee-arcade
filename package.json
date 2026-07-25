@@ -11,7 +11,8 @@
     "check:questions": "node scripts/check-questions.mjs",
     "check:logic": "tsx scripts/check-logic.ts",
     "check": "npm run typecheck && npm run check:questions && npm run check:logic",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "passcode": "node scripts/passcode-hash.mjs"
   },
   "dependencies": {
     "next": "16.2.11",
