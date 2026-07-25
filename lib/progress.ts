@@ -1,0 +1,163 @@
+'use client';
+
+import type { Subject } from './questions/types';
+
+const STORAGE_KEY = 'isee-arcade:v1';
+const HISTORY_CAP = 500;
+
+export type SubjectStat = { seen: number; correct: number };
+
+export type Attempt = {
+  /** epoch ms */
+  t: number;
+  id: string;
+  subject: Subject;
+  correct: boolean;
+};
+
+export type Progress = {
+  bySubject: Record<Subject, SubjectStat>;
+  /** questionId -> how many times still owed a correct answer. Drives spaced repetition. */
+  missed: Record<string, number>;
+  /** questionIds answered correctly after having been missed. */
+  mastered: string[];
+  /** gameId -> best score */
+  highScores: Record<string, number>;
+  totalSeen: number;
+  totalCorrect: number;
+  streak: number;
+  bestStreak: number;
+  history: Attempt[];
+};
+
+const EMPTY_SUBJECTS: Record<Subject, SubjectStat> = {
+  verbal: { seen: 0, correct: 0 },
+  quantitative: { seen: 0, correct: 0 },
+  reading: { seen: 0, correct: 0 },
+  math: { seen: 0, correct: 0 },
+};
+
+export function emptyProgress(): Progress {
+  return {
+    bySubject: structuredClone(EMPTY_SUBJECTS),
+    missed: {},
+    mastered: [],
+    highScores: {},
+    totalSeen: 0,
+    totalCorrect: 0,
+    streak: 0,
+    bestStreak: 0,
+    history: [],
+  };
+}
+
+/** Merges stored data over a fresh shape so older saves survive new fields. */
+function hydrate(raw: unknown): Progress {
+  const base = emptyProgress();
+  if (!raw || typeof raw !== 'object') return base;
+  const p = raw as Partial<Progress>;
+  return {
+    ...base,
+    ...p,
+    bySubject: { ...base.bySubject, ...(p.bySubject ?? {}) },
+    missed: { ...(p.missed ?? {}) },
+    mastered: [...(p.mastered ?? [])],
+    highScores: { ...(p.highScores ?? {}) },
+    history: [...(p.history ?? [])],
+  };
+}
+
+export function loadProgress(): Progress {
+  if (typeof window === 'undefined') return emptyProgress();
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return hydrate(raw ? JSON.parse(raw) : null);
+  } catch {
+    return emptyProgress();
+  }
+}
+
+export function saveProgress(p: Progress): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+  } catch {
+    // Quota or private-browsing failure. Progress is a nice-to-have, never block play.
+  }
+}
+
+export function resetProgress(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/** Records one answered question and returns the updated progress. */
+export function recordAnswer(
+  prev: Progress,
+  args: { id: string; subject: Subject; correct: boolean },
+): Progress {
+  const { id, subject, correct } = args;
+  const next: Progress = {
+    ...prev,
+    bySubject: { ...prev.bySubject },
+    missed: { ...prev.missed },
+    mastered: [...prev.mastered],
+    history: [...prev.history],
+  };
+
+  const stat = next.bySubject[subject] ?? { seen: 0, correct: 0 };
+  next.bySubject[subject] = {
+    seen: stat.seen + 1,
+    correct: stat.correct + (correct ? 1 : 0),
+  };
+
+  next.totalSeen += 1;
+  if (correct) {
+    next.totalCorrect += 1;
+    next.streak += 1;
+    next.bestStreak = Math.max(next.bestStreak, next.streak);
+    // A correct answer pays down one unit of debt on a previously missed question.
+    if (next.missed[id]) {
+      const remaining = next.missed[id] - 1;
+      if (remaining <= 0) {
+        delete next.missed[id];
+        if (!next.mastered.includes(id)) next.mastered.push(id);
+      } else {
+        next.missed[id] = remaining;
+      }
+    }
+  } else {
+    next.streak = 0;
+    // Missing it again deepens the debt, so it resurfaces sooner and more often.
+    next.missed[id] = Math.min((next.missed[id] ?? 0) + 1, 3);
+    next.mastered = next.mastered.filter((m) => m !== id);
+  }
+
+  next.history.push({ t: Date.now(), id, subject, correct });
+  if (next.history.length > HISTORY_CAP) {
+    next.history = next.history.slice(-HISTORY_CAP);
+  }
+  return next;
+}
+
+export function recordHighScore(prev: Progress, gameId: string, score: number): Progress {
+  const best = prev.highScores[gameId] ?? 0;
+  if (score <= best) return prev;
+  return { ...prev, highScores: { ...prev.highScores, [gameId]: score } };
+}
+
+export function accuracy(stat: SubjectStat): number {
+  return stat.seen === 0 ? 0 : Math.round((stat.correct / stat.seen) * 100);
+}
+
+/** Accuracy over the most recent `n` attempts. Used to steer difficulty. */
+export function recentAccuracy(p: Progress, n = 12): number | null {
+  const slice = p.history.slice(-n);
+  if (slice.length < 4) return null;
+  const hits = slice.filter((a) => a.correct).length;
+  return hits / slice.length;
+}
