@@ -31,6 +31,7 @@ const eslintConfig = defineConfig([
     // different values on server and client and cause a hydration mismatch.
     files: [
       "lib/difficulty.ts",
+      "lib/sound.ts",
       "components/GameShell.tsx",
       "components/PasscodeGate.tsx",
       "components/ProgressStrip.tsx",

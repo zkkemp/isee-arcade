@@ -2,9 +2,23 @@ import type { ComponentType } from 'react';
 import type { Difficulty } from './difficulty';
 import type { InputController } from './input';
 
-export type GameId = 'frogger' | 'snake' | 'platformer';
+export type GameId =
+  | 'frogger'
+  | 'snake'
+  | 'platformer'
+  | 'runner'
+  | 'breakout'
+  | 'climber'
+  | 'maze';
 
-export type ControlScheme = 'dpad' | 'run-jump';
+/**
+ * How a game is driven on touch.
+ *  dpad      - tap the edges of the play area
+ *  run-jump  - hold arrows in a strip below, tap the right half to jump
+ *  lanes     - tap left/right halves to change lane, swipe up to jump
+ *  paddle    - drag anywhere to move a paddle
+ */
+export type ControlScheme = 'dpad' | 'run-jump' | 'lanes' | 'paddle';
 
 export type GameMeta = {
   id: GameId;
@@ -74,6 +88,46 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'dpad',
     aspect: 1,
   },
+  runner: {
+    id: 'runner',
+    name: 'Dash Run',
+    tagline: 'Sprint down three lanes, dodge everything, grab every coin.',
+    gateNote: 'A question when you crash.',
+    icon: '🏃',
+    accent: '#ff8f5d',
+    controls: 'lanes',
+    aspect: 3 / 4,
+  },
+  breakout: {
+    id: 'breakout',
+    name: 'Brick Buster',
+    tagline: 'Bounce the ball, smash every brick, clear the wall.',
+    gateNote: 'A question when you clear a wall or lose the ball.',
+    icon: '🧱',
+    accent: '#ffd75e',
+    controls: 'paddle',
+    aspect: 3 / 4,
+  },
+  climber: {
+    id: 'climber',
+    name: 'Sky Hopper',
+    tagline: 'Bounce higher and higher. Do not look down.',
+    gateNote: 'A question when you fall.',
+    icon: '☁️',
+    accent: '#7ec8ff',
+    controls: 'lanes',
+    aspect: 3 / 4,
+  },
+  maze: {
+    id: 'maze',
+    name: 'Dot Muncher',
+    tagline: 'Eat every dot. Do not get caught.',
+    gateNote: 'A question when you clear the maze or get caught.',
+    icon: '👻',
+    accent: '#c77dff',
+    controls: 'dpad',
+    aspect: 1,
+  },
   platformer: {
     id: 'platformer',
     name: 'Coin Runner',
@@ -86,8 +140,18 @@ export const GAMES: Record<GameId, GameMeta> = {
   },
 };
 
-export const GAME_LIST: GameMeta[] = [GAMES.frogger, GAMES.snake, GAMES.platformer];
+export const GAME_LIST: GameMeta[] = [
+  GAMES.platformer,
+  GAMES.runner,
+  GAMES.breakout,
+  GAMES.maze,
+  GAMES.climber,
+  GAMES.frogger,
+  GAMES.snake,
+];
+
+const IDS = new Set<string>(Object.keys(GAMES));
 
 export function isGameId(v: string): v is GameId {
-  return v === 'frogger' || v === 'snake' || v === 'platformer';
+  return IDS.has(v);
 }

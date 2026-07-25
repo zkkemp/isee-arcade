@@ -78,6 +78,85 @@ export default function TouchOverlay({
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
+  if (scheme === 'paddle') {
+    // Drag anywhere: the paddle follows the finger. Reported normalised so the
+    // game does not need to know the canvas size.
+    const report = (e: React.PointerEvent) => {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      input.setPointerX(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
+    };
+    return (
+      <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
+        <button
+          type="button"
+          aria-label="Move paddle"
+          className="absolute inset-0 h-full w-full"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+            setShowHint(false);
+            report(e);
+          }}
+          onPointerMove={(e) => {
+            if (e.buttons === 0 && e.pointerType === 'mouse') return;
+            report(e);
+          }}
+          onPointerUp={() => input.setPointerX(null)}
+          onPointerCancel={() => input.setPointerX(null)}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {showHint && (
+            <span className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/80">
+              Drag to move
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  if (scheme === 'lanes') {
+    // Tap a half to move that way; flick upward anywhere to jump. No buttons on
+    // screen, because a runner needs the whole view unobstructed.
+    let downY = 0;
+    let downT = 0;
+    const onDown = (e: React.PointerEvent) => {
+      downY = e.clientY;
+      downT = e.timeStamp;
+    };
+    const onUp = (dir: Direction) => (e: React.PointerEvent) => {
+      e.preventDefault();
+      setShowHint(false);
+      const dy = downY - e.clientY;
+      const dt = e.timeStamp - downT;
+      // A quick upward flick is a jump; anything else is a lane change.
+      if (dy > 28 && dt < 500) input.pressJump();
+      else input.tap(dir);
+      // Jump is edge-triggered and consumed by the game, so release immediately.
+      input.releaseJump();
+    };
+    return (
+      <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
+        {(['left', 'right'] as const).map((dir) => (
+          <button
+            key={dir}
+            type="button"
+            aria-label={dir === 'left' ? 'Move left' : 'Move right'}
+            className={`absolute inset-y-0 ${dir === 'left' ? 'left-0' : 'right-0'} w-1/2`}
+            onPointerDown={onDown}
+            onPointerUp={onUp(dir)}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+        ))}
+        {showHint && (
+          <span className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-widest text-white/80">
+            Tap a side to move · flick up to jump
+          </span>
+        )}
+      </div>
+    );
+  }
+
   if (scheme === 'run-jump') {
     // Only the jump zone lives over the canvas now. The run buttons moved to a
     // strip below it, because when they sat on the canvas the playfield had to be

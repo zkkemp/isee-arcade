@@ -19,9 +19,20 @@ export class InputController {
     right: false,
   };
 
+  /**
+   * Horizontal pointer position across the play area, 0..1, or null when nothing
+   * is touching. Paddle games follow this directly instead of a direction.
+   */
+  pointerX: number | null = null;
+
   private tapQueue: Direction[] = [];
   private jumpEdge = false;
   jumpHeld = false;
+
+  /** Paddle surfaces report through this rather than assigning the field. */
+  setPointerX(v: number | null): void {
+    this.pointerX = v;
+  }
 
   press(dir: Direction): void {
     if (!this.held[dir]) this.tapQueue.push(dir);
@@ -59,6 +70,7 @@ export class InputController {
   }
 
   clear(): void {
+    this.pointerX = null;
     this.held = { up: false, down: false, left: false, right: false };
     this.tapQueue = [];
     this.jumpEdge = false;

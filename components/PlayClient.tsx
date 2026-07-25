@@ -4,6 +4,10 @@ import GameShell from './GameShell';
 import Frogger from './games/Frogger';
 import Snake from './games/Snake';
 import Platformer from './games/Platformer';
+import Runner from './games/Runner';
+import Breakout from './games/Breakout';
+import Climber from './games/Climber';
+import Maze from './games/Maze';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -14,6 +18,10 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   frogger: Frogger,
   snake: Snake,
   platformer: Platformer,
+  runner: Runner,
+  breakout: Breakout,
+  climber: Climber,
+  maze: Maze,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {
