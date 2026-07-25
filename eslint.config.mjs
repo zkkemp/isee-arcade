@@ -30,6 +30,7 @@ const eslintConfig = defineConfig([
     // pattern here: doing it in a useState initializer instead would return
     // different values on server and client and cause a hydration mismatch.
     files: [
+      "lib/difficulty.ts",
       "components/GameShell.tsx",
       "components/PasscodeGate.tsx",
       "components/ProgressStrip.tsx",

@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import QuestionGate from './QuestionGate';
 import TouchOverlay from './TouchOverlay';
 import type { GameApi, GameComponent, GameMeta } from '@/lib/games';
+import { useDifficulty } from '@/lib/difficulty';
 import { InputController, bindKeyboard } from '@/lib/input';
 import { pickQuestion } from '@/lib/questions';
-import type { Question } from '@/lib/questions/types';
+import type { Question, QuestionKind } from '@/lib/questions/types';
 import {
   emptyProgress,
   loadProgress,
@@ -21,7 +22,20 @@ import {
 /** Points for answering a gate question correctly. */
 const CORRECT_REWARD = 50;
 
-/** Why the game stopped to ask. */
+/**
+ * Free passes granted for getting a READING question right. A passage is long, so
+ * it earns more than a synonym does — otherwise the rational move is to guess on
+ * reading and hope for something short next time.
+ */
+const READING_PASSES = 2;
+/** Correct answers in a row that earn one free pass. */
+const STREAK_FOR_PASS = 3;
+/** Wrong answers in a row after which two correct answers are required. */
+const WRONG_STREAK_PENALTY = 3;
+
+/** Screen pixels the run/jump buttons occupy. Games keep gameplay above this. */
+const RUN_JUMP_INSET = 118;
+
 type GateReason = 'death' | 'level';
 
 type Gate = {
@@ -33,6 +47,8 @@ type Gate = {
 };
 
 export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameComponent }) {
+  const [difficulty] = useDifficulty();
+
   const [score, setScore] = useState(0);
   const [gate, setGate] = useState<Gate | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -42,16 +58,30 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const [progress, setProgress] = useState<Progress>(emptyProgress);
   const [best, setBest] = useState(0);
 
-  // Refs mirror what the game API touches, so the API object stays stable for
-  // the lifetime of the mount without going stale.
+  /** Deaths that can be shrugged off without a question. */
+  const [passes, setPasses] = useState(0);
+  const [correctStreak, setCorrectStreak] = useState(0);
+  /** Correct answers still required before play resumes. Normally 1. */
+  const [owed, setOwed] = useState(1);
+
+  // Refs mirror what the game API and callbacks touch, so the API object stays
+  // stable for the lifetime of the mount without going stale.
   const scoreRef = useRef(0);
   const progressRef = useRef<Progress>(emptyProgress());
   const gateOpenRef = useRef(false);
+  const passesRef = useRef(0);
+  const correctStreakRef = useRef(0);
+  const wrongStreakRef = useRef(0);
+  const owedRef = useRef(1);
   const seenIdsRef = useRef<string[]>([]);
   const seenPassagesRef = useRef<string[]>([]);
+  /** Kind of the last question answered, so the next one rotates away from it. */
+  const lastKindRef = useRef<QuestionKind | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [input] = useState(() => new InputController());
+
+  const controlsInset = meta.controls === 'run-jump' ? RUN_JUMP_INSET : 0;
 
   useEffect(() => {
     const p = loadProgress();
@@ -69,13 +99,16 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     [],
   );
 
-  const flashStatus = useCallback((text: string | null, ms = 1600) => {
+  const flashStatus = useCallback((text: string | null, ms = 1700) => {
     setStatus(text);
     if (statusTimer.current) clearTimeout(statusTimer.current);
     if (text) statusTimer.current = setTimeout(() => setStatus(null), ms);
   }, []);
 
-  /** Draws a question, recording it so the same one is not served twice in a row. */
+  /**
+   * Draws a question. `sameKindAs` keeps them on something they just missed;
+   * otherwise the last kind answered is avoided so sections rotate.
+   */
   const draw = useCallback((sameKindAs: Question | null = null) => {
     const p = progressRef.current;
     const question = pickQuestion({
@@ -84,6 +117,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       missed: p.missed,
       recentAccuracy: recentAccuracy(p),
       sameKindAs,
+      avoidKind: sameKindAs ? null : lastKindRef.current,
     });
     seenIdsRef.current = [...seenIdsRef.current, question.id].slice(-40);
     if (question.passageId) {
@@ -98,6 +132,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       // Drop held keys so the player does not resume mid-move after answering.
       input.clear();
       gateOpenRef.current = true;
+      owedRef.current = 1;
+      setOwed(1);
       setGate({ question: draw(null), reason, label, attempt: 1 });
     },
     [draw, input],
@@ -109,7 +145,20 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         scoreRef.current += delta;
         setScore(scoreRef.current);
       },
-      died: (label = 'You crashed') => openGate('death', label),
+      died: (label = 'You crashed') => {
+        // A free pass, earned by a reading answer or a 3-answer streak, lets the
+        // death slide without a question.
+        if (passesRef.current > 0) {
+          passesRef.current -= 1;
+          setPasses(passesRef.current);
+          flashStatus(
+            `Free pass used - ${passesRef.current} left`,
+            1900,
+          );
+          return;
+        }
+        openGate('death', label);
+      },
       requestGate: (label) => openGate('level', label),
       setStatus: (text) => flashStatus(text),
     }),
@@ -131,12 +180,24 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       saveProgress(updated);
 
       setAsked((n) => n + 1);
-      if (correct) setGotRight((n) => n + 1);
+      lastKindRef.current = g.question.kind;
 
       if (!correct) {
-        // Stay on it. Another question of the same kind — for templated math that
-        // is the same shape with new numbers, so there is no way through except
-        // actually doing it.
+        correctStreakRef.current = 0;
+        setCorrectStreak(0);
+        wrongStreakRef.current += 1;
+
+        // Three wrong in a row raises the bar: two correct answers to resume.
+        let note = '';
+        if (wrongStreakRef.current >= WRONG_STREAK_PENALTY && owedRef.current < 2) {
+          owedRef.current = 2;
+          setOwed(2);
+          note = ' Two right answers needed now.';
+        }
+        if (note) flashStatus(note.trim(), 2600);
+
+        // Same kind again — for templated math that is the same shape with new
+        // numbers, so there is no way through but to actually do it.
         setGate({
           question: draw(g.question),
           reason: g.reason,
@@ -146,8 +207,43 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         return;
       }
 
+      // --- correct ---
+      setGotRight((n) => n + 1);
+      wrongStreakRef.current = 0;
+      correctStreakRef.current += 1;
+      setCorrectStreak(correctStreakRef.current);
+
       scoreRef.current += CORRECT_REWARD;
       setScore(scoreRef.current);
+
+      let earned = 0;
+      const rewards: string[] = [];
+      if (g.question.kind === 'reading') {
+        earned += READING_PASSES;
+        rewards.push(`+${READING_PASSES} free passes for the reading`);
+      }
+      if (correctStreakRef.current % STREAK_FOR_PASS === 0) {
+        earned += 1;
+        rewards.push(`${correctStreakRef.current} in a row - +1 free pass`);
+      }
+      if (earned > 0) {
+        passesRef.current += earned;
+        setPasses(passesRef.current);
+      }
+
+      owedRef.current -= 1;
+      setOwed(Math.max(0, owedRef.current));
+
+      if (owedRef.current > 0) {
+        // Still owed one — rotate to a different kind rather than repeating.
+        setGate({
+          question: draw(null),
+          reason: g.reason,
+          label: g.label,
+          attempt: g.attempt + 1,
+        });
+        return;
+      }
 
       const banked = recordHighScore(progressRef.current, meta.id, scoreRef.current);
       progressRef.current = banked;
@@ -158,8 +254,12 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       gateOpenRef.current = false;
       setGate(null);
       flashStatus(
-        g.reason === 'death' ? `+${CORRECT_REWARD} — back in!` : `+${CORRECT_REWARD} — next level!`,
-        1800,
+        rewards.length > 0
+          ? rewards.join(' - ')
+          : g.reason === 'death'
+            ? `+${CORRECT_REWARD} - back in!`
+            : `+${CORRECT_REWARD} - next level!`,
+        rewards.length > 0 ? 2600 : 1800,
       );
     },
     [draw, flashStatus, gate, meta.id],
@@ -168,11 +268,19 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const restart = useCallback(() => {
     scoreRef.current = 0;
     gateOpenRef.current = false;
+    passesRef.current = 0;
+    correctStreakRef.current = 0;
+    wrongStreakRef.current = 0;
+    owedRef.current = 1;
+    lastKindRef.current = null;
     setScore(0);
     setGate(null);
     setAsked(0);
     setGotRight(0);
     setStatus(null);
+    setPasses(0);
+    setCorrectStreak(0);
+    setOwed(1);
     input.clear();
     setRestartToken((t) => t + 1);
   }, [input]);
@@ -180,10 +288,19 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const paused = gate !== null;
   const sessionAccuracy = asked === 0 ? null : Math.round((gotRight / asked) * 100);
 
+  const subhead = (() => {
+    if (!gate) return '';
+    if (owed > 1) return `Get ${owed} right in a row to carry on.`;
+    if (gate.attempt > 1) return 'Another one of the same kind - keep going.';
+    return gate.reason === 'death'
+      ? 'Answer one question to get back in.'
+      : 'Answer one question to move on.';
+  })();
+
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden">
       {/* HUD */}
-      <header className="flex flex-shrink-0 items-center gap-3 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
+      <header className="flex flex-shrink-0 items-center gap-2.5 px-3 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
         <Link
           href="/"
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white/70 transition active:scale-95"
@@ -194,11 +311,24 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-bold leading-tight text-white">{meta.name}</div>
-          <div className="text-[11px] leading-tight text-white/40">
-            best {best}
-            {asked > 0 && ` · ${gotRight}/${asked} right`}
+          <div className="flex items-center gap-2 text-[11px] leading-tight text-white/40">
+            <span>best {best}</span>
+            {asked > 0 && <span>{gotRight}/{asked} right</span>}
+            {correctStreak > 1 && (
+              <span className="text-amber-300/90">{correctStreak} streak</span>
+            )}
           </div>
         </div>
+
+        {passes > 0 && (
+          <div
+            className="flex flex-shrink-0 items-center gap-1 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-2 py-1"
+            title="Free passes: a death costs one of these instead of a question"
+          >
+            <span className="text-sm">🛡️</span>
+            <span className="text-sm font-bold text-emerald-300">{passes}</span>
+          </div>
+        )}
 
         <div className="flex-shrink-0 text-right">
           <div className="text-xl font-bold leading-none" style={{ color: meta.accent }}>
@@ -210,7 +340,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         <button
           type="button"
           onClick={restart}
-          className="flex h-9 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-3 text-xs font-semibold text-white/70 transition active:scale-95"
+          className="flex h-9 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition active:scale-95"
         >
           Restart
         </button>
@@ -225,7 +355,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             input={input}
             api={api}
             restartToken={restartToken}
-            bonusToken={0}
+            difficulty={difficulty}
+            controlsInset={controlsInset}
           />
 
           <TouchOverlay
@@ -236,7 +367,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           />
 
           {status && !gate && (
-            <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-1.5 text-xs font-semibold text-white shadow-lg">
+            <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-1.5 text-center text-xs font-semibold text-white shadow-lg">
               {status}
             </div>
           )}
@@ -248,14 +379,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               // reuses the same question id.
               key={`${gate.question.id}-${gate.attempt}`}
               question={gate.question}
-              headline={gate.reason === 'death' ? gate.label : gate.label}
-              subhead={
-                gate.attempt === 1
-                  ? gate.reason === 'death'
-                    ? 'Answer one question to get back in.'
-                    : 'Answer one question to move on.'
-                  : `Try another one — attempt ${gate.attempt}.`
-              }
+              headline={gate.label}
+              subhead={subhead}
               reward={CORRECT_REWARD}
               onAnswered={handleAnswered}
             />
@@ -263,8 +388,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         </div>
       </div>
 
-
-      <p className="hidden flex-shrink-0 pb-2 text-center text-xs text-white/25 md:block">
+      <p className="hidden flex-shrink-0 pb-1 text-center text-xs text-white/25 md:block">
         {meta.controls === 'run-jump'
           ? 'Arrow keys or A / D to move · Space to jump'
           : 'Arrow keys or W A S D to move'}
@@ -272,8 +396,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       </p>
 
       {progress.totalSeen > 0 && (
-        <p className="flex-shrink-0 pb-[max(0.25rem,env(safe-area-inset-bottom))] text-center text-[11px] text-white/20">
-          {progress.totalSeen} questions answered all time
+        <p className="flex-shrink-0 pb-[max(0.2rem,env(safe-area-inset-bottom))] text-center text-[11px] text-white/20">
+          {progress.totalSeen} answered all time
           {sessionAccuracy !== null && ` · ${sessionAccuracy}% this run`}
         </p>
       )}

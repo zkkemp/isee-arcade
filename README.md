@@ -45,17 +45,27 @@ keep strangers from stumbling in.
 
 ## How the study gate works
 
-The games are real games and you can lose. The learning is wired into the reward
-loop rather than interrupting play:
+Questions never interrupt play. They fire only when you die or clear a level, and
+the rules are built so that guessing is worse than reading.
 
 | Event | Behavior |
 | --- | --- |
-| **Never mid-play** | A question never breaks up a run. Play is uninterrupted. |
-| Death | A question appears instead of Game Over. |
+| **Never mid-play** | A run is never broken up by a question. |
+| Death | A question, unless you hold a free pass (below). |
 | Level cleared | A question before the next level. |
-| Correct | +50 points, straight back into the game. |
-| **Wrong** | You get **another question of the same kind**, and another, until you get one right. A missed reading passage means another reading passage. A missed fraction question means the same kind of fraction question with different numbers. |
-| Runs | Never truly end. Answering is how you get back in, so she stops when she wants to. |
+| Correct | +50 points, straight back in. |
+| **Wrong** | Another question of the **same kind**, and another, until you get one right. A missed passage means another passage; a missed fraction means the same kind of fraction with new numbers. |
+| **Reading correct** | Earns **2 free passes.** |
+| **3 correct in a row** | Earns **1 free pass.** |
+| **3 wrong in a row** | You now need **2 correct answers** to carry on, not one. |
+| Rotation | After any correct answer the next question is a **different section**, so you never get two long passages back to back. |
+| Runs | Never truly end. Answering is how you get back in. |
+
+A **free pass** is a death you can shrug off without answering. This exists to
+solve a specific incentive problem: reading passages take far longer than a
+synonym, so without a reward the rational move is to guess on reading and hope for
+something short next time. Paying double for reading makes the long question the
+one worth doing properly.
 
 Two things run quietly in the background:
 
@@ -67,6 +77,13 @@ Two things run quietly in the background:
 Progress is stored in `localStorage` on the device. There is no account, no server,
 and no data leaves the device. `/progress` shows accuracy by subject, the review
 pool, and high scores - that page is for a parent to glance at.
+
+## Skill level
+
+Easy, Normal or Hard, chosen on the home screen and applied to all three games
+(obstacle speed, how fast levels ramp, hazard density). **Easy is the default** -
+the first version was too hard out of the gate, and a kid who dies constantly quits
+before reaching any questions.
 
 ## Question bank
 
@@ -170,7 +187,9 @@ writing one canvas component and adding an entry to `lib/games.ts`.
 - *Coin Runner*: hold the arrows in the bottom-left to run; **tap anywhere on the
   right half of the screen to jump**. No aiming for a small target.
 - *Road Hopper / Byte Snake*: **tap the edge of the play area** in the direction you
-  want to move.
+  want to move. The zones are confined to the board itself, not the whole canvas -
+  anchoring them to the canvas put "up" and "down" on the empty frame bands above
+  and below the board, where a thumb never goes.
 
 **Keyboard** - arrow keys or WASD, Space to jump in Coin Runner. In a question,
 `1`-`4` or `A`-`D` to answer and Enter to advance.

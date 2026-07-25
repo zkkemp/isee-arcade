@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import type { GameCanvasProps } from '@/lib/games';
 import type { Direction } from '@/lib/input';
 import { animFrame, drawFrame, useSprites, type SpriteSet } from '@/lib/sprites';
+import { SPEED_SCALE } from '@/lib/difficulty';
 import { fitBoard, useCanvasGame } from '@/lib/useCanvasGame';
 
 const GRID = 20;
@@ -68,7 +69,13 @@ function freshState(keepEaten = 0): State {
   };
 }
 
-export default function Snake({ paused, input, api, restartToken }: GameCanvasProps) {
+export default function Snake({
+  paused,
+  input,
+  api,
+  restartToken,
+  difficulty,
+}: GameCanvasProps) {
   const stateRef = useRef<State>(freshState());
   const sprites = useSprites();
   const spritesRef = useRef<SpriteSet | null>(null);
@@ -96,7 +103,11 @@ export default function Snake({ paused, input, api, restartToken }: GameCanvasPr
 
       if (s.flash > 0) s.flash -= dt;
 
-      const tick = Math.max(MIN_TICK, BASE_TICK - s.eaten * 0.004);
+      // Lower difficulty means a longer tick, so there is more time to react.
+      const tick = Math.max(
+        MIN_TICK,
+        (BASE_TICK - s.eaten * 0.004) / SPEED_SCALE[difficulty],
+      );
       s.tickAccum += dt;
 
       if (s.tickAccum >= tick) {

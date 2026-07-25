@@ -114,49 +114,64 @@ export default function TouchOverlay({
     );
   }
 
-  // dpad: the edges of the play area are the controls.
+  // dpad: the edges of the PLAY AREA are the controls.
+  //
+  // The board is square and centred inside a taller canvas, so the zones have to
+  // be confined to the board itself. Anchoring them to the whole canvas put "up"
+  // and "down" on the empty frame bands above and below the board, which is
+  // exactly where a thumb does not go.
   return (
-    <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
-      <button
-        type="button"
-        aria-label="Move up"
-        className="absolute left-[22%] right-[22%] top-0 h-[30%]"
-        {...tap('up')}
+    <div
+      className="absolute inset-0 z-10 flex select-none items-center justify-center"
+      style={{ touchAction: 'none' }}
+    >
+      <div
+        className="relative aspect-square w-full"
+        style={{ maxHeight: '100%', maxWidth: '100%' }}
       >
-        {showHint && <Chevron glyph="▲" accent={accent} className="top-2" />}
-      </button>
-      <button
-        type="button"
-        aria-label="Move down"
-        className="absolute bottom-0 left-[22%] right-[22%] h-[30%]"
-        {...tap('down')}
-      >
-        {showHint && <Chevron glyph="▼" accent={accent} className="bottom-2" />}
-      </button>
-      <button
-        type="button"
-        aria-label="Move left"
-        className="absolute bottom-0 left-0 top-0 w-[22%]"
-        {...tap('left')}
-      >
-        {showHint && <Chevron glyph="◀" accent={accent} className="left-2 top-1/2 -translate-y-1/2" />}
-      </button>
-      <button
-        type="button"
-        aria-label="Move right"
-        className="absolute bottom-0 right-0 top-0 w-[22%]"
-        {...tap('right')}
-      >
-        {showHint && (
-          <Chevron glyph="▶" accent={accent} className="right-2 top-1/2 -translate-y-1/2" />
-        )}
-      </button>
+        <button
+          type="button"
+          aria-label="Move up"
+          className="absolute left-[24%] right-[24%] top-0 h-[34%]"
+          {...tap('up')}
+        >
+          {showHint && <Chevron glyph="▲" accent={accent} className="top-2" />}
+        </button>
+        <button
+          type="button"
+          aria-label="Move down"
+          className="absolute bottom-0 left-[24%] right-[24%] h-[34%]"
+          {...tap('down')}
+        >
+          {showHint && <Chevron glyph="▼" accent={accent} className="bottom-2" />}
+        </button>
+        <button
+          type="button"
+          aria-label="Move left"
+          className="absolute bottom-0 left-0 top-0 w-[24%]"
+          {...tap('left')}
+        >
+          {showHint && (
+            <Chevron glyph="◀" accent={accent} className="left-2 top-1/2 -translate-y-1/2" />
+          )}
+        </button>
+        <button
+          type="button"
+          aria-label="Move right"
+          className="absolute bottom-0 right-0 top-0 w-[24%]"
+          {...tap('right')}
+        >
+          {showHint && (
+            <Chevron glyph="▶" accent={accent} className="right-2 top-1/2 -translate-y-1/2" />
+          )}
+        </button>
 
-      {showHint && (
-        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/75">
-          Tap a side to move
-        </span>
-      )}
+        {showHint && (
+          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/80">
+            Tap a side to move
+          </span>
+        )}
+      </div>
     </div>
   );
 }

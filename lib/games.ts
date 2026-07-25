@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { Difficulty } from './difficulty';
 import type { InputController } from './input';
 
 export type GameId = 'frogger' | 'snake' | 'platformer';
@@ -41,8 +42,13 @@ export type GameCanvasProps = {
   api: GameApi;
   /** Increments whenever the shell wants a fresh game. */
   restartToken: number;
-  /** Reserved for pickup effects. */
-  bonusToken: number;
+  /** Skill setting. Games scale speed, hazard density and ramp from this. */
+  difficulty: Difficulty;
+  /**
+   * Screen pixels at the bottom of the canvas occupied by thumb controls. Games
+   * must keep gameplay above this band so a hand never covers the action.
+   */
+  controlsInset: number;
 };
 
 export type GameComponent = ComponentType<GameCanvasProps>;

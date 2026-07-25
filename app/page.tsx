@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import DifficultyPicker from '@/components/DifficultyPicker';
 import ProgressStrip from '@/components/ProgressStrip';
 import { GAME_LIST } from '@/lib/games';
 import { TEMPLATE_COUNT, TOTAL_FAMILIES, countBySubject } from '@/lib/questions';
@@ -15,12 +16,16 @@ export default function Home() {
           ISEE <span className="text-[#a78bfa]">Arcade</span>
         </h1>
         <p className="mt-1 text-sm text-white/55">
-          Real games that pause to quiz you. Get it right, earn points and a life.
+          Real games. When you die or clear a level, one question stands between you and playing on.
         </p>
       </header>
 
-      <div className="mb-6">
+      <div className="mb-4">
         <ProgressStrip />
+      </div>
+
+      <div className="mb-6">
+        <DifficultyPicker />
       </div>
 
       <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/40">
@@ -72,9 +77,15 @@ export default function Home() {
           <li>· Play uninterrupted. Questions never break up a run.</li>
           <li>· A question comes when you die, or when you clear a level.</li>
           <li>· Get it right for +50 points, then straight back into the game.</li>
-          <li>· Get it wrong and you get another one of the same kind, until you get it right.</li>
-          <li>· Runs never really end — answering is how you get back in.</li>
-          <li>· Math questions build new numbers every time, so there is nothing to memorize.</li>
+          <li>· Get it wrong and you get another of the same kind, until you get one right.</li>
+          <li>
+            · <strong className="text-white/80">Reading questions pay double</strong> — get one
+            right and you earn 2 free passes, so you can die twice without answering.
+          </li>
+          <li>· 3 right in a row earns another free pass.</li>
+          <li>· 3 wrong in a row and you need 2 right to carry on.</li>
+          <li>· Questions rotate between sections — never two long passages back to back.</li>
+          <li>· Math builds new numbers every time, so there is nothing to memorize.</li>
         </ul>
         <p className="mt-3 text-xs text-white/35">
           {TOTAL_FAMILIES} ISEE Lower Level question families · {TEMPLATE_COUNT} of them generate

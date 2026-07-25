@@ -105,6 +105,13 @@ export type PickArgs = {
    * numbers; a fixed question serves a different one of the same kind.
    */
   sameKindAs?: Question | null;
+  /**
+   * Kind to steer away from, so questions rotate between sections instead of
+   * serving two of the same in a row. Reading passages are long, and two back to
+   * back is where a kid checks out. Ignored when `sameKindAs` is set, because a
+   * wrong answer deliberately keeps them on the same kind.
+   */
+  avoidKind?: QuestionKind | null;
 };
 
 export function pickQuestion(args: PickArgs = {}): Question {
@@ -115,6 +122,7 @@ export function pickQuestion(args: PickArgs = {}): Question {
     missed = {},
     recentAccuracy = null,
     sameKindAs = null,
+    avoidKind = null,
   } = args;
 
   // --- retry path: stay on the thing they just missed ---
@@ -141,8 +149,15 @@ export function pickQuestion(args: PickArgs = {}): Question {
 
   // --- normal path ---
   const allowed = subjects && subjects.length > 0 ? new Set(subjects) : null;
-  const inScope = CANDIDATES.filter((c) => !allowed || allowed.has(c.subject));
+  let inScope = CANDIDATES.filter((c) => !allowed || allowed.has(c.subject));
   if (inScope.length === 0) return pickRandom(CANDIDATES).materialize();
+
+  // Rotate sections. Falls back to the unfiltered pool if avoiding the kind
+  // would leave nothing to serve.
+  if (avoidKind) {
+    const rotated = inScope.filter((c) => c.kind !== avoidKind);
+    if (rotated.length > 0) inScope = rotated;
+  }
 
   const recent = new Set(recentIds);
   const usedPassages = new Set(recentPassageIds);

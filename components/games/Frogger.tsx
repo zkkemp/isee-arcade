@@ -10,6 +10,7 @@ import {
   useSprites,
   type SpriteSet,
 } from '@/lib/sprites';
+import { RAMP_SCALE, SPEED_SCALE, type Difficulty } from '@/lib/difficulty';
 import { fitBoard, useCanvasGame } from '@/lib/useCanvasGame';
 
 const COLS = 13;
@@ -43,22 +44,24 @@ type Lane = LaneSpec & { obstacles: Obstacle[]; span: number };
 
 const LANE_SPECS: LaneSpec[] = [
   // River: ride these or drown.
-  { row: 1, kind: 'log', dir: 1, speed: 2.0, len: 3, gap: 6 },
-  { row: 2, kind: 'log', dir: -1, speed: 2.6, len: 2, gap: 5 },
-  { row: 3, kind: 'log', dir: 1, speed: 1.5, len: 4, gap: 7 },
-  { row: 4, kind: 'log', dir: -1, speed: 3.0, len: 2, gap: 5 },
-  { row: 5, kind: 'log', dir: 1, speed: 2.2, len: 3, gap: 6 },
+  { row: 1, kind: 'log', dir: 1, speed: 1.7, len: 4, gap: 5 },
+  { row: 2, kind: 'log', dir: -1, speed: 2.1, len: 3, gap: 4 },
+  { row: 3, kind: 'log', dir: 1, speed: 1.3, len: 5, gap: 5 },
+  { row: 4, kind: 'log', dir: -1, speed: 2.4, len: 3, gap: 4 },
+  { row: 5, kind: 'log', dir: 1, speed: 1.9, len: 4, gap: 5 },
   // Road: avoid these or get squashed.
-  { row: 7, kind: 'car', dir: -1, speed: 2.6, len: 2, gap: 5, car: CAR_NAMES[0] },
-  { row: 8, kind: 'car', dir: 1, speed: 3.4, len: 1, gap: 4, car: CAR_NAMES[1] },
-  { row: 9, kind: 'car', dir: -1, speed: 4.2, len: 1, gap: 6, car: CAR_NAMES[4] },
-  { row: 10, kind: 'car', dir: 1, speed: 2.1, len: 3, gap: 6, car: CAR_NAMES[2] },
-  { row: 11, kind: 'car', dir: -1, speed: 3.0, len: 2, gap: 5, car: CAR_NAMES[3] },
+  { row: 7, kind: 'car', dir: -1, speed: 2.2, len: 2, gap: 7, car: CAR_NAMES[0] },
+  { row: 8, kind: 'car', dir: 1, speed: 2.8, len: 1, gap: 6, car: CAR_NAMES[1] },
+  { row: 9, kind: 'car', dir: -1, speed: 3.4, len: 1, gap: 8, car: CAR_NAMES[4] },
+  { row: 10, kind: 'car', dir: 1, speed: 1.8, len: 3, gap: 8, car: CAR_NAMES[2] },
+  { row: 11, kind: 'car', dir: -1, speed: 2.5, len: 2, gap: 7, car: CAR_NAMES[3] },
 ];
 
-function buildLanes(level: number): Lane[] {
+function buildLanes(level: number, difficulty: Difficulty): Lane[] {
   // Each cleared bank speeds everything up, but caps out so it stays playable.
-  const mult = Math.min(1 + (level - 1) * 0.16, 2.4);
+  // The ramp is gentler on easy, and the whole thing is scaled by skill setting.
+  const ramp = 1 + (level - 1) * 0.14 * RAMP_SCALE[difficulty];
+  const mult = Math.min(ramp, 2.3) * SPEED_SCALE[difficulty];
   return LANE_SPECS.map((spec) => {
     const period = spec.len + spec.gap;
     const count = Math.ceil((COLS + period) / period) + 1;
@@ -91,9 +94,9 @@ type State = {
   animTime: number;
 };
 
-function freshState(level: number): State {
+function freshState(level: number, difficulty: Difficulty): State {
   return {
-    lanes: buildLanes(level),
+    lanes: buildLanes(level, difficulty),
     level,
     x: Math.floor(COLS / 2),
     row: START_ROW,
@@ -105,17 +108,24 @@ function freshState(level: number): State {
   };
 }
 
-export default function Frogger({ paused, input, api, restartToken }: GameCanvasProps) {
-  const stateRef = useRef<State>(freshState(1));
+export default function Frogger({
+  paused,
+  input,
+  api,
+  restartToken,
+  difficulty,
+}: GameCanvasProps) {
+  const stateRef = useRef<State>(freshState(1, difficulty));
   const sprites = useSprites();
   const spritesRef = useRef<SpriteSet | null>(null);
   useEffect(() => {
     spritesRef.current = sprites;
   }, [sprites]);
 
+  // Changing the skill setting mid-run rebuilds the lanes too.
   useEffect(() => {
-    stateRef.current = freshState(1);
-  }, [restartToken]);
+    stateRef.current = freshState(1, difficulty);
+  }, [restartToken, difficulty]);
 
   const { canvasRef } = useCanvasGame({
     active: !paused,
@@ -175,7 +185,7 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
         if (s.row === GOAL_ROW) {
           api.addScore(100);
           const nextLevel = s.level + 1;
-          stateRef.current = freshState(nextLevel);
+          stateRef.current = freshState(nextLevel, difficulty);
           api.requestGate(`Bank ${s.level} reached`);
         } else if (lane?.kind === 'log') {
           const riding = lane.obstacles.find((o) => o.x <= center && center <= o.x + o.len);
@@ -309,9 +319,41 @@ function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null
       if (px > W || px + pw < 0) continue;
 
       if (lane.kind === 'log') {
-        // Repeat the log-bridge tile across the length so joints line up.
-        for (let i = 0; i < o.len; i += 1) {
-          drawFrame(ctx, sp.tiles, 'bridge_logs', px + i * CELL, y + 3, CELL, CELL - 6);
+        // Drawn rather than tiled. Repeating the bridge tile left thin gaps and a
+        // beaded look that did not read as something you could stand on, and it
+        // did not fill the lane.
+        const top = y + 2;
+        const hgt = CELL - 4;
+        const grad = ctx.createLinearGradient(0, top, 0, top + hgt);
+        grad.addColorStop(0, '#a9763f');
+        grad.addColorStop(0.5, '#8a5a2b');
+        grad.addColorStop(1, '#6b4420');
+        ctx.fillStyle = grad;
+        const r = 7;
+        ctx.beginPath();
+        ctx.moveTo(px + r, top);
+        ctx.arcTo(px + pw, top, px + pw, top + hgt, r);
+        ctx.arcTo(px + pw, top + hgt, px, top + hgt, r);
+        ctx.arcTo(px, top + hgt, px, top, r);
+        ctx.arcTo(px, top, px + pw, top, r);
+        ctx.closePath();
+        ctx.fill();
+
+        // Grain lines along the length.
+        ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+        ctx.lineWidth = 1.5;
+        for (const fy of [0.32, 0.62]) {
+          ctx.beginPath();
+          ctx.moveTo(px + 6, top + hgt * fy);
+          ctx.lineTo(px + pw - 6, top + hgt * fy);
+          ctx.stroke();
+        }
+        // End caps, so the ends read as cut wood.
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        for (const cx of [px + 3, px + pw - 6]) {
+          ctx.beginPath();
+          ctx.ellipse(cx + 1.5, top + hgt / 2, 2.5, hgt / 2 - 2, 0, 0, Math.PI * 2);
+          ctx.fill();
         }
       } else {
         const img = lane.car ? sp.cars[lane.car] : undefined;
