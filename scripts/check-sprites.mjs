@@ -49,6 +49,16 @@ for (const file of readdirSync(GAME_DIR)) {
   }
 }
 
+// Names built by template string (e.g. `terrain_${biome}_block_top`) never appear
+// as a quoted literal, so the scan above cannot see them. Assert the families
+// they expand into explicitly.
+const DYNAMIC_FAMILIES = [
+  ...['grass', 'sand', 'snow', 'stone', 'dirt', 'purple'].map((b) => `terrain_${b}_block_top`),
+];
+for (const name of DYNAMIC_FAMILIES) {
+  if (!requested.has(name)) requested.set(name, new Set(['(template string)']));
+}
+
 const missing = [];
 for (const [name, files] of requested) {
   if (!available.has(name)) missing.push(`${name}  (referenced in ${[...files].join(', ')})`);

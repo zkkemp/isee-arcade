@@ -11,7 +11,8 @@
     "check:questions": "node scripts/check-questions.mjs",
     "check:logic": "tsx scripts/check-logic.ts",
     "check:sprites": "node scripts/check-sprites.mjs",
-    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic",
+    "check:platformer": "tsx scripts/check-platformer.ts",
+    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer",
     "icons": "node scripts/make-icons.mjs",
     "passcode": "node scripts/passcode-hash.mjs"
   },

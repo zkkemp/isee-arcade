@@ -30,7 +30,14 @@ const CORRECT_REWARD = 50;
 const READING_PASSES = 2;
 /** Correct answers in a row that earn one free pass. */
 const STREAK_FOR_PASS = 3;
-/** Wrong answers in a row after which two correct answers are required. */
+/**
+ * Correct answers required before play resumes. Two rather than one, because the
+ * point of this app is the studying, not the game. They do NOT have to be
+ * consecutive - a wrong answer in between costs another question of that kind but
+ * does not reset progress toward the two.
+ */
+const OWED_BASE = 2;
+/** Wrong answers in a row after which one extra correct answer is required. */
 const WRONG_STREAK_PENALTY = 3;
 
 /** Screen pixels the run/jump buttons occupy. Games keep gameplay above this. */
@@ -61,8 +68,10 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   /** Deaths that can be shrugged off without a question. */
   const [passes, setPasses] = useState(0);
   const [correctStreak, setCorrectStreak] = useState(0);
-  /** Correct answers still required before play resumes. Normally 1. */
-  const [owed, setOwed] = useState(1);
+  /** Correct answers still required before play resumes. */
+  const [owed, setOwed] = useState(OWED_BASE);
+  /** Manual pause, separate from a question gate. */
+  const [manualPause, setManualPause] = useState(false);
 
   // Refs mirror what the game API and callbacks touch, so the API object stays
   // stable for the lifetime of the mount without going stale.
@@ -72,7 +81,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const passesRef = useRef(0);
   const correctStreakRef = useRef(0);
   const wrongStreakRef = useRef(0);
-  const owedRef = useRef(1);
+  const owedRef = useRef(OWED_BASE);
   const seenIdsRef = useRef<string[]>([]);
   const seenPassagesRef = useRef<string[]>([]);
   /** Kind of the last question answered, so the next one rotates away from it. */
@@ -132,8 +141,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       // Drop held keys so the player does not resume mid-move after answering.
       input.clear();
       gateOpenRef.current = true;
-      owedRef.current = 1;
-      setOwed(1);
+      owedRef.current = OWED_BASE;
+      setOwed(OWED_BASE);
       setGate({ question: draw(null), reason, label, attempt: 1 });
     },
     [draw, input],
@@ -189,10 +198,13 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
         // Three wrong in a row raises the bar: two correct answers to resume.
         let note = '';
-        if (wrongStreakRef.current >= WRONG_STREAK_PENALTY && owedRef.current < 2) {
-          owedRef.current = 2;
-          setOwed(2);
-          note = ' Two right answers needed now.';
+        if (
+          wrongStreakRef.current >= WRONG_STREAK_PENALTY &&
+          owedRef.current < OWED_BASE + 1
+        ) {
+          owedRef.current = OWED_BASE + 1;
+          setOwed(owedRef.current);
+          note = `${owedRef.current} right answers needed now.`;
         }
         if (note) flashStatus(note.trim(), 2600);
 
@@ -271,7 +283,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     passesRef.current = 0;
     correctStreakRef.current = 0;
     wrongStreakRef.current = 0;
-    owedRef.current = 1;
+    owedRef.current = OWED_BASE;
     lastKindRef.current = null;
     setScore(0);
     setGate(null);
@@ -280,21 +292,20 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     setStatus(null);
     setPasses(0);
     setCorrectStreak(0);
-    setOwed(1);
+    setOwed(OWED_BASE);
+    setManualPause(false);
     input.clear();
     setRestartToken((t) => t + 1);
   }, [input]);
 
-  const paused = gate !== null;
+  const paused = gate !== null || manualPause;
   const sessionAccuracy = asked === 0 ? null : Math.round((gotRight / asked) * 100);
 
   const subhead = (() => {
     if (!gate) return '';
-    if (owed > 1) return `Get ${owed} right in a row to carry on.`;
-    if (gate.attempt > 1) return 'Another one of the same kind - keep going.';
-    return gate.reason === 'death'
-      ? 'Answer one question to get back in.'
-      : 'Answer one question to move on.';
+    if (owed > 1) return `${owed} more to go - they do not have to be in a row.`;
+    if (gate.attempt > 1) return 'Last one. Same kind, since that one was missed.';
+    return 'One more to go.';
   })();
 
   return (
@@ -339,6 +350,15 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
         <button
           type="button"
+          onClick={() => setManualPause((v) => !v)}
+          aria-label={manualPause ? 'Resume' : 'Pause'}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95"
+        >
+          {manualPause ? '▶' : '❚❚'}
+        </button>
+
+        <button
+          type="button"
           onClick={restart}
           className="flex h-9 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition active:scale-95"
         >
@@ -366,7 +386,26 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             disabled={paused}
           />
 
-          {status && !gate && (
+          {manualPause && !gate && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm">
+              <div className="text-sm font-bold uppercase tracking-widest text-white/60">
+                Paused
+              </div>
+              <button
+                type="button"
+                onClick={() => setManualPause(false)}
+                className="rounded-2xl px-8 py-4 text-base font-bold text-[#101020]"
+                style={{ background: meta.accent }}
+              >
+                Resume
+              </button>
+              <Link href="/" className="text-xs font-semibold text-white/50 underline">
+                Quit to menu
+              </Link>
+            </div>
+          )}
+
+          {status && !gate && !manualPause && (
             <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-1.5 text-center text-xs font-semibold text-white shadow-lg">
               {status}
             </div>

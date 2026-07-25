@@ -28,6 +28,29 @@ const START_ROW = 12;
 /** Horizontal forgiveness on collisions, in cells. Makes near misses feel fair. */
 const HITBOX_INSET = 0.22;
 
+/**
+ * Each bank you reach re-themes the whole board, so progress is visible at a
+ * glance rather than only in the counter.
+ */
+const BIOMES = ['grass', 'sand', 'snow', 'stone', 'dirt', 'purple'] as const;
+type Biome = (typeof BIOMES)[number];
+
+const THEME: Record<
+  Biome,
+  { water: [string, string]; road: string; dash: string; ripple: string }
+> = {
+  grass: { water: ['#2b7fd4', '#1f5fa8'], road: '#3b3b45', dash: 'rgba(255,255,255,0.28)', ripple: 'rgba(255,255,255,0.16)' },
+  sand: { water: ['#2fa8c7', '#1d7f9c'], road: '#5c5346', dash: 'rgba(255,240,200,0.3)', ripple: 'rgba(255,255,255,0.2)' },
+  snow: { water: ['#5fb3e0', '#3d86b8'], road: '#57606b', dash: 'rgba(255,255,255,0.4)', ripple: 'rgba(255,255,255,0.3)' },
+  stone: { water: ['#3a6f96', '#274c69',], road: '#33333b', dash: 'rgba(210,220,235,0.3)', ripple: 'rgba(255,255,255,0.14)' },
+  dirt: { water: ['#3f7f6a', '#2a5a4c'], road: '#453a30', dash: 'rgba(255,235,205,0.28)', ripple: 'rgba(255,255,255,0.15)' },
+  purple: { water: ['#6a4fb0', '#472f82'], road: '#3a2f4a', dash: 'rgba(230,215,255,0.32)', ripple: 'rgba(255,255,255,0.18)' },
+};
+
+function biomeFor(level: number): Biome {
+  return BIOMES[(level - 1) % BIOMES.length];
+}
+
 type LaneSpec = {
   row: number;
   kind: 'car' | 'log';
@@ -92,6 +115,7 @@ type State = {
   dying: number;
   splash: { x: number; y: number } | null;
   animTime: number;
+  biome: Biome;
 };
 
 function freshState(level: number, difficulty: Difficulty): State {
@@ -105,6 +129,7 @@ function freshState(level: number, difficulty: Difficulty): State {
     dying: 0,
     splash: null,
     animTime: 0,
+    biome: biomeFor(level),
   };
 }
 
@@ -254,8 +279,8 @@ function draw(
 function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
   // --- water base, drawn under everything in the river band ---
   const water = ctx.createLinearGradient(0, RIVER_ROWS[0] * CELL, 0, (MEDIAN_ROW + 1) * CELL);
-  water.addColorStop(0, '#2b7fd4');
-  water.addColorStop(1, '#1f5fa8');
+  water.addColorStop(0, THEME[s.biome].water[0]);
+  water.addColorStop(1, THEME[s.biome].water[1]);
 
   ctx.fillStyle = '#0b1020';
   ctx.fillRect(0, 0, W, H);
@@ -269,15 +294,17 @@ function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null
     return;
   }
 
-  // --- banks and median ---
-  drawGrassRow(ctx, sp, GOAL_ROW, 'terrain_grass_block_top');
-  drawGrassRow(ctx, sp, MEDIAN_ROW, 'terrain_grass_block_top');
-  drawGrassRow(ctx, sp, START_ROW, 'terrain_grass_block_top');
+  // --- banks and median, themed by level ---
+  const theme = THEME[s.biome];
+  const bank = `terrain_${s.biome}_block_top`;
+  drawGrassRow(ctx, sp, GOAL_ROW, bank);
+  drawGrassRow(ctx, sp, MEDIAN_ROW, bank);
+  drawGrassRow(ctx, sp, START_ROW, bank);
 
   // --- river with moving surface highlights ---
   ctx.fillStyle = water;
   ctx.fillRect(0, RIVER_ROWS[0] * CELL, W, RIVER_ROWS.length * CELL);
-  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.strokeStyle = theme.ripple;
   ctx.lineWidth = 2;
   for (const row of RIVER_ROWS) {
     const drift = (s.animTime * 22 * (row % 2 === 0 ? 1 : -1)) % 40;
@@ -290,9 +317,9 @@ function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null
   }
 
   // --- road ---
-  ctx.fillStyle = '#3b3b45';
+  ctx.fillStyle = theme.road;
   ctx.fillRect(0, ROAD_ROWS[0] * CELL, W, ROAD_ROWS.length * CELL);
-  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.strokeStyle = theme.dash;
   ctx.lineWidth = 2;
   ctx.setLineDash([12, 14]);
   for (let i = 1; i < ROAD_ROWS.length; i += 1) {

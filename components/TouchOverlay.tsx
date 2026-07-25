@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ControlScheme } from '@/lib/games';
 import type { Direction, InputController } from '@/lib/input';
 
@@ -29,6 +29,32 @@ export default function TouchOverlay({
 }) {
   // The hint is for the first run only; it gets in the way after that.
   const [showHint, setShowHint] = useState(true);
+
+  // Zone geometry is measured rather than expressed in percentages, because the
+  // up/down zones deliberately straddle two different boxes: they cover the
+  // board's top/bottom third AND the frame band beyond it, while left/right stay
+  // on the board. That cannot be written as one set of CSS percentages.
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const apply = () => setBox({ w: el.clientWidth, h: el.clientHeight });
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    // Belt and braces: a ResizeObserver alone was observed not refreshing after a
+    // viewport change, which would leave the zones positioned for the previous
+    // orientation after an iPad rotate.
+    window.addEventListener('resize', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('orientationchange', apply);
+    };
+  }, []);
 
   useEffect(() => {
     if (!showHint) return;
@@ -114,64 +140,97 @@ export default function TouchOverlay({
     );
   }
 
-  // dpad: the edges of the PLAY AREA are the controls.
+  // dpad zones.
   //
-  // The board is square and centred inside a taller canvas, so the zones have to
-  // be confined to the board itself. Anchoring them to the whole canvas put "up"
-  // and "down" on the empty frame bands above and below the board, which is
-  // exactly where a thumb does not go.
+  // Left and right stay on the board. Up and down cover the board's top and
+  // bottom thirds AND continue out into the frame bands above and below it,
+  // because that is where a thumb naturally lands - the player reported reaching
+  // up into the banner and nothing happening.
+  const side = Math.min(box.w, box.h);
+  const boardLeft = (box.w - side) / 2;
+  const boardTop = (box.h - side) / 2;
+  const sideInset = side * 0.24;
+  const band = side * 0.34;
+
   return (
     <div
-      className="absolute inset-0 z-10 flex select-none items-center justify-center"
+      ref={wrapRef}
+      className="absolute inset-0 z-10 select-none"
       style={{ touchAction: 'none' }}
     >
-      <div
-        className="relative aspect-square w-full"
-        style={{ maxHeight: '100%', maxWidth: '100%' }}
-      >
-        <button
-          type="button"
-          aria-label="Move up"
-          className="absolute left-[24%] right-[24%] top-0 h-[34%]"
-          {...tap('up')}
-        >
-          {showHint && <Chevron glyph="▲" accent={accent} className="top-2" />}
-        </button>
-        <button
-          type="button"
-          aria-label="Move down"
-          className="absolute bottom-0 left-[24%] right-[24%] h-[34%]"
-          {...tap('down')}
-        >
-          {showHint && <Chevron glyph="▼" accent={accent} className="bottom-2" />}
-        </button>
-        <button
-          type="button"
-          aria-label="Move left"
-          className="absolute bottom-0 left-0 top-0 w-[24%]"
-          {...tap('left')}
-        >
-          {showHint && (
-            <Chevron glyph="◀" accent={accent} className="left-2 top-1/2 -translate-y-1/2" />
-          )}
-        </button>
-        <button
-          type="button"
-          aria-label="Move right"
-          className="absolute bottom-0 right-0 top-0 w-[24%]"
-          {...tap('right')}
-        >
-          {showHint && (
-            <Chevron glyph="▶" accent={accent} className="right-2 top-1/2 -translate-y-1/2" />
-          )}
-        </button>
+      {side > 0 && (
+        <>
+          <button
+            type="button"
+            aria-label="Move up"
+            className="absolute"
+            style={{
+              left: boardLeft + sideInset,
+              width: side - sideInset * 2,
+              top: 0,
+              height: boardTop + band,
+            }}
+            {...tap('up')}
+          >
+            {showHint && (
+              <Chevron glyph="▲" accent={accent} style={{ bottom: 6 }} />
+            )}
+          </button>
 
-        {showHint && (
-          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/80">
-            Tap a side to move
-          </span>
-        )}
-      </div>
+          <button
+            type="button"
+            aria-label="Move down"
+            className="absolute"
+            style={{
+              left: boardLeft + sideInset,
+              width: side - sideInset * 2,
+              top: boardTop + side - band,
+              height: box.h - (boardTop + side - band),
+            }}
+            {...tap('down')}
+          >
+            {showHint && <Chevron glyph="▼" accent={accent} style={{ top: 6 }} />}
+          </button>
+
+          <button
+            type="button"
+            aria-label="Move left"
+            className="absolute"
+            style={{ left: boardLeft, width: sideInset, top: boardTop, height: side }}
+            {...tap('left')}
+          >
+            {showHint && (
+              <Chevron glyph="◀" accent={accent} style={{ top: '50%', marginTop: -12 }} />
+            )}
+          </button>
+
+          <button
+            type="button"
+            aria-label="Move right"
+            className="absolute"
+            style={{
+              left: boardLeft + side - sideInset,
+              width: sideInset,
+              top: boardTop,
+              height: side,
+            }}
+            {...tap('right')}
+          >
+            {showHint && (
+              <Chevron glyph="▶" accent={accent} style={{ top: '50%', marginTop: -12 }} />
+            )}
+          </button>
+
+          {showHint && (
+            <span
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/80"
+              style={{ top: boardTop + side / 2 - 12 }}
+            >
+              Tap a side to move
+            </span>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -179,16 +238,16 @@ export default function TouchOverlay({
 function Chevron({
   glyph,
   accent,
-  className,
+  style,
 }: {
   glyph: string;
   accent: string;
-  className: string;
+  style: React.CSSProperties;
 }) {
   return (
     <span
-      className={`pointer-events-none absolute left-1/2 -translate-x-1/2 text-xl opacity-70 ${className}`}
-      style={{ color: accent }}
+      className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-xl opacity-70"
+      style={{ color: accent, ...style }}
     >
       {glyph}
     </span>

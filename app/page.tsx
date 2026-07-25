@@ -76,14 +76,14 @@ export default function Home() {
         <ul className="space-y-1.5 text-sm text-white/60">
           <li>· Play uninterrupted. Questions never break up a run.</li>
           <li>· A question comes when you die, or when you clear a level.</li>
-          <li>· Get it right for +50 points, then straight back into the game.</li>
+          <li>· <strong className="text-white/80">Two right answers</strong> get you back in — they do not have to be in a row.</li>
           <li>· Get it wrong and you get another of the same kind, until you get one right.</li>
           <li>
             · <strong className="text-white/80">Reading questions pay double</strong> — get one
             right and you earn 2 free passes, so you can die twice without answering.
           </li>
           <li>· 3 right in a row earns another free pass.</li>
-          <li>· 3 wrong in a row and you need 2 right to carry on.</li>
+          <li>· 3 wrong in a row and the bar goes up to 3 right.</li>
           <li>· Questions rotate between sections — never two long passages back to back.</li>
           <li>· Math builds new numbers every time, so there is nothing to memorize.</li>
         </ul>
