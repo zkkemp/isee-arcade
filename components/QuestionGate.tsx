@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Question } from '@/lib/questions/types';
 import { SUBJECT_LABELS } from '@/lib/questions/types';
 
@@ -40,6 +40,7 @@ export default function QuestionGate({
 }: QuestionGateProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [lock, setLock] = useState(0);
+  const explainRef = useRef<HTMLDivElement | null>(null);
 
   const answered = picked !== null;
   const correct = picked === question.answer;
@@ -61,6 +62,19 @@ export default function QuestionGate({
     const t = setTimeout(() => setLock((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [lock]);
+
+  // Bring the explanation into view once answered. After a reading question the
+  // passage has pushed it well below the fold, so without this the feedback for
+  // the answer you just got wrong is off-screen and simply never read.
+  useEffect(() => {
+    if (picked === null) return;
+    const el = explainRef.current;
+    if (!el) return;
+    const id = requestAnimationFrame(() =>
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+    );
+    return () => cancelAnimationFrame(id);
+  }, [picked]);
 
   const canAdvance = answered && lock <= 0;
 
@@ -169,6 +183,7 @@ export default function QuestionGate({
 
           {answered && (
             <div
+              ref={explainRef}
               className={`mt-4 rounded-2xl border p-4 ${
                 correct
                   ? 'border-emerald-400/40 bg-emerald-400/10'
