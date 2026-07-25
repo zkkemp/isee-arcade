@@ -15,8 +15,26 @@ import {
 import { animFrame, drawFrame, useSprites, type SpriteSet } from '@/lib/sprites';
 import { useCanvasGame } from '@/lib/useCanvasGame';
 
-const VIEW_W = 320;
-const VIEW_H = ROWS * TILE;
+/**
+ * The world is a fixed number of tiles tall; how much WIDTH is visible depends on
+ * the screen's aspect ratio. That is what lets the game fill a tall phone and a
+ * wide iPad without letterboxing.
+ */
+const WORLD_H = ROWS * TILE;
+/**
+ * How much world width we aim to show, in pixels (18 tiles). Fitting the world's
+ * HEIGHT to a tall phone zooms in so far that you cannot see what is coming, so
+ * width is the primary constraint and height only clamps it on wide screens.
+ */
+const TARGET_VIEW_W = 18 * TILE;
+/**
+ * Cap on surplus vertical space, as a multiple of the world's height. A tall
+ * phone is much narrower than a platformer level is wide, so something has to
+ * give: without this the ground sits in a thin strip at the bottom under a
+ * screenful of empty sky. Zooming in a little instead keeps the playfield
+ * central at the cost of some forward visibility.
+ */
+const MAX_SKY_FACTOR = 1.3;
 
 const GRAVITY = 880;
 const RUN_SPEED = 118;
@@ -113,12 +131,16 @@ export default function Platformer({ paused, input, api, restartToken }: GameCan
   }, [restartToken]);
 
   const { canvasRef } = useCanvasGame({
-    width: VIEW_W,
-    height: VIEW_H,
     active: !paused,
-    step: (ctx, dt) => {
+    step: (ctx, dt, cw, ch) => {
       const s = stateRef.current;
       const tiles = s.data.tiles;
+      // Show a useful amount of width, but never less world height than exists.
+      const zoom = Math.max(cw / TARGET_VIEW_W, ch / (WORLD_H * MAX_SKY_FACTOR));
+      const viewW = cw / zoom;
+      const viewH = ch / zoom;
+      // Anchor the ground to the bottom of the screen; any surplus is sky.
+      const offsetY = Math.max(0, viewH - WORLD_H);
       s.animTime += dt;
       if (s.hurt > 0) s.hurt -= dt;
       if (s.squash > 0) s.squash = Math.max(0, s.squash - dt * 4);
@@ -233,7 +255,7 @@ export default function Platformer({ paused, input, api, restartToken }: GameCan
       s.sparks = s.sparks.filter((p) => p.life > 0);
 
       // --- pit death ---
-      if (s.y > VIEW_H + 30) {
+      if (s.y > WORLD_H + 30) {
         api.died('You fell');
         s.x = s.data.spawn.x;
         s.y = s.data.spawn.y;
@@ -248,20 +270,20 @@ export default function Platformer({ paused, input, api, restartToken }: GameCan
         const nextLevel = s.level + 1;
         stateRef.current = freshState(nextLevel, s.coinsTotal);
         api.requestGate(`Level ${s.level} cleared`);
-        draw(ctx, stateRef.current, spritesRef.current);
+        draw(ctx, stateRef.current, spritesRef.current, viewW, zoom, offsetY, cw, ch);
         return;
       }
 
       // --- camera ---
-      const want = s.x + PW / 2 - VIEW_W / 2;
-      const clamped = Math.max(0, Math.min(want, LEVEL_W - VIEW_W));
+      const want = s.x + PW / 2 - viewW / 2;
+      const clamped = Math.max(0, Math.min(want, Math.max(0, LEVEL_W - viewW)));
       s.camera += (clamped - s.camera) * Math.min(1, dt * 8);
 
-      draw(ctx, s, spritesRef.current);
+      draw(ctx, s, spritesRef.current, viewW, zoom, offsetY, cw, ch);
     },
   });
 
-  return <canvas ref={canvasRef} className="block h-full w-full touch-none" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />;
 }
 
 /** Picks the autotile variant for a solid tile from which sides are exposed. */
@@ -278,54 +300,65 @@ function terrainFrame(tiles: string[][], tx: number, ty: number): string {
   return 'terrain_grass_block_center';
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
+function draw(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  sp: SpriteSet | null,
+  viewW: number,
+  zoom: number,
+  offsetY: number,
+  cw: number,
+  ch: number,
+) {
   const cam = Math.round(s.camera);
 
-  // --- sky ---
-  const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+  // Sky in screen space so it covers the whole canvas, including the surplus
+  // above a short world on a tall screen.
+  const sky = ctx.createLinearGradient(0, 0, 0, ch);
   sky.addColorStop(0, '#8fd3ff');
   sky.addColorStop(1, '#d8f1ff');
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillRect(0, 0, cw, ch);
 
   if (!sp) {
     // Sprites still loading — show something rather than a blank frame.
     ctx.fillStyle = '#4a8f4a';
-    ctx.fillRect(0, GROUND_TOP * TILE, VIEW_W, VIEW_H);
+    ctx.fillRect(0, ch - 40, cw, 40);
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
+    ctx.font = 'bold 13px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('loading art…', VIEW_W / 2, VIEW_H / 2);
+    ctx.fillText('loading art', cw / 2, ch / 2);
     ctx.textAlign = 'left';
     return;
   }
 
-  // --- parallax hills, then clouds, both wrapping ---
-  const hills = sp.backgrounds.frames['background_color_hills'];
-  if (hills) {
-    const hw = VIEW_H * (hills[2] / hills[3]);
-    const off = -((cam * 0.25) % hw);
-    for (let x = off - hw; x < VIEW_W + hw; x += hw) {
-      drawFrame(ctx, sp.backgrounds, 'background_color_hills', x, 0, hw, VIEW_H);
-    }
-  }
-  const clouds = sp.backgrounds.frames['background_clouds'];
-  if (clouds) {
-    const cw = VIEW_H * (clouds[2] / clouds[3]);
-    const off = -((cam * 0.45) % cw);
-    ctx.globalAlpha = 0.8;
-    for (let x = off - cw; x < VIEW_W + cw; x += cw) {
-      drawFrame(ctx, sp.backgrounds, 'background_clouds', x, 0, cw, VIEW_H);
+  // Parallax in SCREEN space, sized to the canvas. Anchoring these to the world
+  // instead left a hard seam where the backdrop stopped and raw sky began.
+  const drawLayer = (name: string, factor: number, alpha: number) => {
+    const f = sp.backgrounds.frames[name];
+    if (!f) return;
+    const w = ch * (f[2] / f[3]);
+    const off = -(((cam * factor * zoom) % w) + w);
+    ctx.globalAlpha = alpha;
+    for (let x = off; x < cw + w; x += w) {
+      drawFrame(ctx, sp.backgrounds, name, x, 0, w, ch);
     }
     ctx.globalAlpha = 1;
-  }
+  };
+  drawLayer('background_color_hills', 0.25, 1);
+  drawLayer('background_clouds', 0.45, 0.75);
+
+  // World drawing happens in world units, with the ground pinned to the bottom.
+  ctx.save();
+  ctx.scale(zoom, zoom);
+  ctx.translate(0, offsetY);
 
   ctx.save();
   ctx.translate(-cam, 0);
 
   // --- terrain ---
   const firstCol = Math.max(0, Math.floor(cam / TILE) - 1);
-  const lastCol = Math.min(COLS - 1, Math.ceil((cam + VIEW_W) / TILE) + 1);
+  const lastCol = Math.min(COLS - 1, Math.ceil((cam + viewW) / TILE) + 1);
   for (let ty = 0; ty < ROWS; ty += 1) {
     for (let tx = firstCol; tx <= lastCol; tx += 1) {
       if (s.data.tiles[ty][tx] !== '#') continue;
@@ -353,14 +386,14 @@ function draw(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
   );
   for (const c of s.data.coins) {
     if (c.taken) continue;
-    if (c.x < cam - 20 || c.x > cam + VIEW_W + 20) continue;
+    if (c.x < cam - 20 || c.x > cam + viewW + 20) continue;
     const bob = Math.sin(s.animTime * 3 + c.x * 0.05) * 1.5;
     drawFrame(ctx, sp.tiles, coinName, c.x - 6, c.y - 6 + bob, 12, 12);
   }
 
   // --- enemies ---
   for (const e of s.data.enemies) {
-    if (e.x < cam - 30 || e.x > cam + VIEW_W + 30) continue;
+    if (e.x < cam - 30 || e.x > cam + viewW + 30) continue;
     if (!e.alive) {
       if (e.squash > 0) {
         drawFrame(ctx, sp.enemies, 'slime_normal_flat', e.x - 2, e.y + PH - 6, 16, 8);
@@ -395,15 +428,16 @@ function draw(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
   }
   ctx.globalAlpha = 1;
 
-  ctx.restore();
+  ctx.restore();   // end camera translate
+  ctx.restore();   // end world scale
 
-  // --- HUD ---
-  ctx.fillStyle = 'rgba(0,0,0,0.32)';
-  ctx.fillRect(0, VIEW_H - 18, VIEW_W, 18);
-  ctx.fillStyle = 'rgba(255,255,255,0.88)';
-  ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(`LEVEL ${s.level}`, 6, VIEW_H - 6);
+  // --- HUD at the TOP, in screen pixels. The bottom belongs to thumbs. ---
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillRect(0, 0, cw, 26);
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.font = 'bold 13px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(`LEVEL ${s.level}`, 10, 18);
   ctx.textAlign = 'right';
-  ctx.fillText(`${s.coinsTotal} coins`, VIEW_W - 6, VIEW_H - 6);
+  ctx.fillText(`${s.coinsTotal} coins`, cw - 10, 18);
   ctx.textAlign = 'left';
 }

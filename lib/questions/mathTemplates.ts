@@ -95,7 +95,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         prompt: `What is ${a} + ${b}?`,
         choices,
         answer,
-        explain: `Ones: ${onesA} + ${onesB} = ${onesA + onesB}, so write ${(onesA + onesB) % 10} and carry 1. Adding the rest gives ${correct}.`,
+        explain: `In the ones column ${onesA} + ${onesB} = ${onesA + onesB}, so write ${(onesA + onesB) % 10} and carry 1. Finishing the columns, ${a} + ${b} = ${correct}.`,
       };
     },
   },
@@ -123,7 +123,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         prompt: `What is ${a} - ${b}?`,
         choices,
         answer,
-        explain: `${onesA} - ${onesB} needs a borrow: ${onesA + 10} - ${onesB} = ${onesA + 10 - onesB} in the ones place. Finishing the columns gives ${correct}.`,
+        explain: `The ones column needs a borrow: ${onesA + 10} - ${onesB} = ${onesA + 10 - onesB}. Finishing the columns, ${a} - ${b} = ${correct}.`,
       };
     },
   },
@@ -175,15 +175,24 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         [5, 6],
         [2, 7],
         [3, 7],
+        [5, 7],
+        [3, 8],
+        [5, 8],
+        [4, 9],
+        [7, 9],
+        [7, 10],
       ] as const);
-      const k = randInt(rng, 2, 4);
+      const rawK = randInt(rng, 2, 4);
+      // With n = 1 and d = k^2, (n+k)/(d+k) and nk/d are equal in value
+      // (1/4 with k=2 gives 3/6 and 2/4), which would offer two right answers.
+      const k = n === 1 && d === rawK * rawK ? rawK + 1 : rawK;
       // Written raw, not through frac(), or the answer would reduce back.
       const correct = `${n * k}/${d * k}`;
       const { choices, answer } = buildChoices(rng, correct, [
         `${n + k}/${d + k}`, // added k instead of multiplying by it
         `${n}/${d * k}`, // scaled only the denominator
         `${n * k}/${d}`, // scaled only the numerator
-        `${n * k + 1}/${d * k}`,
+        `${n * k + k}/${d * k}`,
       ]);
       return {
         prompt: `Which fraction is equal to ${n}/${d}?`,
@@ -205,17 +214,20 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
       const n2 = randInt(rng, 1, d - 1 - n1);
       const total = n1 + n2;
       const correct = frac(total, d);
+      // Everything goes through frac() so two candidates that are equal in
+      // value render as the same string and get deduped, never offered twice.
       const { choices, answer } = buildChoices(rng, correct, [
-        `${total}/${d + d}`, // added the denominators too
+        frac(total, d + d), // added the denominators too
         frac(total + 1, d),
-        frac(Math.abs(n1 - n2), d),
+        frac(Math.max(1, Math.abs(n1 - n2)), d), // subtracted instead of adding
         frac(n1 * n2, d),
+        frac(total + 2, d),
       ]);
       return {
         prompt: `What is ${n1}/${d} + ${n2}/${d}?`,
         choices,
         answer,
-        explain: `The denominators already match, so add only the tops: ${n1} + ${n2} = ${total}, giving ${total}/${d} = ${correct}.`,
+        explain: `The denominators already match, so add only the tops: ${n1} + ${n2} = ${total}, giving ${total}/${d}${correct === `${total}/${d}` ? '' : ` = ${correct}`}.`,
       };
     },
   },
@@ -412,12 +424,13 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         frac(diff + 1, d),
         frac(diff - 1, d),
         frac(d - diff, d),
+        frac(diff + 2, d),
       ]);
       return {
         prompt: `What is ${n1}/${d} - ${n2}/${d}?`,
         choices,
         answer,
-        explain: `The denominators match, so subtract only the tops: ${n1} - ${n2} = ${diff}, giving ${diff}/${d} = ${correct}.`,
+        explain: `The denominators match, so subtract only the tops: ${n1} - ${n2} = ${diff}, giving ${diff}/${d}${correct === `${diff}/${d}` ? '' : ` = ${correct}`}.`,
       };
     },
   },
@@ -438,9 +451,10 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
       const correct = frac(correctN, d2);
       const { choices, answer } = buildChoices(rng, correct, [
         frac(n1 + n2, d2), // forgot to rewrite the first fraction
-        `${n1 + n2}/${d1 + d2}`, // added the denominators too
+        frac(n1 + n2, d1 + d2), // added the denominators too
         frac(correctN + 1, d2),
         frac(Math.abs(num1 - n2), d2),
+        frac(correctN - 1, d2),
       ]);
       return {
         prompt: `What is ${n1}/${d1} + ${n2}/${d2}?`,
@@ -466,11 +480,11 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
       const diff = num1 - n2;
       const correct = frac(diff, d2);
       const { choices, answer } = buildChoices(rng, correct, [
-        frac(Math.abs(n1 - n2), d2), // forgot to rewrite the first fraction
+        frac(Math.max(1, Math.abs(n1 - n2)), d2), // forgot to rewrite the first fraction
         frac(num1 + n2, d2), // added instead of subtracting
         frac(diff + 1, d2),
         frac(diff - 1, d2),
-        `${n1 - n2 > 0 ? n1 - n2 : n2 - n1}/${d2 - d1}`,
+        frac(diff + 2, d2),
       ]);
       return {
         prompt: `What is ${n1}/${d1} - ${n2}/${d2}?`,
@@ -509,11 +523,14 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
       const d = bd * k;
       const correct = frac(n, d);
       const { choices, answer } = buildChoices(rng, correct, [
+        // These first three are always distinct in value as well as in text:
+        // subtracting k, flipping, and dividing only the denominator can never
+        // land on each other or on bn/bd for any pair-and-k in the ranges above.
         `${n - k}/${d - k}`, // subtracted k instead of dividing by it
         `${bd}/${bn}`, // flipped the fraction
-        `${bn}/${bd + 1}`,
+        `${n}/${bd}`, // reduced only the denominator
         `${bn + 1}/${bd}`,
-        `${n}/${bd}`,
+        `${bn}/${bd + 1}`,
       ]);
       return {
         prompt: `Write ${n}/${d} in simplest form.`,
@@ -530,21 +547,29 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
     difficulty: 2,
     topic: 'compare fractions',
     generate: (rng) => {
-      const n = randInt(rng, 2, 4);
-      const dens = sample(rng, [n + 1, n + 2, n + 4, n + 6, n + 8], 4);
+      const n = randInt(rng, 2, 6);
+      // Same numerator throughout, so the comparison is pure reasoning about
+      // denominators; a wide pool keeps the set of possible questions large.
+      const dens = sample(
+        rng,
+        Array.from({ length: 13 }, (_, i) => n + 1 + i),
+        4,
+      );
       const smallest = Math.min(...dens);
-      const largestDen = Math.max(...dens);
-      const correct = `${n}/${smallest}`;
+      const biggest = Math.max(...dens);
+      const wantGreatest = rng() < 0.5;
+      const winner = wantGreatest ? smallest : biggest;
+      const correct = `${n}/${winner}`;
       const { choices, answer } = buildChoices(
         rng,
         correct,
-        dens.filter((d) => d !== smallest).map((d) => `${n}/${d}`),
+        dens.filter((d) => d !== winner).map((d) => `${n}/${d}`),
       );
       return {
-        prompt: `Which fraction is the greatest?`,
+        prompt: `Which fraction is the ${wantGreatest ? 'greatest' : 'least'}?`,
         choices,
         answer,
-        explain: `Every fraction has the numerator ${n}, so the one cut into the fewest pieces is biggest: ${n}/${smallest} beats ${n}/${largestDen}.`,
+        explain: `Each fraction has the numerator ${n}, so ${wantGreatest ? 'fewer' : 'more'} pieces means a ${wantGreatest ? 'bigger' : 'smaller'} share: ${n}/${winner} rather than ${n}/${wantGreatest ? biggest : smallest}.`,
       };
     },
   },
@@ -654,7 +679,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         prompt: `What is ${dec2(a)} + ${dec2(b)}?`,
         choices,
         answer,
-        explain: `Line up the decimal points. The hundredths give ${onesA} + ${onesB} = ${onesA + onesB}, so write ${(onesA + onesB) % 10} and carry 1. The total is ${correct}.`,
+        explain: `Line up the decimal points: the hundredths give ${onesA} + ${onesB} = ${onesA + onesB}, so carry 1. That makes ${dec2(a)} + ${dec2(b)} = ${correct}.`,
       };
     },
   },
@@ -681,7 +706,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         prompt: `What is ${dec2(a)} - ${dec2(b)}?`,
         choices,
         answer,
-        explain: `Line up the decimal points. The hundredths need a borrow: ${onesA + 10} - ${onesB} = ${onesA + 10 - onesB}. Finishing the columns gives ${correct}.`,
+        explain: `Line up the decimal points. The hundredths need a borrow: ${onesA + 10} - ${onesB} = ${onesA + 10 - onesB}. So ${dec2(a)} - ${dec2(b)} = ${correct}.`,
       };
     },
   },
@@ -913,6 +938,8 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
           `${n + c.f} ${c.smallPl}`, // added the factor instead of multiplying
           `${n * c.f * 2} ${c.smallPl}`,
           `${(n * c.f) / 2} ${c.smallPl}`,
+          `${n * c.f + c.f} ${c.smallPl}`,
+          `${n * c.f - c.f} ${c.smallPl}`,
         ]);
         return {
           prompt: `How many ${c.smallPl} are in ${n} ${c.bigPl}?`,
@@ -923,11 +950,14 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
       }
       const amount = n * c.f;
       const correct = `${n} ${c.bigPl}`;
+      // n is small here, so several formulas can coincide (n + f == n x 2 when
+      // n == f, and n x f == n x 2 when f is 2). n-1 and n+1 always survive.
       const { choices, answer } = buildChoices(rng, correct, [
-        `${n * 2} ${c.bigPl}`,
-        `${n + c.f} ${c.bigPl}`, // added instead of dividing
         `${n * c.f} ${c.bigPl}`, // multiplied instead of dividing
+        `${n + c.f} ${c.bigPl}`, // added instead of dividing
+        `${n * 2} ${c.bigPl}`,
         `${n - 1} ${c.bigPl}`,
+        `${n + 1} ${c.bigPl}`,
       ]);
       return {
         prompt: `How many ${c.bigPl} are in ${amount} ${c.smallPl}?`,
@@ -958,6 +988,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
           `${n * 100} ${c.smallPl}`,
           `${n * 1000} ${c.smallPl}`,
           `${n + c.f} ${c.smallPl}`,
+          `${n * c.f * 10} ${c.smallPl}`,
         ]);
         return {
           prompt: `How many ${c.smallPl} are in ${n} ${c.bigPl}?`,
@@ -969,10 +1000,11 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
       const amount = n * c.f;
       const correct = `${n} ${c.bigPl}`;
       const { choices, answer } = buildChoices(rng, correct, [
+        `${amount} ${c.bigPl}`, // forgot to convert at all
         `${n * 10} ${c.bigPl}`,
         `${num(n / 10)} ${c.bigPl}`,
-        `${amount} ${c.bigPl}`, // forgot to convert at all
         `${n + 1} ${c.bigPl}`,
+        `${n - 1} ${c.bigPl}`,
       ]);
       return {
         prompt: `How many ${c.bigPl} are in ${amount} ${c.smallPl}?`,
@@ -1007,18 +1039,20 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
           explain: `${h} x 60 = ${h * 60} minutes, plus ${m} more is ${total} minutes.`,
         };
       }
-      const correct = `${h} hours ${m} minutes`;
+      const hm = (hours: number, mins: number) =>
+        `${hours} hour${hours === 1 ? '' : 's'} ${mins} minutes`;
+      const correct = hm(h, m);
       const { choices, answer } = buildChoices(rng, correct, [
-        `${h + 1} hours ${m} minutes`,
-        `${h} hours ${60 - m} minutes`,
-        `${h - 1} hours ${m} minutes`,
-        `${h} hours ${m + 10} minutes`,
+        hm(h + 1, m),
+        hm(h, 60 - m), // took the leftover from the wrong end
+        hm(h - 1, m),
+        hm(h, m + 10),
       ]);
       return {
         prompt: `How many hours and minutes is ${total} minutes?`,
         choices,
         answer,
-        explain: `${total} / 60 = ${h} with ${m} left over, so ${total} minutes is ${h} hours ${m} minutes.`,
+        explain: `${total} / 60 = ${h} with ${m} left over, so ${total} minutes is ${correct}.`,
       };
     },
   },
@@ -1039,6 +1073,8 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         `${long + wide} sq ${unit}`, // added the sides
         `${area + long} sq ${unit}`,
         `${area - wide} sq ${unit}`,
+        `${area * 2} sq ${unit}`,
+        `${area + wide} sq ${unit}`,
       ]);
       return {
         prompt: `A rectangle is ${long} ${unit} by ${wide} ${unit}. What is its area?`,
@@ -1226,6 +1262,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
           num(a + b + c),
           num(a * b + c),
           num(a * b * c),
+          num(a * (b + c)),
         ]);
         return {
           prompt: `What is ${a} + ${b} x ${c}?`,
@@ -1244,6 +1281,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         num(a * b + c),
         num(a + b * c),
         num(a + b - c),
+        num(a * b), // forgot to subtract
       ]);
       return {
         prompt: `What is ${a} x ${b} - ${c}?`,
@@ -1289,8 +1327,11 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
     generate: (rng) => {
       const count = pick(rng, [4, 5]);
       const mean = randInt(rng, 8, 20);
-      const x = randInt(rng, 1, 5);
-      const y = randInt(rng, 2, 6);
+      // Offsets that cancel keep the mean whole; y > x keeps the set from
+      // collapsing to two repeated values, and the spread stays under the mean
+      // so every value is positive.
+      const x = randInt(rng, 1, 3);
+      const y = x + randInt(rng, 1, 3);
       const offsets = count === 4 ? [x, -x, y, -y] : [x, -x, y, -y, 0];
       const values = sample(rng, offsets.map((o) => mean + o), count);
       const sum = mean * count;
@@ -1305,7 +1346,7 @@ export const MATH_TEMPLATES: QuestionTemplate[] = [
         prompt: `What is the mean of ${values.join(', ')}?`,
         choices,
         answer,
-        explain: `The ${count} numbers add up to ${sum}, and ${sum} / ${count} = ${mean}.`,
+        explain: `${values.join(' + ')} = ${sum}, and ${sum} / ${count} = ${mean}.`,
       };
     },
   },

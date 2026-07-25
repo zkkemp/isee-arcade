@@ -216,16 +216,10 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         </button>
       </header>
 
-      {/* Stage — grows to fill whatever is left, canvas scales to fit inside it */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
-        <div
-          className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl"
-          style={{
-            aspectRatio: `${meta.aspect}`,
-            maxWidth: '100%',
-            maxHeight: '100%',
-          }}
-        >
+      {/* Stage — fills every pixel left over. Each game decides what to do with
+          the space: the platformer widens its view, the grid games centre a board. */}
+      <div className="relative min-h-0 flex-1 px-2 pb-2">
+        <div className="relative h-full w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
           <Game
             paused={paused}
             input={input}

@@ -2,52 +2,63 @@
 
 import { useEffect, useRef } from 'react';
 
-type StepFn = (ctx: CanvasRenderingContext2D, dt: number, now: number) => void;
-
 /**
- * Canvas plumbing shared by every game: crisp rendering on retina screens, a
- * fixed logical coordinate space, and a delta-timed animation loop that stops
- * cleanly when the study gate pauses play.
+ * Canvas plumbing shared by every game.
  *
- * `step` is kept in a ref so a game can close over fresh React state each
- * render without tearing down and restarting the loop.
+ * The canvas fills its container rather than using a fixed logical size, so a
+ * game occupies the whole screen on a phone and on an iPad in either
+ * orientation. `step` receives the current size in CSS pixels each frame and
+ * decides what that means: the platformer widens its view, the grid games scale
+ * and centre a fixed board.
+ *
+ * Retina handling and delta timing live here too, and the loop stops cleanly
+ * when a question pauses play.
  */
-export function useCanvasGame(opts: {
-  width: number;
-  height: number;
-  active: boolean;
-  step: StepFn;
-}) {
-  const { width, height, active, step } = opts;
+type StepFn = (ctx: CanvasRenderingContext2D, dt: number, w: number, h: number) => void;
+
+export function useCanvasGame(opts: { active: boolean; step: StepFn }) {
+  const { active, step } = opts;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sizeRef = useRef({ w: 0, h: 0 });
   const stepRef = useRef(step);
 
   // Declared before the loop effect so the freshest `step` is in place before
-  // any frame runs, both on mount and on every subsequent render.
+  // any frame runs, on mount and on every subsequent render.
   useEffect(() => {
     stepRef.current = step;
   });
 
-  // Size the backing store to the device pixel ratio once per mount / resize.
+  // Track the element's rendered size and keep the backing store matched to it.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const apply = () => {
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(1, Math.round(rect.width));
+      const h = Math.max(1, Math.round(rect.height));
       const dpr = Math.min(window.devicePixelRatio || 1, 3);
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.imageSmoothingEnabled = false;
+
+      // Reassigning width/height clears the canvas and resets the transform, so
+      // only do it when the size actually changed.
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
       }
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      sizeRef.current = { w, h };
     };
 
     apply();
-    window.addEventListener('resize', apply);
-    return () => window.removeEventListener('resize', apply);
-  }, [width, height]);
+    const ro = new ResizeObserver(apply);
+    ro.observe(canvas);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('orientationchange', apply);
+    };
+  }, []);
 
   useEffect(() => {
     if (!active) return;
@@ -63,7 +74,8 @@ export function useCanvasGame(opts: {
       // Clamp dt so a backgrounded tab does not teleport everything on return.
       const dt = Math.min((now - last) / 1000, 1 / 20);
       last = now;
-      stepRef.current(ctx, dt, now);
+      const { w, h } = sizeRef.current;
+      if (w > 0 && h > 0) stepRef.current(ctx, dt, w, h);
       raf = requestAnimationFrame(frame);
     };
 
@@ -71,11 +83,23 @@ export function useCanvasGame(opts: {
     return () => cancelAnimationFrame(raf);
   }, [active]);
 
-  /** Draws a single frame outside the loop, e.g. right after a reset while paused. */
-  const drawOnce = () => {
-    const ctx = canvasRef.current?.getContext('2d');
-    if (ctx) stepRef.current(ctx, 0, performance.now());
-  };
+  return { canvasRef };
+}
 
-  return { canvasRef, drawOnce };
+/**
+ * Scales a fixed-size board to fit the canvas and centres it, returning the
+ * scale used. Call inside ctx.save()/restore(). Used by the grid games, whose
+ * layouts are inherently square.
+ */
+export function fitBoard(
+  ctx: CanvasRenderingContext2D,
+  canvasW: number,
+  canvasH: number,
+  boardW: number,
+  boardH: number,
+): number {
+  const scale = Math.min(canvasW / boardW, canvasH / boardH);
+  ctx.translate((canvasW - boardW * scale) / 2, (canvasH - boardH * scale) / 2);
+  ctx.scale(scale, scale);
+  return scale;
 }

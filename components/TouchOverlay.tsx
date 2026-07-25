@@ -96,14 +96,14 @@ export default function TouchOverlay({
         </button>
 
         {/* Move buttons, bottom-left, thumb-sized. */}
-        <div className="absolute bottom-3 left-3 flex gap-2.5">
+        <div className="absolute bottom-5 left-4 flex gap-3">
           {(['left', 'right'] as const).map((dir) => (
             <button
               key={dir}
               type="button"
               aria-label={dir === 'left' ? 'Move left' : 'Move right'}
-              className="flex h-[68px] w-[68px] items-center justify-center rounded-full border-2 bg-black/35 text-2xl font-bold backdrop-blur-sm transition active:scale-90"
-              style={{ borderColor: `${accent}88`, color: accent }}
+              className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-2 bg-white/25 text-2xl font-bold text-white shadow-lg backdrop-blur-md transition active:scale-90 active:bg-white/40"
+              style={{ borderColor: 'rgba(255,255,255,0.7)' }}
               {...hold(dir)}
             >
               {dir === 'left' ? '◀' : '▶'}

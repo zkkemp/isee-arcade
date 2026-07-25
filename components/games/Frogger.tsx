@@ -10,7 +10,7 @@ import {
   useSprites,
   type SpriteSet,
 } from '@/lib/sprites';
-import { useCanvasGame } from '@/lib/useCanvasGame';
+import { fitBoard, useCanvasGame } from '@/lib/useCanvasGame';
 
 const COLS = 13;
 const ROWS = 13;
@@ -118,10 +118,8 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
   }, [restartToken]);
 
   const { canvasRef } = useCanvasGame({
-    width: W,
-    height: H,
     active: !paused,
-    step: (ctx, dt) => {
+    step: (ctx, dt, cw, ch) => {
       const s = stateRef.current;
       s.animTime += dt;
 
@@ -205,11 +203,11 @@ export default function Frogger({ paused, input, api, restartToken }: GameCanvas
         }
       }
 
-      draw(ctx, stateRef.current, spritesRef.current);
+      draw(ctx, stateRef.current, spritesRef.current, cw, ch);
     },
   });
 
-  return <canvas ref={canvasRef} className="block h-full w-full touch-none" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />;
 }
 
 function drawGrassRow(
@@ -223,7 +221,27 @@ function drawGrassRow(
   }
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
+/**
+ * The board is inherently square, so it is scaled to fit and centred. The
+ * surrounding area is painted in a matching colour rather than left black, so a
+ * tall screen still looks intentional.
+ */
+function draw(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  sp: SpriteSet | null,
+  cw: number,
+  ch: number,
+) {
+  ctx.fillStyle = '#0d2b52';
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.save();
+  fitBoard(ctx, cw, ch, W, H);
+  drawBoard(ctx, s, sp);
+  ctx.restore();
+}
+
+function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
   // --- water base, drawn under everything in the river band ---
   const water = ctx.createLinearGradient(0, RIVER_ROWS[0] * CELL, 0, (MEDIAN_ROW + 1) * CELL);
   water.addColorStop(0, '#2b7fd4');

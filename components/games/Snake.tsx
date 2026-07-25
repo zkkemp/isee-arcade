@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import type { GameCanvasProps } from '@/lib/games';
 import type { Direction } from '@/lib/input';
 import { animFrame, drawFrame, useSprites, type SpriteSet } from '@/lib/sprites';
-import { useCanvasGame } from '@/lib/useCanvasGame';
+import { fitBoard, useCanvasGame } from '@/lib/useCanvasGame';
 
 const GRID = 20;
 const CELL = 20;
@@ -81,10 +81,8 @@ export default function Snake({ paused, input, api, restartToken }: GameCanvasPr
   }, [restartToken]);
 
   const { canvasRef } = useCanvasGame({
-    width: W,
-    height: H,
     active: !paused,
-    step: (ctx, dt) => {
+    step: (ctx, dt, cw, ch) => {
       const s = stateRef.current;
       s.animTime += dt;
 
@@ -116,7 +114,7 @@ export default function Snake({ paused, input, api, restartToken }: GameCanvasPr
         if (hitWall || hitSelf) {
           stateRef.current = freshState(s.eaten);
           api.died(hitWall ? 'You hit the wall' : 'You ran into yourself');
-          draw(ctx, stateRef.current, spritesRef.current);
+          draw(ctx, stateRef.current, spritesRef.current, cw, ch);
           return;
         }
 
@@ -133,11 +131,11 @@ export default function Snake({ paused, input, api, restartToken }: GameCanvasPr
         }
       }
 
-      draw(ctx, stateRef.current, spritesRef.current);
+      draw(ctx, stateRef.current, spritesRef.current, cw, ch);
     },
   });
 
-  return <canvas ref={canvasRef} className="block h-full w-full touch-none" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />;
 }
 
 function roundedCell(
@@ -160,11 +158,31 @@ function roundedCell(
   ctx.fill();
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
+/**
+ * The board is inherently square, so it is scaled to fit and centred. The
+ * surrounding area is painted in a matching colour rather than left black, so a
+ * tall screen still looks intentional.
+ */
+function draw(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  sp: SpriteSet | null,
+  cw: number,
+  ch: number,
+) {
+  ctx.fillStyle = '#101426';
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.save();
+  fitBoard(ctx, cw, ch, W, H);
+  drawBoard(ctx, s, sp);
+  ctx.restore();
+}
+
+function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
   // --- checkered field, so movement reads clearly ---
   ctx.fillStyle = '#7cc96a';
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.fillStyle = 'rgba(255,255,255,0.13)';
   for (let y = 0; y < GRID; y += 1) {
     for (let x = 0; x < GRID; x += 1) {
       if ((x + y) % 2 === 0) ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
@@ -172,7 +190,7 @@ function draw(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
   }
 
   // Vignette, so the playfield edges read as walls.
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
   ctx.lineWidth = 6;
   ctx.strokeRect(3, 3, W - 6, H - 6);
 
