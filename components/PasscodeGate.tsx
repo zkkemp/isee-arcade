@@ -89,7 +89,12 @@ export default function PasscodeGate({ children }: { children: React.ReactNode }
         ))}
       </div>
 
-      <p className={`mb-6 h-5 text-sm ${wrong ? 'text-rose-400' : 'text-transparent'}`}>
+      {/* `invisible` rather than transparent text: it reserves the layout space
+          without leaving the message in the accessibility tree. */}
+      <p
+        role="status"
+        className={`mb-6 h-5 text-sm text-rose-400 ${wrong ? '' : 'invisible'}`}
+      >
         Not quite — try again.
       </p>
 
