@@ -34,9 +34,21 @@ export const TILE = 16;
  * 14, standing surfaces climbing to row 6, coins and flyers up to row 1.
  */
 export const ROWS = 18;
-export const COLS = 88;
+/**
+ * Level width. Raised from the original 88 (Zach's complaint: a single run ended
+ * too quickly) to roughly 2.7x that distance, so a run from spawn to flag is
+ * substantially longer at the same walk/run speed. `LENGTH_SCALE` below scales
+ * the content budgets (enemies, coin top-up) that would otherwise stay fixed
+ * per-level regardless of how wide the level is, so a longer level does not
+ * read as the same amount of stuff spread thinner.
+ */
+export const COLS = 220;
 export const LEVEL_W = COLS * TILE;
 export const WORLD_H = ROWS * TILE;
+/** COLS this file originally shipped with, kept only to derive LENGTH_SCALE. */
+const BASE_COLS = 88;
+/** How much wider the level is than the original. Scales density budgets. */
+export const LENGTH_SCALE = COLS / BASE_COLS;
 
 /** Topmost solid ground row. Rows below this are also solid. */
 export const GROUND_TOP = 15;
@@ -806,28 +818,37 @@ function knobsFor(level: number, d: Difficulty): Knobs {
   const easy = d === 'easy';
   const hard = d === 'hard';
   const warmupLevels = easy ? 2 : 1;
+  const isWarmup = level <= warmupLevels;
   const basePits = easy ? 0.18 : hard ? 0.46 : 0.32;
   const baseEnemies = easy ? 1.6 : hard ? 4 : 2.8;
+  const baseEnemyBudget =
+    level === 1
+      ? easy
+        ? 1
+        : hard
+          ? 3
+          : 2
+      : baseEnemies + intensity * (easy ? 3 : hard ? 8 : 5);
   return {
     intensity,
-    pitChance: level <= warmupLevels ? 0 : basePits + intensity * 0.18,
+    pitChance: isWarmup ? 0 : basePits + intensity * 0.18,
     maxPitW: Math.min(MAX_PIT_WIDTH, (easy ? 1 : 2) + Math.round(intensity * 2)),
-    enemyBudget:
-      level === 1
-        ? easy
-          ? 1
-          : hard
-            ? 3
-            : 2
-        : Math.round(baseEnemies + intensity * (easy ? 3 : hard ? 8 : 5)),
+    // Scaled by LENGTH_SCALE: the budget used to be sized for an 88-column level,
+    // and a level this much wider needs proportionally more enemies or the extra
+    // distance reads as empty rather than as more game. The warm-up levels are
+    // deliberately exempt - "one slow enemy on open ground" is a design choice
+    // about teaching, not a density the wider level should scale up.
+    enemyBudget: Math.round(baseEnemyBudget * (isWarmup ? 1 : LENGTH_SCALE)),
     coinScale: easy ? 1.3 : hard ? 0.85 : 1,
     speed: SPEED_SCALE[d] * (1 + intensity * 0.45),
     flyers: easy ? level >= 4 : level >= 2,
     hazards: intensity > (easy ? 0.3 : 0.15),
     // Roughly one chain per screenful of level, so the upper rows are never blank
-    // wherever the camera happens to be - not merely non-blank on average.
-    skyChains: level <= warmupLevels ? 4 : 5 + Math.round(intensity * 2),
-    warmup: level <= warmupLevels,
+    // wherever the camera happens to be - not merely non-blank on average. Scaled
+    // with LENGTH_SCALE so a wider level gets proportionally more real climbable
+    // storeys instead of leaning on guaranteeUpperAir's coin-stack fallback.
+    skyChains: isWarmup ? 4 : Math.round((5 + intensity * 2) * LENGTH_SCALE),
+    warmup: isWarmup,
   };
 }
 
@@ -1762,7 +1783,10 @@ function topUpEnemies(g: Gen) {
 
 /** Brings a thin level up to a coin target, on surfaces the player walks anyway. */
 function topUpCoins(g: Gen) {
-  const target = Math.round((14 + g.k.intensity * 8) * g.k.coinScale);
+  // Same LENGTH_SCALE reasoning as enemyBudget: this floor was sized for the
+  // original 88-column level and must grow with the level or a longer run
+  // just means more empty ground between the same coin count as before.
+  const target = Math.round((14 + g.k.intensity * 8) * g.k.coinScale * LENGTH_SCALE);
   let guard = 0;
   while (g.coins.length < target && guard < 500) {
     guard += 1;
