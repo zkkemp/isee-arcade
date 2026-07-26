@@ -5,6 +5,17 @@ type ArtKind = 'adventure' | 'candy' | 'blocks' | 'arena' | 'tabletop' | 'words'
 const ART_KIND: Record<GameId, ArtKind> = {
   platformer: 'adventure',
   platformer2: 'adventure',
+  platformer3: 'adventure',
+  diamond: 'candy',
+  paperroute: 'adventure',
+  pyramidhop: 'adventure',
+  reversi: 'tabletop',
+  backgammon: 'tabletop',
+  seabattle: 'arena',
+  paddleduel: 'arena',
+  asteroids: 'arena',
+  stardefender: 'arena',
+  lunarlander: 'adventure',
   runner: 'adventure',
   climber: 'adventure',
   frogger: 'adventure',
@@ -50,11 +61,21 @@ export default function GameArtwork({
     <span
       className={`game-art game-art--${ART_KIND[game]} ${featured ? 'game-art--featured' : ''}`}
       data-game={game}
-      style={{ '--game-accent': accent } as React.CSSProperties}
+      style={{
+        '--game-accent': accent,
+        ...(game === 'platformer3'
+          ? {
+              backgroundImage:
+                'linear-gradient(180deg, rgba(16,28,79,.02), rgba(14,18,66,.42)), url(/assets/coin-runner-v3/skybound-kingdom.png)',
+              backgroundPosition: 'center',
+              backgroundSize: 'cover',
+            }
+          : {}),
+      } as React.CSSProperties}
       aria-hidden="true"
     >
-      {game.endsWith('2') && (
-        <span className="game-art__edition">New edition</span>
+      {(game === 'platformer2' || game === 'platformer3') && (
+        <span className="game-art__edition">{game === 'platformer3' ? 'V3 edition' : 'V2 edition'}</span>
       )}
       <span className="game-art__sun" />
       <span className="game-art__backdrop game-art__backdrop--far" />

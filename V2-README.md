@@ -5,6 +5,26 @@ The original repository was not edited.
 
 ## Latest refresh
 
+- **Coin Runner: Skybound** (`platformer3`)
+  - A genuinely separate V3 presentation built on the verifier-proven platformer
+    simulation, so the original and Storybook editions remain available
+  - New original panoramic pixel-art kingdom, crystal terrain and blocks,
+    sky-creature enemies, beacon goal, portal wipe, HUD and world intros
+  - Three deterministic star relics in every level, bonus scoring and secret-cache
+    discovery callouts
+  - The 25 levels retain their tested enemies, movers, springs, portals, secrets,
+    checkpoints, power-ups and multiple biomes
+- **Ten original games inspired by classic play patterns**
+  - **Diamond Derby** — pitch-timing baseball
+  - **Paper Route** — neighborhood delivery and obstacle dodging
+  - **Pyramid Hop** — color-changing isometric tile hopping
+  - **Reversi** — legal line flips, passes and computer play
+  - **Mini Backgammon** — dice movement, hits, bar re-entry and bearing off
+  - **Sea Battle** — hidden-fleet strategy against the computer
+  - **Paddle Duel** — first-to-seven neon paddle competition
+  - **Asteroid Patrol** — wraparound space steering and splitting rocks
+  - **Star Defender** — fixed-screen formation defense
+  - **Lunar Lander** — fuel, momentum and soft-landing challenges
 - **Coin Runner: Storybook** (`platformer2`)
   - A distinct original 16-bit storybook-console presentation, with illustrated
     terrain, depth layers, paper grain, brighter landmarks and a custom HUD
@@ -77,8 +97,9 @@ The original repository was not edited.
 
 - TypeScript typecheck
 - ESLint
-- Production build with 30 game routes (34 static pages total)
+- Production build with 41 game routes (45 static pages total)
 - All game and logic verifier scripts
+- Focused rule checks for all ten classic-inspired games
 - Question-bank structural checks
 - Sprite-reference checks
 - Coin Runner brute-force reachability across 75 generated levels
@@ -91,5 +112,4 @@ Install dependencies if needed, then run:
 npm run dev
 ```
 
-Choose a game labeled **New edition** for a side-by-side remaster, or start with
-the **Fresh from the workshop** collection to try the three entirely new games.
+Start with **Coin Runner: Skybound** or the **Classics Reimagined** collection.

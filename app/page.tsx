@@ -16,7 +16,12 @@ const GAME_SECTIONS: Array<{ eyebrow: string; title: string; ids: GameId[] }> = 
   {
     eyebrow: 'Run · jump · dodge',
     title: 'Fast & fearless',
-    ids: ['platformer2', 'platformer', 'snake2', 'runner', 'frogger', 'climber', 'breakout'],
+    ids: ['platformer3', 'platformer2', 'platformer', 'paperroute', 'pyramidhop', 'snake2', 'runner', 'frogger', 'climber', 'breakout'],
+  },
+  {
+    eyebrow: 'Beloved rules · fresh worlds',
+    title: 'Classics Reimagined',
+    ids: ['reversi', 'backgammon', 'seabattle', 'paddleduel', 'asteroids', 'stardefender', 'lunarlander', 'diamond'],
   },
   {
     eyebrow: 'Match · stack · solve',
@@ -35,10 +40,27 @@ const GAME_SECTIONS: Array<{ eyebrow: string; title: string; ids: GameId[] }> = 
   },
 ];
 
+const NEW_GAME_IDS = new Set<GameId>([
+  'platformer3',
+  'diamond',
+  'paperroute',
+  'pyramidhop',
+  'reversi',
+  'backgammon',
+  'seabattle',
+  'paddleduel',
+  'asteroids',
+  'stardefender',
+  'lunarlander',
+  'skystack',
+  'starfall',
+  'firefly',
+]);
+
 export default function Home() {
   const counts = countBySubject();
   const subjects = Object.keys(counts) as Subject[];
-  const featured = GAMES.platformer2;
+  const featured = GAMES.platformer3;
 
   return (
     <main className="arcade-home mx-auto w-full max-w-6xl px-4 pb-14 pt-5 sm:px-8 sm:pt-9">
@@ -93,8 +115,8 @@ export default function Home() {
             {featured.name}
           </span>
           <span className="mt-2 max-w-md text-sm leading-relaxed text-white/60 sm:text-base">
-            A separate storybook remaster with richer worlds, warmer light and your own family
-            hero. The original Coin Runner is still here too.
+            The newest skybound Coin Runner adventure, with fresh routes, cloud kingdoms, and
+            your own family hero. Earlier editions are still here too.
           </span>
           <span className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-[#21152b] shadow-[0_10px_30px_rgba(251,191,36,.25)] transition group-hover:gap-3">
             Start the adventure <span>→</span>
@@ -119,8 +141,8 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
               {section.ids.map((id) => {
                 const g = GAMES[id];
-                const isNewEdition = id.endsWith('2');
-                const isNewGame = id === 'skystack' || id === 'starfall' || id === 'firefly';
+                const edition = id === 'platformer3' ? 'V3' : id.endsWith('2') ? 'V2' : id === 'platformer' ? 'Original' : null;
+                const isNewGame = NEW_GAME_IDS.has(id);
                 return (
                   <Link
                     key={g.id}
@@ -135,9 +157,9 @@ export default function Home() {
                           <span className="block truncate text-sm font-extrabold text-white sm:text-base">
                             {g.name}
                           </span>
-                          {isNewEdition && (
+                          {edition && (
                             <span className="mt-0.5 block text-[9px] font-black uppercase tracking-[0.18em] text-amber-300">
-                              V2 · Original preserved
+                              {edition === 'Original' ? 'Original edition' : `${edition} · Original preserved`}
                             </span>
                           )}
                           {isNewGame && (

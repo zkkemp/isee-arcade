@@ -534,7 +534,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   })();
 
   const clockLow = msLeft > 0 && msLeft < 60_000;
-  const isRemaster = meta.id.endsWith('2');
+  const isRemaster = meta.id.endsWith('2') || meta.id === 'platformer3';
 
   // Controls help lives behind an info button now, not as fixed text under the
   // canvas. On iPad that text sat right under the jump button and iOS kept
@@ -552,7 +552,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       case 'grid':
         return 'Tap and drag on the board. Keyboard: arrows or W A S D.';
       case 'board':
-        return 'Tap a square to play. Choose two players or play against the computer from the menu at the top.';
+        return 'Tap a square, card, or piece to play. Follow the message at the top for the current turn and available move.';
       default:
         return 'Swipe up, down, left, or right anywhere on the board, or press the arrow pad below. Keyboard: arrows or W A S D.';
     }

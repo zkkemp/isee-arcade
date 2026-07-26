@@ -5,6 +5,17 @@ import Frogger from './games/Frogger';
 import SnakeV2 from './games/SnakeV2';
 import Platformer from './games/Platformer';
 import PlatformerV2 from './games/PlatformerV2';
+import PlatformerV3 from './games/PlatformerV3';
+import DiamondDerby from './games/DiamondDerby';
+import PaperRoute from './games/PaperRoute';
+import PyramidHop from './games/PyramidHop';
+import Reversi from './games/Reversi';
+import Backgammon from './games/Backgammon';
+import SeaBattle from './games/SeaBattle';
+import PaddleDuel from './games/PaddleDuel';
+import AsteroidPatrol from './games/AsteroidPatrol';
+import StarDefender from './games/StarDefender';
+import LunarLander from './games/LunarLander';
 import Runner from './games/Runner';
 import Breakout from './games/Breakout';
 import Climber from './games/Climber';
@@ -42,6 +53,17 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   snake2: SnakeV2,
   platformer: Platformer,
   platformer2: PlatformerV2,
+  platformer3: PlatformerV3,
+  diamond: DiamondDerby,
+  paperroute: PaperRoute,
+  pyramidhop: PyramidHop,
+  reversi: Reversi,
+  backgammon: Backgammon,
+  seabattle: SeaBattle,
+  paddleduel: PaddleDuel,
+  asteroids: AsteroidPatrol,
+  stardefender: StarDefender,
+  lunarlander: LunarLander,
   runner: Runner,
   breakout: Breakout,
   climber: Climber,

@@ -11,6 +11,17 @@ export type GameId =
   | 'snake2'
   | 'platformer'
   | 'platformer2'
+  | 'platformer3'
+  | 'diamond'
+  | 'paperroute'
+  | 'pyramidhop'
+  | 'reversi'
+  | 'backgammon'
+  | 'seabattle'
+  | 'paddleduel'
+  | 'asteroids'
+  | 'stardefender'
+  | 'lunarlander'
   | 'runner'
   | 'breakout'
   | 'climber'
@@ -209,6 +220,17 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'run-jump',
     aspect: 4 / 3,
   },
+  platformer3: { id: 'platformer3', name: 'Coin Runner: Skybound', tagline: 'Explore a spectacular sky kingdom, find three star relics, and race for the beacon.', gateNote: 'Study time buys play time.', icon: '☁️', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
+  diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Time the pitch, swing for the fences, and build a home-run streak.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4 },
+  paperroute: { id: 'paperroute', name: 'Paper Route', tagline: 'Zip down the street, dodge trouble, and deliver every paper.', gateNote: 'Study time buys play time.', icon: '📰', accent: '#ffbd5a', controls: 'lanes', aspect: 3 / 4 },
+  pyramidhop: { id: 'pyramidhop', name: 'Pyramid Hop', tagline: 'Hop through sunny ruins and uncover the golden path.', gateNote: 'Study time buys play time.', icon: '🔺', accent: '#efb24e', controls: 'dpad', aspect: 3 / 4 },
+  reversi: { id: 'reversi', name: 'Reversi', tagline: 'Trap the discs, flip the board, and claim the most.', gateNote: 'Study time buys play time.', icon: '⚫', accent: '#5ed6a0', controls: 'board', aspect: 1 },
+  backgammon: { id: 'backgammon', name: 'Backgammon', tagline: 'Roll, race home, and bump lone checkers from the path.', gateNote: 'Study time buys play time.', icon: '🎲', accent: '#e7b978', controls: 'board', aspect: 3 / 4 },
+  seabattle: { id: 'seabattle', name: 'Sea Battle', tagline: 'Scan the waves, find the fleet, and win the naval duel.', gateNote: 'Study time buys play time.', icon: '⚓', accent: '#58b9e8', controls: 'board', aspect: 1 },
+  paddleduel: { id: 'paddleduel', name: 'Paddle Duel', tagline: 'Guard your goal, return the ball, and outscore your rival.', gateNote: 'Study time buys play time.', icon: '🏓', accent: '#ff7d8e', controls: 'paddle', aspect: 3 / 4 },
+  asteroids: { id: 'asteroids', name: 'Asteroid Patrol', tagline: 'Steer through the starfield and clear a safe space lane.', gateNote: 'Study time buys play time.', icon: '☄️', accent: '#b49aff', controls: 'dpad', aspect: 3 / 4 },
+  stardefender: { id: 'stardefender', name: 'Star Defender', tagline: 'Slide your starship, fire bright bolts, and stop the descending swarm.', gateNote: 'Study time buys play time.', icon: '🌟', accent: '#ffdc63', controls: 'paddle', aspect: 3 / 4 },
+  lunarlander: { id: 'lunarlander', name: 'Lunar Lander', tagline: 'Guide your lander gently onto the moon base.', gateNote: 'Study time buys play time.', icon: '🌙', accent: '#b6d4ee', controls: 'dpad', aspect: 3 / 4 },
   tictactoe: {
     id: 'tictactoe',
     name: 'Tic-Tac-Toe',
@@ -421,6 +443,17 @@ export const HOW_TO: Record<GameId, string> = {
     'Run and jump to the flag at the end. Collect coins, bounce on enemies to squash them, and watch out for spiky ones you cannot jump on. Jump over the pits! See a glowing OPEN door? Stand on it and STOP moving for a moment to warp to a hidden coin room.',
   platformer2:
     'Run through each storybook chapter to reach the flag. Collect coins, jump over pits, and bounce on safe enemies. Look for magical doors that lead to secret pages full of treasure.',
+  platformer3: 'Run and jump through Skybound Kingdom to reach each beacon. Stomp safe enemies, dodge hazards, use glowing portals, discover secret caches, and collect all three star relics hidden in every level.',
+  diamond: 'Tap the screen or press Space when the pitch reaches home plate. A well-timed swing earns a hit; nail the sweet spot for a home run. Five hits clear the inning, but three strikes end the run.',
+  paperroute: 'Move left and right along the street. Deliver papers to the mailboxes, dodge obstacles, and keep your route rolling.',
+  pyramidhop: 'Use the arrows to hop across the pyramid. Every jewel tile changes color when you land on it. Light every tile to clear the pyramid, and avoid the roaming dust bug.',
+  reversi: 'Place a disc so it traps the other color in a straight line. Every trapped disc flips to your color. When the board is full, the most discs wins.',
+  backgammon: 'This quick 12-point version keeps the classic race: move with the die, bump a lone opponent checker to the bar, bring every checker into your home area, then bear all five off to win.',
+  seabattle: 'Tap squares in the enemy ocean to fire. Hits find ships and misses mark empty water. Find every ship before the other fleet finds yours.',
+  paddleduel: 'Drag your paddle to return the ball. Protect your goal, aim for open space, and score more points than your rival.',
+  asteroids: 'Steer your patrol ship around the starfield. Dodge rocks, clear the dangerous path, and keep your ship safe.',
+  stardefender: 'Slide your starship left and right; it fires automatically. Dodge enemy bolts and shoot every colorful invader before the formation reaches your defense line.',
+  lunarlander: 'Use the arrows for gentle thrust. Slow down, line up with the landing pad, and touch down softly on the moon.',
   runner:
     'You run automatically and the road never ends. Tap anywhere to jump over gaps and obstacles - tap again in the air for a double jump. See how far you can go!',
   breakout:
@@ -473,8 +506,19 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.match3,
   GAMES.blocks,
   GAMES.tetris,
-  GAMES.platformer,
+  GAMES.platformer3,
   GAMES.platformer2,
+  GAMES.platformer,
+  GAMES.diamond,
+  GAMES.paperroute,
+  GAMES.pyramidhop,
+  GAMES.reversi,
+  GAMES.backgammon,
+  GAMES.seabattle,
+  GAMES.paddleduel,
+  GAMES.asteroids,
+  GAMES.stardefender,
+  GAMES.lunarlander,
   GAMES.runner,
   GAMES.breakout,
   GAMES.maze,

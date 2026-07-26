@@ -38,7 +38,10 @@
     "check:grade3": "tsx scripts/check-grade3.ts",
     "check:frogger": "tsx scripts/check-frogger.ts",
     "check:newgames": "tsx scripts/check-newgames.ts",
-    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory && npm run check:merge && npm run check:bubble && npm run check:checkers && npm run check:echo && npm run check:fruit && npm run check:chess && npm run check:tapattack && npm run check:sudoku && npm run check:dots && npm run check:cards && npm run check:wordhunt && npm run check:spelling && npm run check:gradek && npm run check:grade1 && npm run check:grade3 && npm run check:frogger",
+    "check:classic-a": "tsx scripts/check-classic-arcade-a.ts",
+    "check:classic-b": "tsx scripts/check-classic-arcade-b.ts",
+    "check:classic-board": "tsx scripts/check-classic-board.ts",
+    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory && npm run check:merge && npm run check:bubble && npm run check:checkers && npm run check:echo && npm run check:fruit && npm run check:chess && npm run check:tapattack && npm run check:sudoku && npm run check:dots && npm run check:cards && npm run check:wordhunt && npm run check:spelling && npm run check:gradek && npm run check:grade1 && npm run check:grade3 && npm run check:frogger && npm run check:newgames && npm run check:classic-a && npm run check:classic-b && npm run check:classic-board",
     "icons": "node scripts/make-icons.mjs",
     "passcode": "node scripts/passcode-hash.mjs"
   },
