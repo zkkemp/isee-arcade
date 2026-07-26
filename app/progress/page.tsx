@@ -22,6 +22,13 @@ const SUBJECT_COLORS: Record<Subject, string> = {
   math: '#ffb84e',
 };
 
+const SUBJECT_ICONS: Record<Subject, string> = {
+  verbal: '💬',
+  quantitative: '🔢',
+  reading: '📚',
+  math: '✦',
+};
+
 export default function ProgressPage() {
   const [p, setP] = useState<Progress | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -40,9 +47,16 @@ export default function ProgressPage() {
   const reviewIds = Object.keys(p.missed);
   // Newest first, and only one row per question even if it was missed twice.
   const recent = [...p.history].reverse().slice(0, 15);
+  const practiced = SUBJECT_ORDER.filter((subject) => p.bySubject[subject].seen > 0);
+  const focusSubject =
+    practiced.length > 0
+      ? [...practiced].sort(
+          (a, b) => accuracy(p.bySubject[a]) - accuracy(p.bySubject[b]),
+        )[0]
+      : null;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 pb-12 pt-6">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-6">
       <div className="mb-6 flex items-center gap-3">
         <Link
           href="/"
@@ -51,7 +65,12 @@ export default function ProgressPage() {
         >
           ←
         </Link>
-        <h1 className="text-2xl font-bold text-white">Progress</h1>
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300/70">
+            Learner dashboard
+          </div>
+          <h1 className="text-2xl font-black text-white">Progress & practice</h1>
+        </div>
       </div>
 
       {p.totalSeen === 0 ? (
@@ -67,16 +86,17 @@ export default function ProgressPage() {
       ) : (
         <>
           {/* Headline numbers */}
-          <div className="mb-6 grid grid-cols-3 gap-3">
+          <div className="mb-4 grid grid-cols-3 gap-3">
             {[
-              { label: 'answered', value: p.totalSeen, color: '#fff' },
-              { label: 'correct', value: `${overall}%`, color: '#3ddc84' },
-              { label: 'best streak', value: p.bestStreak, color: '#ffb84e' },
+              { label: 'answered', value: p.totalSeen, color: '#fff', icon: '✦' },
+              { label: 'correct', value: `${overall}%`, color: '#3ddc84', icon: '✓' },
+              { label: 'best streak', value: p.bestStreak, color: '#ffb84e', icon: '🔥' },
             ].map((s) => (
               <div
                 key={s.label}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center"
+                className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.025] p-3 text-center shadow-xl"
               >
+                <div className="mb-1 text-sm opacity-70" aria-hidden="true">{s.icon}</div>
                 <div className="text-2xl font-bold" style={{ color: s.color }}>
                   {s.value}
                 </div>
@@ -87,6 +107,35 @@ export default function ProgressPage() {
             ))}
           </div>
 
+          {focusSubject && (
+            <div
+              className="mb-6 flex items-center gap-3 rounded-3xl border p-4"
+              style={{
+                borderColor: `${SUBJECT_COLORS[focusSubject]}35`,
+                background: `linear-gradient(110deg, ${SUBJECT_COLORS[focusSubject]}16, rgba(255,255,255,.025))`,
+              }}
+            >
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-black/20 text-2xl">
+                {SUBJECT_ICONS[focusSubject]}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Suggested focus
+                </div>
+                <div className="font-black text-white">{SUBJECT_LABELS[focusSubject]}</div>
+                <div className="text-xs text-white/50">
+                  This is the best place for the next little confidence boost.
+                </div>
+              </div>
+              <Link
+                href="/"
+                className="flex-shrink-0 rounded-2xl bg-white/10 px-3 py-2 text-xs font-bold text-white/80"
+              >
+                Play →
+              </Link>
+            </div>
+          )}
+
           {/* By subject */}
           <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/40">
             By subject
@@ -96,9 +145,10 @@ export default function ProgressPage() {
               const stat = p.bySubject[s];
               const pct = accuracy(stat);
               return (
-                <div key={s} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <div key={s} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
                   <div className="mb-2 flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold text-white">
+                    <span className="flex items-center gap-2 text-sm font-bold text-white">
+                      <span aria-hidden="true">{SUBJECT_ICONS[s]}</span>
                       {SUBJECT_LABELS[s]}
                     </span>
                     <span className="text-xs text-white/50">
@@ -126,7 +176,7 @@ export default function ProgressPage() {
                 Needs review ({reviewIds.length})
               </h2>
               <p className="mb-3 text-xs text-white/40">
-                These come back in future games until she gets them right.
+                These come back in future games until the learner gets them right.
               </p>
               <ul className="mb-6 space-y-2">
                 {reviewIds.slice(0, 12).map((id) => {
@@ -158,7 +208,7 @@ export default function ProgressPage() {
           <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/40">
             High scores
           </h2>
-          <div className="mb-6 grid gap-2">
+          <div className="mb-6 grid gap-2 sm:grid-cols-2">
             {GAME_LIST.map((g) => (
               <div
                 key={g.id}

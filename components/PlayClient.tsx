@@ -3,7 +3,9 @@
 import GameShell from './GameShell';
 import Frogger from './games/Frogger';
 import Snake from './games/Snake';
+import SnakeV2 from './games/SnakeV2';
 import Platformer from './games/Platformer';
+import PlatformerV2 from './games/PlatformerV2';
 import Runner from './games/Runner';
 import Breakout from './games/Breakout';
 import Climber from './games/Climber';
@@ -18,13 +20,18 @@ import BubblePop from './games/BubblePop';
 import Checkers from './games/Checkers';
 import Echo from './games/Echo';
 import FruitCatch from './games/FruitCatch';
+import FruitCatchV2 from './games/FruitCatchV2';
 import Chess from './games/Chess';
 import TapAttack from './games/TapAttack';
+import TapAttackV2 from './games/TapAttackV2';
 import Sudoku from './games/Sudoku';
 import DotsBoxes from './games/DotsBoxes';
 import CardMatch from './games/CardMatch';
 import WordHunt from './games/WordHunt';
 import SpellingZap from './games/SpellingZap';
+import SkyStack from './games/SkyStack';
+import StarfallSquadron from './games/StarfallSquadron';
+import FireflyOrbit from './games/FireflyOrbit';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -34,7 +41,9 @@ import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 const COMPONENTS: Record<GameId, GameComponent> = {
   frogger: Frogger,
   snake: Snake,
+  snake2: SnakeV2,
   platformer: Platformer,
+  platformer2: PlatformerV2,
   runner: Runner,
   breakout: Breakout,
   climber: Climber,
@@ -49,13 +58,18 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   checkers: Checkers,
   echo: Echo,
   fruit: FruitCatch,
+  fruit2: FruitCatchV2,
   chess: Chess,
   tapattack: TapAttack,
+  tapattack2: TapAttackV2,
   sudoku: Sudoku,
   dots: DotsBoxes,
   cards: CardMatch,
   wordhunt: WordHunt,
   spelling: SpellingZap,
+  skystack: SkyStack,
+  starfall: StarfallSquadron,
+  firefly: FireflyOrbit,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

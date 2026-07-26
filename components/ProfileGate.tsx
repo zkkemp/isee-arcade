@@ -72,14 +72,14 @@ export default function ProfileGate() {
   return (
     <div className="mb-5">
       {/* Signed-in bar */}
-      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+      <div className="flex items-center gap-3 rounded-3xl border border-violet-300/15 bg-gradient-to-br from-violet-300/[0.09] to-white/[0.025] p-4 shadow-xl">
         {active ? (
           <>
             <CharacterFace character={getCharacter(active.avatarId)} size={44} className="rounded-xl" />
             <div className="min-w-0 flex-1">
-              <div className="truncate font-bold text-white">{active.name}</div>
-              <div className="text-xs" style={{ color: ACCENT }}>
-                {GRADE_BAND_LABELS[active.band]}
+              <div className="truncate text-lg font-black text-white">{active.name}</div>
+              <div className="mt-0.5 text-xs font-semibold" style={{ color: ACCENT }}>
+                {GRADE_BAND_LABELS[active.band]} questions
               </div>
             </div>
           </>
@@ -91,14 +91,14 @@ export default function ProfileGate() {
         <button
           type="button"
           onClick={onSwitch}
-          className="flex-shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-white/80 transition active:scale-95"
+          className="flex-shrink-0 rounded-2xl border border-white/15 bg-white/[0.07] px-3.5 py-2.5 text-sm font-bold text-white/80 transition hover:bg-white/10 active:scale-95"
         >
           {active ? (open ? 'Close' : 'Switch player') : 'Choose player'}
         </button>
       </div>
 
       {showChooser && (
-        <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="mt-3 rounded-3xl border border-white/10 bg-[#121020]/90 p-4 shadow-2xl">
           {view === 'parentUnlock' ? (
             <ParentUnlockPanel
               actions={actions}

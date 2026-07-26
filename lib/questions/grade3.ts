@@ -899,4 +899,136 @@ export const GRADE_3_TEMPLATES: QuestionTemplate[] = [
   synonymTemplate('g3-029', 'grade 3 synonyms: speed and sound', 1, POOL_SPEED_SOUND),
   synonymTemplate('g3-030', 'grade 3 synonyms: kindness and toughness', 2, POOL_KINDNESS_TOUGH),
   synonymTemplate('g3-031', 'grade 3 synonyms: appearance and temperature', 2, POOL_APPEARANCE_TEMP),
+  {
+    id: 'g3-032',
+    subject: 'math',
+    kind: 'math_achievement',
+    difficulty: 3,
+    topic: 'two-step multiplication and subtraction',
+    generate: (rng) => {
+      const groups = randInt(rng, 3, 8);
+      const perGroup = randInt(rng, 4, 9);
+      const removed = randInt(rng, 2, groups * perGroup - 2);
+      const total = groups * perGroup;
+      const correct = num(total - removed);
+      const { choices, answer } = buildChoices(rng, correct, [
+        num(total),
+        num(total + removed),
+        num(groups + perGroup - removed),
+        num(total - removed + 1),
+      ]);
+      return {
+        prompt: `A librarian puts ${perGroup} books on each of ${groups} shelves, then lends out ${removed} books. How many books are left?`,
+        choices,
+        answer,
+        explain: `${groups} x ${perGroup} = ${total} books. Then ${total} - ${removed} = ${correct} books left.`,
+      };
+    },
+  },
+  {
+    id: 'g3-033',
+    subject: 'math',
+    kind: 'math_achievement',
+    difficulty: 3,
+    topic: 'compare fractions with the same denominator',
+    generate: (rng) => {
+      const denominator = pick(rng, [4, 5, 6, 8, 10] as const);
+      const a = randInt(rng, 1, denominator - 2);
+      const b = randInt(rng, a + 1, denominator - 1);
+      const correct = `${b}/${denominator}`;
+      const { choices, answer } = buildChoices(rng, correct, [
+        `${a}/${denominator}`,
+        `${b}/${a}`,
+        `${b}/${denominator + 1}`,
+      ]);
+      return {
+        prompt: `Which fraction is greater: ${a}/${denominator} or ${b}/${denominator}?`,
+        choices,
+        answer,
+        explain: `The denominators match, so compare the top numbers. ${b} is greater than ${a}, so ${b}/${denominator} is greater.`,
+      };
+    },
+  },
+  {
+    id: 'g3-034',
+    subject: 'math',
+    kind: 'math_achievement',
+    difficulty: 2,
+    topic: 'find a missing side from perimeter',
+    generate: (rng) => {
+      const length = randInt(rng, 5, 14);
+      const width = randInt(rng, 2, length - 1);
+      const perimeter = 2 * (length + width);
+      const correct = num(width);
+      const { choices, answer } = buildChoices(rng, correct, [
+        num(length),
+        num(perimeter / 2),
+        num(perimeter - length),
+        num(width + 1),
+      ]);
+      return {
+        prompt: `A rectangle has a perimeter of ${perimeter} cm. Its long sides are ${length} cm each. How long is each short side?`,
+        choices,
+        answer,
+        explain: `The two long sides use ${length} + ${length} = ${2 * length} cm. ${perimeter} - ${2 * length} = ${2 * width} cm remain, so each short side is ${width} cm.`,
+      };
+    },
+  },
+  {
+    id: 'g3-035',
+    subject: 'quantitative',
+    kind: 'quant_reasoning',
+    difficulty: 2,
+    topic: 'read a picture-table total',
+    generate: (rng) => {
+      const counts = [randInt(rng, 2, 8), randInt(rng, 2, 8), randInt(rng, 2, 8)];
+      const total = counts[0] + counts[1] + counts[2];
+      const correct = num(total);
+      const { choices, answer } = buildChoices(rng, correct, [
+        num(Math.max(...counts)),
+        num(counts[0] * counts[1] * counts[2]),
+        num(total - counts[1]),
+        num(total + 1),
+      ]);
+      return {
+        prompt: `A class survey shows ${counts[0]} kids chose soccer, ${counts[1]} chose art, and ${counts[2]} chose music. How many kids answered the survey altogether?`,
+        choices,
+        answer,
+        explain: `Add all three groups: ${counts[0]} + ${counts[1]} + ${counts[2]} = ${correct}.`,
+      };
+    },
+  },
+  {
+    id: 'g3-036',
+    subject: 'quantitative',
+    kind: 'quant_reasoning',
+    difficulty: 3,
+    topic: 'rule-based number pattern',
+    generate: (rng) => {
+      const start = randInt(rng, 2, 9);
+      const multiplier = pick(rng, [2, 3] as const);
+      const terms = [start, start * multiplier, start * multiplier ** 2, start * multiplier ** 3];
+      const next = start * multiplier ** 4;
+      const correct = num(next);
+      const { choices, answer } = buildChoices(rng, correct, [
+        num(terms[3] + multiplier),
+        num(terms[3] * (multiplier + 1)),
+        num(terms[2] * multiplier),
+        num(next + multiplier),
+      ]);
+      return {
+        prompt: `What number comes next in this multiply pattern? ${terms.join(', ')}, ___`,
+        choices,
+        answer,
+        explain: `Each number is multiplied by ${multiplier}. ${terms[3]} x ${multiplier} = ${correct}.`,
+      };
+    },
+  },
+  synonymTemplate('g3-037', 'grade 3 synonyms: useful school words', 3, [
+    ['ANSWER', 'reply', 'question', 'mistake', 'silence'],
+    ['CHOOSE', 'select', 'drop', 'hide', 'forget'],
+    ['NOTICE', 'observe', 'ignore', 'repair', 'whisper'],
+    ['PROBLEM', 'puzzle', 'celebration', 'solution', 'game'],
+    ['FINISH', 'complete', 'start', 'lose', 'wait'],
+  ]),
 ];

@@ -9,7 +9,9 @@ export type GameId =
   | 'tetris'
   | 'frogger'
   | 'snake'
+  | 'snake2'
   | 'platformer'
+  | 'platformer2'
   | 'runner'
   | 'breakout'
   | 'climber'
@@ -21,13 +23,18 @@ export type GameId =
   | 'checkers'
   | 'echo'
   | 'fruit'
+  | 'fruit2'
   | 'chess'
   | 'tapattack'
+  | 'tapattack2'
   | 'sudoku'
   | 'dots'
   | 'cards'
   | 'wordhunt'
-  | 'spelling';
+  | 'spelling'
+  | 'skystack'
+  | 'starfall'
+  | 'firefly';
 
 /**
  * How a game is driven on touch.
@@ -113,6 +120,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'dpad',
     aspect: 1,
   },
+  snake2: {
+    id: 'snake2',
+    name: 'Byte Snake: Garden',
+    tagline: 'Slither through the garden, snack on berries, and grow your trail.',
+    gateNote: 'Study time buys play time.',
+    icon: '🐍',
+    accent: '#69c66d',
+    controls: 'dpad',
+    aspect: 1,
+  },
   match3: {
     id: 'match3',
     name: 'Sugar Swap',
@@ -193,6 +210,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'run-jump',
     aspect: 4 / 3,
   },
+  platformer2: {
+    id: 'platformer2',
+    name: 'Coin Runner: Storybook',
+    tagline: 'Run through storybook worlds, scoop up coins, and reach the flag.',
+    gateNote: 'Study time buys play time.',
+    icon: '📖',
+    accent: '#ff9f5a',
+    controls: 'run-jump',
+    aspect: 4 / 3,
+  },
   tictactoe: {
     id: 'tictactoe',
     name: 'Tic-Tac-Toe',
@@ -263,6 +290,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'paddle',
     aspect: 3 / 4,
   },
+  fruit2: {
+    id: 'fruit2',
+    name: 'Fruit Catch: Orchard',
+    tagline: 'Catch the orchard harvest and keep the basket full of goodies.',
+    gateNote: 'Study time buys play time.',
+    icon: '🍎',
+    accent: '#f26b5b',
+    controls: 'paddle',
+    aspect: 3 / 4,
+  },
   chess: {
     id: 'chess',
     name: 'Chess',
@@ -280,6 +317,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     gateNote: 'Study time buys play time.',
     icon: '🔨',
     accent: '#f2542d',
+    controls: 'grid',
+    aspect: 1,
+  },
+  tapattack2: {
+    id: 'tapattack2',
+    name: 'Tap Attack: Carnival',
+    tagline: 'Tap the carnival targets fast, but leave the grumpy ones alone.',
+    gateNote: 'Study time buys play time.',
+    icon: '🎪',
+    accent: '#ff5aa5',
     controls: 'grid',
     aspect: 1,
   },
@@ -333,6 +380,36 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'grid',
     aspect: 3 / 4,
   },
+  skystack: {
+    id: 'skystack',
+    name: 'Sky Stack',
+    tagline: 'Tap at just the right moment and build a toy town into the clouds.',
+    gateNote: 'Study time buys play time.',
+    icon: '🏙️',
+    accent: '#7dd3fc',
+    controls: 'tapjump',
+    aspect: 3 / 4,
+  },
+  starfall: {
+    id: 'starfall',
+    name: 'Starfall Squadron',
+    tagline: 'Steer through a sparkling galaxy and clear each colorful wave.',
+    gateNote: 'Study time buys play time.',
+    icon: '🚀',
+    accent: '#7be6ff',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
+  firefly: {
+    id: 'firefly',
+    name: 'Firefly Orbit',
+    tagline: 'Time one perfect tap to bring two glowing garden friends together.',
+    gateNote: 'Study time buys play time.',
+    icon: '✨',
+    accent: '#fff19a',
+    controls: 'grid',
+    aspect: 2 / 3,
+  },
 };
 
 /**
@@ -351,8 +428,12 @@ export const HOW_TO: Record<GameId, string> = {
     'Hop across the road and river to reach the safe spots at the top. Dodge the cars, and ride the logs and lily pads across the water - do not fall in! Grab coins along the way.',
   snake:
     'Steer the snake to eat the food. Every bite makes it longer. Do not run into the walls or into your own tail.',
+  snake2:
+    'Guide your snake through the garden to munch sweet berries. Every berry makes your trail longer, so plan ahead and do not bump into the fence or your own tail.',
   platformer:
     'Run and jump to the flag at the end. Collect coins, bounce on enemies to squash them, and watch out for spiky ones you cannot jump on. Jump over the pits! See a glowing OPEN door? Stand on it and STOP moving for a moment to warp to a hidden coin room.',
+  platformer2:
+    'Run through each storybook chapter to reach the flag. Collect coins, jump over pits, and bounce on safe enemies. Look for magical doors that lead to secret pages full of treasure.',
   runner:
     'You run automatically and the road never ends. Tap anywhere to jump over gaps and obstacles - tap again in the air for a double jump. See how far you can go!',
   breakout:
@@ -375,10 +456,14 @@ export const HOW_TO: Record<GameId, string> = {
     'Watch the pattern of pads light up, then tap them back in the same order. Each round adds one more step. How long a pattern can you remember?',
   fruit:
     'Slide the basket left and right to catch the falling fruit. Catch the good fruit for points, and let the yucky ones fall past. Do not miss too many!',
+  fruit2:
+    'Slide your basket through the orchard to catch ripe fruit as it tumbles down. Grab the tasty fruit for points, avoid the spoiled ones, and do not let too many good picks fall away.',
   chess:
     'The classic game. Each piece moves its own way. Capture pieces and trap the other king in checkmate to win. Play a friend or the computer.',
   tapattack:
     'Critters pop out of the holes - tap the friendly ones fast for points before they duck back down. Do NOT tap the grumpy ones! It speeds up as you go.',
+  tapattack2:
+    'Carnival targets pop up all around the booth. Tap the happy targets quickly for points, but do not tap the grumpy ones! Each round gets faster.',
   sudoku:
     'Fill the grid so every row, every column, and every box has each number exactly once. Tap a square, then tap a number. The given numbers cannot change.',
   dots:
@@ -389,6 +474,12 @@ export const HOW_TO: Record<GameId, string> = {
     'Find the hidden words in the letter grid. Drag from the first letter to the last - words go across, down, and diagonally. Find them all to move on.',
   spelling:
     'A word flashes on the screen - memorize it! Then it hides and you tap the scrambled letters in the right order to spell it. Stuck? Use the Peek button.',
+  skystack:
+    'A colorful block slides across the sky. Tap or press Space to drop it onto the tower. The part that hangs over the edge falls away, so line it up carefully. Stack eight blocks to light up the next town!',
+  starfall:
+    'Drag your ship around the galaxy or use the arrow keys. Your ship fires automatically. Dodge the visitors, clear every colorful wave, and protect all three hearts.',
+  firefly:
+    'The blue firefly circles the moonlit garden. Tap or press Space when it reaches the golden firefly. Light six meetings to open the next garden, and watch closely as the orbit speeds up!',
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -396,12 +487,14 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.blocks,
   GAMES.tetris,
   GAMES.platformer,
+  GAMES.platformer2,
   GAMES.runner,
   GAMES.breakout,
   GAMES.maze,
   GAMES.climber,
   GAMES.frogger,
   GAMES.snake,
+  GAMES.snake2,
   GAMES.tictactoe,
   GAMES.memory,
   GAMES.merge,
@@ -412,10 +505,15 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.sudoku,
   GAMES.echo,
   GAMES.fruit,
+  GAMES.fruit2,
   GAMES.tapattack,
+  GAMES.tapattack2,
   GAMES.cards,
   GAMES.wordhunt,
   GAMES.spelling,
+  GAMES.skystack,
+  GAMES.starfall,
+  GAMES.firefly,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

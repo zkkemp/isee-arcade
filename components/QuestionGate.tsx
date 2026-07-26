@@ -24,6 +24,39 @@ const SUBJECT_COLORS: Record<Question['subject'], string> = {
   math: '#ffb84e',
 };
 
+const SUBJECT_ICONS: Record<Question['subject'], string> = {
+  verbal: '💬',
+  quantitative: '🔢',
+  reading: '📚',
+  math: '✦',
+};
+
+/** A no-reading-required number picture for the youngest learners. */
+function NumberPicture({ choice }: { choice: string }) {
+  const number = Number(choice.trim());
+  if (!Number.isInteger(number) || number < 0 || number > 10) return null;
+  if (number === 0) {
+    return (
+      <span
+        aria-hidden="true"
+        className="rounded-full border border-current px-2 py-0.5 text-[10px] font-black uppercase opacity-55"
+      >
+        none
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="grid w-9 grid-cols-5 place-items-center gap-0.5 opacity-80"
+    >
+      {Array.from({ length: number }, (_, dot) => (
+        <span key={dot} className="h-1.5 w-1.5 rounded-full bg-current" />
+      ))}
+    </span>
+  );
+}
+
 export type QuestionGateProps = {
   question: Question;
   /** Why play stopped, e.g. "You got squashed" or "Bank 2 reached". */
@@ -62,6 +95,7 @@ export default function QuestionGate({
   const accent = SUBJECT_COLORS[question.subject];
   const speechLine = questionSpeech(question.prompt, question.choices);
   const canSpeak = speechAvailable();
+  const subjectIcon = SUBJECT_ICONS[question.subject];
 
   const choose = useCallback(
     (i: number) => {
@@ -147,13 +181,22 @@ export default function QuestionGate({
     <div className="fixed inset-0 z-50 flex flex-col bg-[#0b0b16]/97 backdrop-blur-md">
       {/* Header */}
       <div
-        className="flex-shrink-0 border-b border-white/10 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3"
+        className="flex-shrink-0 border-b border-white/10 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 shadow-[0_12px_40px_rgba(0,0,0,.2)]"
         style={{ background: `linear-gradient(180deg, ${accent}22, transparent)` }}
       >
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-base font-bold text-white">{headline}</div>
-            <div className="truncate text-xs text-white/50">{subhead}</div>
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border text-xl shadow-lg"
+              style={{ borderColor: `${accent}55`, background: `${accent}20` }}
+              aria-hidden="true"
+            >
+              {subjectIcon}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-base font-black text-white">{headline}</div>
+              <div className="truncate text-xs text-white/50">{subhead}</div>
+            </div>
           </div>
           <div className="flex-shrink-0 text-right">
             <div
@@ -186,8 +229,21 @@ export default function QuestionGate({
             </p>
           )}
 
-          <div className="mb-4 flex items-start gap-3">
-            <p className="flex-1 text-xl font-semibold leading-snug text-white">{question.prompt}</p>
+          {narrate && (
+            <div
+              className="mb-3 flex items-center gap-3 rounded-2xl border px-4 py-3"
+              style={{ borderColor: `${accent}45`, background: `${accent}12` }}
+            >
+              <span className="text-2xl" aria-hidden="true">👂</span>
+              <div className="min-w-0">
+                <div className="text-sm font-black text-white">Listen, then pick your answer</div>
+                <div className="text-xs text-white/55">Tap any little speaker to hear it again.</div>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-4 flex items-start gap-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+            <p className="flex-1 text-xl font-bold leading-snug text-white sm:text-2xl">{question.prompt}</p>
             {canSpeak && (
               <button
                 type="button"
@@ -239,20 +295,32 @@ export default function QuestionGate({
               }
 
               return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => choose(i)}
-                  disabled={answered || readLock > 0}
-                  className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left text-[17px] leading-snug transition disabled:cursor-not-allowed ${cls}`}
-                >
-                  <span className="mt-[2px] flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl border border-current text-xs font-bold opacity-75">
-                    {LETTERS[i]}
-                  </span>
-                  <span className="flex-1">{choice}</span>
-                  {answered && isAnswer && <span className="text-base">✓</span>}
-                  {answered && isPicked && !isAnswer && <span className="text-base">✕</span>}
-                </button>
+                <div key={i} className={`grid ${narrate && canSpeak ? 'grid-cols-[1fr_auto]' : ''} gap-2`}>
+                  <button
+                    type="button"
+                    onClick={() => choose(i)}
+                    disabled={answered || readLock > 0}
+                    className={`flex min-h-16 items-center gap-3 rounded-2xl border px-4 py-3 text-left text-[17px] font-semibold leading-snug transition disabled:cursor-not-allowed sm:text-lg ${cls}`}
+                  >
+                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-current text-sm font-black opacity-80">
+                      {LETTERS[i]}
+                    </span>
+                    <span className="flex-1">{choice}</span>
+                    {narrate && <NumberPicture choice={choice} />}
+                    {answered && isAnswer && <span className="text-lg">✓</span>}
+                    {answered && isPicked && !isAnswer && <span className="text-lg">✕</span>}
+                  </button>
+                  {narrate && canSpeak && (
+                    <button
+                      type="button"
+                      onClick={() => speak(`${LETTERS[i]}. ${toSpeakable(choice)}`)}
+                      aria-label={`Hear answer ${LETTERS[i]}`}
+                      className="flex min-h-16 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.055] text-xl text-white/75 transition hover:bg-white/10 active:scale-95"
+                    >
+                      🔊
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

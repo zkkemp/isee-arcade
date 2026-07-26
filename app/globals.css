@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0a0a14;
-  --bg-soft: #141425;
+  --bg: #090812;
+  --bg-soft: #17152b;
 }
 
 @theme inline {
@@ -18,7 +18,10 @@ html {
 }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 12% -5%, rgba(108, 76, 190, 0.2), transparent 34rem),
+    radial-gradient(circle at 92% 8%, rgba(42, 185, 180, 0.09), transparent 30rem),
+    linear-gradient(180deg, #0d0b18 0%, var(--bg) 34rem);
   color: #f2f2f7;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   min-height: 100dvh;
@@ -26,6 +29,338 @@ body {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   -webkit-tap-highlight-color: transparent;
+}
+
+.arcade-home {
+  isolation: isolate;
+}
+
+.arcade-masthead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.arcade-logo span {
+  background: linear-gradient(110deg, #c4b5fd 5%, #a78bfa 40%, #67e8f9 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 20px rgba(167, 139, 250, 0.22));
+}
+
+.featured-game {
+  background:
+    radial-gradient(circle at 82% 20%, color-mix(in srgb, var(--game-accent, #ffb84e) 18%, transparent), transparent 42%),
+    linear-gradient(135deg, #17142a, #12101e);
+}
+
+.game-card {
+  position: relative;
+}
+
+.game-card::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+  content: "";
+  pointer-events: none;
+}
+
+.game-card__play {
+  background: color-mix(in srgb, var(--game-accent) 25%, rgba(255, 255, 255, 0.05));
+  border: 1px solid color-mix(in srgb, var(--game-accent) 48%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--game-accent) 20%, transparent);
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.game-card:hover .game-card__play {
+  background: var(--game-accent);
+  color: #11111c;
+  transform: scale(1.08);
+}
+
+.game-art {
+  --game-accent: #a78bfa;
+  position: relative;
+  display: block;
+  height: 8.5rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 70% 22%, color-mix(in srgb, var(--game-accent) 24%, transparent), transparent 32%),
+    linear-gradient(155deg, color-mix(in srgb, var(--game-accent) 17%, #211d36), #10121f 75%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.game-art--featured {
+  min-height: 17rem;
+  height: 100%;
+  border-bottom: 0;
+}
+
+.game-art__sun {
+  position: absolute;
+  right: 15%;
+  top: 14%;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 999px;
+  background: #fff1aa;
+  box-shadow: 0 0 0 0.7rem rgba(255, 231, 143, 0.08), 0 0 2.5rem rgba(255, 218, 112, 0.35);
+  opacity: 0.85;
+}
+
+.game-art__edition {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 7;
+  border: 1px solid rgba(253, 230, 138, 0.35);
+  border-radius: 999px;
+  background: rgba(21, 17, 35, 0.78);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.22);
+  color: #fde68a;
+  font-size: 0.52rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  padding: 0.38rem 0.55rem;
+  text-transform: uppercase;
+}
+
+.game-art__backdrop {
+  position: absolute;
+  left: -8%;
+  bottom: -30%;
+  width: 72%;
+  height: 70%;
+  border-radius: 50% 52% 0 0;
+  background: color-mix(in srgb, var(--game-accent) 35%, #292246);
+  transform: rotate(7deg);
+}
+
+.game-art__backdrop--near {
+  left: 38%;
+  bottom: -42%;
+  width: 78%;
+  height: 86%;
+  background: color-mix(in srgb, var(--game-accent) 47%, #161b31);
+  transform: rotate(-8deg);
+}
+
+.game-art__track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 25%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 2.5rem, rgba(255,255,255,.06) 2.5rem 2.7rem),
+    color-mix(in srgb, var(--game-accent) 24%, #10111f);
+  border-top: 2px solid color-mix(in srgb, var(--game-accent) 58%, white 8%);
+}
+
+.game-art__glyph {
+  position: absolute;
+  left: 50%;
+  top: 49%;
+  display: flex;
+  width: 4.1rem;
+  height: 4.1rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.04)),
+    color-mix(in srgb, var(--game-accent) 28%, #171326);
+  box-shadow:
+    0 1rem 2rem rgba(0, 0, 0, 0.3),
+    0 0 2rem color-mix(in srgb, var(--game-accent) 28%, transparent),
+    inset 0 1px rgba(255, 255, 255, 0.24);
+  font-size: 2rem;
+  transform: translate(-50%, -50%) rotate(-5deg);
+  transition: transform 280ms cubic-bezier(.2,.9,.3,1.2);
+  z-index: 4;
+}
+
+.group:hover .game-art__glyph {
+  transform: translate(-50%, -56%) rotate(3deg) scale(1.08);
+}
+
+.game-art__spark {
+  position: absolute;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: #fff4c4;
+  box-shadow: 0 0 1rem var(--game-accent);
+  z-index: 3;
+}
+
+.game-art__spark--one {
+  left: 19%;
+  top: 25%;
+}
+
+.game-art__spark--two {
+  left: 76%;
+  top: 54%;
+  width: 0.25rem;
+  height: 0.25rem;
+}
+
+.game-art__spark--three {
+  left: 31%;
+  top: 68%;
+  width: 0.3rem;
+  height: 0.3rem;
+}
+
+.game-art__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(112deg, transparent 22%, rgba(255,255,255,.08) 38%, transparent 54%);
+  transform: translateX(-80%);
+  transition: transform 600ms ease;
+  z-index: 5;
+}
+
+.group:hover .game-art__shine {
+  transform: translateX(80%);
+}
+
+.game-art--candy {
+  background:
+    radial-gradient(circle at 25% 30%, rgba(255, 111, 181, 0.28), transparent 25%),
+    radial-gradient(circle at 80% 20%, rgba(94, 200, 255, 0.22), transparent 30%),
+    linear-gradient(155deg, #28162f, #111326 75%);
+}
+
+.game-art--candy .game-art__backdrop {
+  width: 3.3rem;
+  height: 3.3rem;
+  left: 13%;
+  bottom: 17%;
+  border-radius: 50%;
+  background: #ff77bd;
+  box-shadow: 5rem -2.2rem 0 #65caff, 10.4rem .25rem 0 #ffd75e, 14rem -2rem 0 #63d29c;
+  transform: none;
+  opacity: 0.55;
+}
+
+.game-art--candy .game-art__backdrop--near,
+.game-art--candy .game-art__track,
+.game-art--candy .game-art__sun {
+  display: none;
+}
+
+.game-art--blocks {
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
+    linear-gradient(155deg, #17233d, #10111d);
+  background-size: 1.7rem 1.7rem, 1.7rem 1.7rem, auto;
+}
+
+.game-art--blocks .game-art__backdrop {
+  left: 9%;
+  bottom: 13%;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.55rem;
+  background: #5ec8ff;
+  box-shadow: 2.35rem 0 0 #5ec8ff, 4.7rem 0 0 #8b7cf6, 4.7rem -2.35rem 0 #8b7cf6, 9.4rem 0 0 #ffd75e;
+  transform: rotate(0);
+  opacity: 0.62;
+}
+
+.game-art--blocks .game-art__backdrop--near,
+.game-art--blocks .game-art__track,
+.game-art--blocks .game-art__sun {
+  display: none;
+}
+
+.game-art--arena {
+  background:
+    linear-gradient(rgba(110,255,210,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110,255,210,.04) 1px, transparent 1px),
+    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--game-accent) 22%, transparent), transparent 48%),
+    #101521;
+  background-size: 1.3rem 1.3rem, 1.3rem 1.3rem, auto, auto;
+}
+
+.game-art--arena .game-art__backdrop,
+.game-art--arena .game-art__track,
+.game-art--arena .game-art__sun {
+  display: none;
+}
+
+.game-art--tabletop {
+  background:
+    linear-gradient(35deg, rgba(255,255,255,.04) 25%, transparent 25%) 0 0 / 2.5rem 2.5rem,
+    linear-gradient(215deg, rgba(255,255,255,.04) 25%, transparent 25%) 0 0 / 2.5rem 2.5rem,
+    linear-gradient(150deg, #35243d, #17131f);
+}
+
+.game-art--tabletop .game-art__backdrop {
+  left: 7%;
+  bottom: -32%;
+  width: 86%;
+  height: 72%;
+  border-radius: 50%;
+  background: rgba(9, 8, 18, 0.5);
+  border: 1px solid rgba(255,255,255,.08);
+  transform: rotate(-4deg);
+}
+
+.game-art--tabletop .game-art__backdrop--near,
+.game-art--tabletop .game-art__track,
+.game-art--tabletop .game-art__sun {
+  display: none;
+}
+
+.game-art--words {
+  background:
+    radial-gradient(circle at 72% 28%, color-mix(in srgb, var(--game-accent) 22%, transparent), transparent 34%),
+    linear-gradient(155deg, #19263a, #12101e);
+}
+
+.game-art--words .game-art__backdrop {
+  left: 8%;
+  bottom: 14%;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.65rem;
+  background: rgba(255,255,255,.13);
+  border: 1px solid rgba(255,255,255,.15);
+  box-shadow: 2.8rem -1.4rem 0 rgba(255,255,255,.09), 9rem -.25rem 0 rgba(255,255,255,.11), 12rem -1.7rem 0 rgba(255,255,255,.08);
+  transform: rotate(-8deg);
+}
+
+.game-art--words .game-art__backdrop--near,
+.game-art--words .game-art__track,
+.game-art--words .game-art__sun {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .game-art {
+    height: 10rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .game-art {
+    height: 7.7rem;
+  }
+
+  .game-art__glyph {
+    width: 3.6rem;
+    height: 3.6rem;
+    font-size: 1.75rem;
+  }
 }
 
 /* Nothing here benefits from a text cursor, and long-press-to-select fires

@@ -735,4 +735,29 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
       };
     },
   },
+  {
+    id: 'gk-025',
+    subject: 'math',
+    kind: 'math_achievement',
+    difficulty: 1,
+    topic: 'add two visible groups within ten',
+    generate: (rng) => {
+      const a = randInt(rng, 1, 5);
+      const b = randInt(rng, 1, 5);
+      const total = a + b;
+      const correct = num(total);
+      const { choices, answer } = buildChoices(rng, correct, [
+        num(total - 1),
+        num(total + 1),
+        num(Math.abs(a - b)),
+        num(a),
+      ]);
+      return {
+        prompt: `Count the two groups of stars: ${repeatMark('*', a)} and ${repeatMark('*', b)}. How many stars are there altogether?`,
+        choices,
+        answer,
+        explain: `Count both groups: ${a} stars and ${b} stars make ${total} stars.`,
+      };
+    },
+  },
 ];

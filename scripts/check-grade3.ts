@@ -178,6 +178,18 @@ function sequenceVerifier(q: Question): string | null {
   return num(terms[terms.length - 1] + step);
 }
 
+function multiplyPatternVerifier(q: Question): string | null {
+  const m = /^What number comes next in this multiply pattern\? (.+), ___$/.exec(q.prompt);
+  if (!m) return null;
+  const terms = m[1].split(', ').map(Number);
+  if (terms.length < 2 || terms[0] === 0 || terms[1] % terms[0] !== 0) return null;
+  const multiplier = terms[1] / terms[0];
+  if (multiplier < 2 || !terms.every((value, i) => i === 0 || value === terms[i - 1] * multiplier)) {
+    return null;
+  }
+  return num(terms[terms.length - 1] * multiplier);
+}
+
 function compareNumbersVerifier(q: Question): string | null {
   const m = /^Which number is the (greatest|least)\? (.+)$/.exec(q.prompt);
   if (!m) return null;
@@ -250,6 +262,7 @@ const VERIFIERS: Array<(q: Question) => string | null> = [
   perimeterVerifier,
   elapsedTimeVerifier,
   readClockVerifier,
+  multiplyPatternVerifier,
   sequenceVerifier,
   compareNumbersVerifier,
   estimateSumVerifier,
@@ -351,8 +364,8 @@ for (const template of GRADE_3_TEMPLATES) {
   if (sawRecompute) verifiedTopics.add(template.id);
 }
 
-if (GRADE_3_TEMPLATES.length < 28 || GRADE_3_TEMPLATES.length > 34) {
-  fail(`GRADE_3_TEMPLATES has ${GRADE_3_TEMPLATES.length} templates, expected 28-34`);
+if (GRADE_3_TEMPLATES.length < 34 || GRADE_3_TEMPLATES.length > 40) {
+  fail(`GRADE_3_TEMPLATES has ${GRADE_3_TEMPLATES.length} templates, expected 34-40`);
 }
 
 // ---------------------------------------------------------------------------

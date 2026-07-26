@@ -887,4 +887,29 @@ export const GRADE_1_TEMPLATES: QuestionTemplate[] = [
       };
     },
   },
+  {
+    id: 'g1-030',
+    subject: 'quantitative',
+    kind: 'quant_reasoning',
+    difficulty: 1,
+    topic: 'compare two visible groups',
+    generate: (rng) => {
+      const a = randInt(rng, 3, 10);
+      let b = randInt(rng, 3, 10);
+      while (b === a) b = randInt(rng, 3, 10);
+      const more = Math.max(a, b);
+      const correct = num(more);
+      const { choices, answer } = buildChoices(rng, correct, [
+        num(Math.min(a, b)),
+        num(more + 1),
+        num(more + 2),
+      ]);
+      return {
+        prompt: `Look at the stars. First group: ${repeatMark('*', a)}. Second group: ${repeatMark('*', b)}. How many stars are in the bigger group?`,
+        choices,
+        answer,
+        explain: `The groups have ${a} and ${b} stars. ${more} is the bigger number.`,
+      };
+    },
+  },
 ];

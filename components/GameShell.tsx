@@ -534,6 +534,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   })();
 
   const clockLow = msLeft > 0 && msLeft < 60_000;
+  const isRemaster = meta.id.endsWith('2');
 
   // Controls help lives behind an info button now, not as fixed text under the
   // canvas. On iPad that text sat right under the jump button and iOS kept
@@ -566,24 +567,45 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       {/* HUD - two rows so a long game name and the stats never fight the
           buttons for space. Row 1: back, title, clock, score. Row 2: stats and
           the action buttons. */}
-      <header className="flex flex-shrink-0 flex-col gap-1 px-3 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5 sm:gap-1.5 sm:px-5 sm:pb-2.5">
+      <header
+        className="relative flex flex-shrink-0 flex-col gap-1 overflow-hidden border-b border-white/8 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 shadow-xl sm:gap-1.5 sm:px-5 sm:pb-3"
+        style={{
+          background: `radial-gradient(circle at 72% -30%, ${meta.accent}24, transparent 48%), linear-gradient(180deg, rgba(25,22,43,.98), rgba(12,11,22,.96))`,
+        }}
+      >
         <div className="flex items-center gap-2.5 sm:gap-3">
           <Link
             href="/"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white/70 transition active:scale-95 sm:h-11 sm:w-11 sm:text-lg"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] text-white/75 shadow-lg transition hover:bg-white/10 active:scale-95 sm:h-11 sm:w-11 sm:text-lg"
             aria-label="Back to game list"
           >
             ←
           </Link>
 
-          <div className="min-w-0 flex-1 truncate text-base font-bold leading-tight text-white sm:text-xl">
-            {meta.name}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl border text-lg shadow-lg"
+              style={{ borderColor: `${meta.accent}4d`, background: `${meta.accent}1f` }}
+              aria-hidden="true"
+            >
+              {meta.icon}
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-base font-black leading-tight text-white sm:text-xl">
+                {meta.name}
+              </div>
+              {isRemaster && (
+                <div className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-300 sm:text-[9px]">
+                  New edition · original preserved
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Play clock. The one thing that ends a window, so it is never hidden. */}
           {!gate && (
             <div
-              className={`flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1 sm:px-3.5 sm:py-1.5 ${
+              className={`flex flex-shrink-0 items-center gap-1.5 rounded-2xl border px-2.5 py-1 shadow-lg sm:px-3.5 sm:py-1.5 ${
                 clockLow
                   ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
                   : 'border-emerald-400/40 bg-emerald-400/10'
@@ -591,17 +613,22 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               title="Play time left. Answer questions to earn more."
             >
               <span className="text-sm sm:text-base">⏱</span>
-              <span
-                className={`text-sm font-bold tabular-nums sm:text-lg ${
-                  clockLow ? 'text-amber-300' : 'text-emerald-300'
-                }`}
-              >
-                {formatClock(msLeft)}
+              <span className="text-right">
+                <span className="block text-[8px] font-bold uppercase tracking-widest text-white/45">
+                  play time
+                </span>
+                <span
+                  className={`block text-sm font-black leading-none tabular-nums sm:text-lg ${
+                    clockLow ? 'text-amber-300' : 'text-emerald-300'
+                  }`}
+                >
+                  {formatClock(msLeft)}
+                </span>
               </span>
             </div>
           )}
 
-          <div className="flex-shrink-0 text-right">
+          <div className="flex-shrink-0 rounded-xl bg-black/20 px-2 py-1 text-right">
             <div className="text-xl font-bold leading-none sm:text-3xl" style={{ color: meta.accent }}>
               {score}
             </div>
@@ -611,15 +638,17 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pt-0.5">
           <div className="flex min-w-0 flex-1 items-center gap-3 truncate text-[11px] leading-tight text-white/40 sm:text-sm">
-            <span>best {best}</span>
+            <span className="rounded-full bg-white/[0.055] px-2 py-1">🏆 best {best}</span>
             {asked > 0 && (
-              <span>
-                {gotRight}/{asked} right
+              <span className="rounded-full bg-white/[0.055] px-2 py-1">✓ {gotRight}/{asked} right</span>
+            )}
+            {correctStreak > 1 && (
+              <span className="rounded-full bg-amber-300/10 px-2 py-1 text-amber-300/90">
+                🔥 {correctStreak} streak
               </span>
             )}
-            {correctStreak > 1 && <span className="text-amber-300/90">{correctStreak} streak</span>}
           </div>
 
           <button
@@ -663,7 +692,13 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           screen cannot show both a useful view width and little sky, so games lay
           out against the size they are given rather than a fixed aspect. */}
       <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1 sm:px-5 sm:pb-3">
-        <div className="relative w-full flex-1 overflow-hidden rounded-2xl bg-black shadow-2xl sm:rounded-3xl">
+        <div
+          className="relative w-full flex-1 overflow-hidden rounded-3xl border bg-black shadow-2xl sm:rounded-[2rem]"
+          style={{
+            borderColor: `${meta.accent}4d`,
+            boxShadow: `0 24px 70px rgba(0,0,0,.5), 0 0 36px ${meta.accent}18, inset 0 1px rgba(255,255,255,.12)`,
+          }}
+        >
           <Game
             paused={paused}
             input={input}
@@ -767,10 +802,16 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           onClick={() => setInfoOpen(false)}
         >
           <div
-            className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-3xl border-2 bg-[#12121e] px-6 py-6 text-center shadow-2xl"
+            className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[2rem] border-2 bg-[#12121e] px-6 py-6 text-center shadow-2xl"
             style={{ borderColor: meta.accent }}
             onClick={(e) => e.stopPropagation()}
           >
+            <div
+              className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-3xl border text-3xl shadow-xl"
+              style={{ color: meta.accent, borderColor: `${meta.accent}55`, background: `${meta.accent}1b` }}
+            >
+              {meta.icon}
+            </div>
             <div className="text-2xl font-extrabold" style={{ color: meta.accent }}>
               {meta.name}
             </div>
