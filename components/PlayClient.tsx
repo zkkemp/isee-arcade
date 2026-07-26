@@ -13,6 +13,7 @@ import Blocks from './games/Blocks';
 import Tetra from './games/Tetra';
 import TicTacToe from './games/TicTacToe';
 import MemoryMatch from './games/MemoryMatch';
+import NumberMerge from './games/NumberMerge';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -32,6 +33,7 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   tetris: Tetra,
   tictactoe: TicTacToe,
   memory: MemoryMatch,
+  merge: NumberMerge,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

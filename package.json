@@ -21,7 +21,8 @@
     "check:tetra": "tsx scripts/check-tetra.ts",
     "check:tictactoe": "tsx scripts/check-tictactoe.ts",
     "check:memory": "tsx scripts/check-memorymatch.ts",
-    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory",
+    "check:merge": "tsx scripts/check-numbermerge.ts",
+    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory && npm run check:merge",
     "icons": "node scripts/make-icons.mjs",
     "passcode": "node scripts/passcode-hash.mjs"
   },
