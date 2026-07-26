@@ -21,8 +21,26 @@
  *             inputs, drops any branch that crashed or fell, and keeps the rest.
  *             If the live set ever empties, the course is unsurvivable. The
  *             search only ever uses JUMP inputs, never the duck, because the
- *             `lanes` touch overlay has no down input - so what it proves is
+ *             `tapjump` touch scheme has no down input - so what it proves is
  *             what a phone player can actually do.
+ *
+ * "A path exists" is NOT enough, and that lesson was paid for: the old
+ * overhead-beam hazard was provably survivable (run under it, never jump), yet
+ * in a game whose entire screen is a jump button it played as "a massive wall I
+ * can't jump over or run under". So two further passes assert FORGIVENESS, not
+ * mere possibility:
+ *
+ *   MARGINS - every obstacle is floor-mounted and capped comfortably inside the
+ *             TAP arc (and far inside the double jump); nothing fatal may float
+ *             in the air where a jump would meet it; and for every feature the
+ *             checker measures the real single-tap TAKEOFF WINDOW - the stretch
+ *             of ground from which one ordinary tap clears it - and requires it
+ *             to be wide enough for sloppy timing at that chunk's top speed.
+ *
+ *   SLOPPY  - the reachability search re-run with a kid's inputs: pure taps
+ *             (no held boost) that may only START every REACT_GRID frames.
+ *             Surviving at every grid phase means no course ever needs
+ *             frame-perfect play.
  *
  * The search is conservative by construction. States are deduplicated on a
  * quantised key, which can DROP a branch that would have worked but can never
@@ -38,6 +56,7 @@
  * Run: npx tsx scripts/check-runner.ts
  */
 import {
+  CHUNK_TILES,
   CHUNK_W,
   DT,
   FATAL_DEPTH,
@@ -58,6 +77,7 @@ import {
   probeJump,
   speedAt,
   stepPlayer,
+  supported,
   type Body,
   type Chunk,
   type Coin,
@@ -94,14 +114,50 @@ const fail = (msg: string) => errors.push(msg);
 // --- derived limits -------------------------------------------------------
 // Every number below comes out of the probed envelope. Nothing is hand-written.
 
-/** A crate must be clearable by the weakest jump the game guarantees. */
-const MAX_CRATE_H = TAP.rise * 0.75;
+/**
+ * The COMFORT cap: nothing that has to be jumped may poke above 60% of the tap
+ * rise. That leaves 40% of a single tap as sheer margin, and puts every
+ * obstacle at under half of the double-jump envelope - a barrier a kid cannot
+ * clear can therefore never be generated, it would trip this first.
+ */
+const MAX_CRATE_H = TAP.rise * 0.6;
+const MAX_HAZARD_UP = TAP.rise * 0.6;
 /** A ledge only has to be landable, since climbing it is optional. */
 const MAX_LEDGE_UP = TAP.rise * 0.85;
-/** A ground hazard has to be jumpable. */
-const MAX_GROUND_HAZARD_H = TAP.rise * 0.75;
+/** Room a runner must have to pass UNDER a ledge without ducking. */
+const MIN_UNDER_LEDGE = STAND_H + 6;
+/** A fatal box must live on the floor. Floating fatals are the wall class. */
+const MAX_FLOAT = 2;
 /** A coin has to sit inside the arc, with a little slack for the pickup radius. */
 const MAX_COIN_UP = TAP.rise + 12;
+/**
+ * Minimum single-tap takeoff window, per difficulty, in seconds. A window is
+ * the contiguous stretch of ground from which ONE ordinary tap clears the
+ * feature - tap anywhere in it, early or late, and you live. 300ms on easy is
+ * eighteen frames of slack; even hard guarantees eleven frames.
+ */
+const MIN_WINDOW_S: Record<Difficulty, number> = { easy: 0.3, normal: 0.24, hard: 0.18 };
+/** px between sampled takeoff points when measuring a window. */
+const WINDOW_STEP = 4;
+/**
+ * The sloppy-thumbs input grid: in the forgiving pass, taps may only START
+ * every this-many frames. Survival at every phase of the grid proves no course
+ * demands better than ~83ms tap placement - and every takeoff window above is
+ * wider than the grid, so a grid frame always lands inside it.
+ */
+const REACT_GRID = 5;
+
+// The caps must themselves sit deep inside the probed envelopes, so a physics
+// retune cannot silently shrink the margins the caps are meant to guarantee.
+if (MAX_HAZARD_UP > TAP.rise * 0.75) {
+  fail(`comfort cap ${MAX_HAZARD_UP.toFixed(1)}px eats the tap margin (rise ${TAP.rise.toFixed(1)}px)`);
+}
+if (MAX_HAZARD_UP > TAP2.rise * 0.45 || MAX_CRATE_H > TAP2.rise * 0.45) {
+  fail('comfort cap is not comfortably inside the double-jump envelope');
+}
+if (MIN_WINDOW_S.hard * 60 <= REACT_GRID + 2) {
+  fail('takeoff windows are not guaranteed to contain a sloppy-tap grid frame');
+}
 
 // ===========================================================================
 // static geometry
@@ -225,20 +281,34 @@ function checkChunk(c: Chunk, d: Difficulty, seed: number, tally: Tally | null):
       if (-s.y > MAX_CRATE_H + 0.001) {
         bad.push(
           `${at}: crate top at ${(-s.y).toFixed(1)}px exceeds the ` +
-            `${MAX_CRATE_H.toFixed(1)}px a tap jump clears`,
+            `${MAX_CRATE_H.toFixed(1)}px a tap jump clears with margin`,
         );
+      }
+      if (Math.abs(s.y + s.h) > 0.5) {
+        bad.push(`${at}: crate at ${Math.round(s.x)} does not rest on the floor`);
       }
       if (!solidOver(c, s.x, s.x + s.w)) bad.push(`${at}: crate at ${Math.round(s.x)} floats over a pit`);
     } else if (-s.y > MAX_LEDGE_UP + 0.001) {
       bad.push(`${at}: ledge top at ${(-s.y).toFixed(1)}px is above the jump's ${MAX_LEDGE_UP.toFixed(1)}px`);
     }
-    // Running under a ledge must not clip a standing head.
-    if (s.kind === 'ledge' && s.y + s.h > -STAND_H) {
-      bad.push(`${at}: ledge underside at ${(s.y + s.h).toFixed(1)} is inside a standing runner`);
+    // Running under a ledge must leave real headroom, not graze a standing head:
+    // the ledge is the one floating platform, and only because passing beneath
+    // it is always safe and bonking its underside is non-fatal.
+    if (s.kind === 'ledge' && s.y + s.h > -MIN_UNDER_LEDGE) {
+      bad.push(
+        `${at}: ledge underside at ${(s.y + s.h).toFixed(1)} leaves less than ` +
+          `${MIN_UNDER_LEDGE}px for a ${STAND_H}px runner to pass beneath`,
+      );
     }
   }
 
-  // 4. hazards: footing, height, and headroom.
+  // 4. hazards: footing, height, and GROUNDING. Every fatal, whatever its kind,
+  // must be a low floor-mounted obstacle that one tap sails over with margin.
+  // A fatal whose travel ever leaves the floor is the impassable-wall class:
+  // the old overhead beam was survivable only by NOT jumping, and on a screen
+  // that is one big jump button that is a trap, not an obstacle ("a massive
+  // wall I can't jump over or run under"). No hazard may hang in the air, full
+  // stop - the two-verb design is gone on purpose.
   for (const f of c.fatals) {
     if (tally) {
       tally.fatals += 1;
@@ -248,25 +318,17 @@ function checkChunk(c: Chunk, d: Difficulty, seed: number, tally: Tally | null):
     if (!solidOver(c, t.x0, t.x1)) {
       bad.push(`${at}: ${f.kind} at ${Math.round(f.x)} hangs over a pit, so it cannot be jumped`);
     }
-    if (f.kind === 'spike' || f.kind === 'saw') {
-      if (-t.y0 > MAX_GROUND_HAZARD_H + 0.001) {
-        bad.push(`${at}: ${f.kind} reaches ${(-t.y0).toFixed(1)}px, above the jumpable ${MAX_GROUND_HAZARD_H.toFixed(1)}px`);
-      }
-      if (t.y1 < -1) bad.push(`${at}: ${f.kind} floats ${(-t.y1).toFixed(1)}px off the floor`);
-    } else {
-      // Overhead hazards are "do not jump" obstacles. A runner who never jumps
-      // has to pass under the LOWEST point of the travel untouched, or the
-      // hazard is unavoidable on touch, where ducking does not exist.
-      const clearance = -STAND_H - t.y1;
-      if (clearance < 1) {
-        bad.push(
-          `${at}: overhead ${f.kind} at ${Math.round(f.x)} dips to ${t.y1.toFixed(1)}, ` +
-            `leaving ${clearance.toFixed(1)}px for a ${STAND_H}px runner`,
-        );
-      }
-      if (clearance > TAP.rise) {
-        bad.push(`${at}: overhead ${f.kind} at ${Math.round(f.x)} is so high it is not an obstacle`);
-      }
+    if (-t.y0 > MAX_HAZARD_UP + 0.001) {
+      bad.push(
+        `${at}: ${f.kind} reaches ${(-t.y0).toFixed(1)}px, above the comfortable ` +
+          `${MAX_HAZARD_UP.toFixed(1)}px (a tap rises ${TAP.rise.toFixed(1)}px)`,
+      );
+    }
+    if (t.y1 < -MAX_FLOAT) {
+      bad.push(
+        `${at}: ${f.kind} at ${Math.round(f.x)} floats ${(-t.y1).toFixed(1)}px off the floor - ` +
+          `an airborne blocker, the impassable-wall class`,
+      );
     }
   }
 
@@ -372,13 +434,30 @@ type SimResult = {
   steps: number;
 };
 
+type SimOpts = {
+  /**
+   * The sloppy-thumbs model: jumps may only START on frames where
+   * frame % grid === phase, and only as pure taps (no held boost) - a touch
+   * player cannot hold, and a kid cannot time to the frame. Undefined means
+   * the full exhaustive search.
+   */
+  grid?: number;
+  phase?: number;
+};
+
 /**
  * Forward reachability over the real integrator. Branches every frame over the
  * legal jump inputs, keeps every distinct surviving state, and reports whether
  * anything is still alive at the end plus which coins some surviving line of
  * play picked up.
  */
-function simulate(chunks: Chunk[], d: Difficulty, speedMul: number, startX: number): SimResult {
+function simulate(
+  chunks: Chunk[],
+  d: Difficulty,
+  speedMul: number,
+  startX: number,
+  mode: SimOpts = {},
+): SimResult {
   const w = mergeWorld(chunks, d);
   const coins: Coin[] = [];
   for (const c of chunks) for (const co of c.coins) coins.push(co);
@@ -411,12 +490,13 @@ function simulate(chunks: Chunk[], d: Difficulty, speedMul: number, startX: numb
     const seen = new Set<string>();
     let nx = x;
 
+    const gridOk = mode.grid === undefined || frames % mode.grid === (mode.phase ?? 0);
     for (const st of live) {
       const opts: Array<{ jump: boolean; hold: number }> = [{ jump: false, hold: st.hold }];
       if (st.hold > 0) opts.push({ jump: false, hold: 0 });
-      if (st.jumps < MAX_JUMPS) {
+      if (st.jumps < MAX_JUMPS && gridOk) {
         opts.push({ jump: true, hold: 0 });
-        opts.push({ jump: true, hold: 45 });
+        if (mode.grid === undefined) opts.push({ jump: true, hold: 45 });
       }
 
       for (const o of opts) {
@@ -545,6 +625,77 @@ function pitReach(d: Difficulty, speed: number): number {
 }
 
 // ===========================================================================
+// takeoff windows: margins, not mere possibility
+// ===========================================================================
+
+/**
+ * World for measuring one chunk in isolation. The chunk's own margins are
+ * proven clear ground, and the seam assertion proves each neighbour reserves
+ * at least as much again, so a flat runway honestly stands in for the
+ * neighbours when a takeoff sample pokes past the chunk edge.
+ */
+function isolatedWorld(c: Chunk, d: Difficulty): World {
+  const w = mergeWorld([c], d);
+  w.spans.push({ x0: c.x0 - 900, x1: c.x0 }, { x0: c.x1, x1: c.x1 + 900 });
+  return w;
+}
+
+let windowSteps = 0;
+
+/**
+ * One scripted attempt: stand at `takeoff`, tap once (or not at all), then just
+ * run. Success is being back on the floor beyond the feature; landing ON a
+ * crate and running off its far side counts, because that is a real recovery.
+ */
+function attemptSlot(
+  w: World,
+  slot: { x0: number; x1: number },
+  takeoff: number,
+  speed: number,
+  jump: boolean,
+): boolean {
+  const b: Body = { x: takeoff, y: 0, vy: 0, h: STAND_H, onGround: true, jumps: 0, rise: 0 };
+  for (let f = 0; f < 420; f += 1) {
+    const out = stepPlayer(w, b, { vx: speed, jump: jump && f === 0, jumpHeld: false, duck: false }, DT);
+    windowSteps += 1;
+    if (out.crashed || out.fell) return false;
+    if (b.onGround && b.y === 0 && b.x > slot.x1 + PW + 8) return true;
+  }
+  return false;
+}
+
+/**
+ * The single-tap takeoff window for a feature at a given speed: the widest
+ * CONTIGUOUS stretch of floor from which one ordinary tap - taken at any point
+ * inside the stretch - clears the whole feature. Measured by simulation with
+ * the real integrator, movers included (their motion is a pure function of the
+ * player's x, so every takeoff sees the true hazard positions). This is what
+ * "not frame-perfect" means concretely: the window must fit many frames.
+ */
+function takeoffWindow(
+  c: Chunk,
+  d: Difficulty,
+  slot: { x0: number; x1: number },
+  speed: number,
+): number {
+  const w = isolatedWorld(c, d);
+  const from = slot.x0 - 1.25 * jumpReach(speed);
+  let best = 0;
+  let run = 0;
+  for (let x = from; x <= slot.x1 - 2; x += WINDOW_STEP) {
+    const ok = supported(w, x, 0) && attemptSlot(w, slot, x, speed, true);
+    run = ok ? run + WINDOW_STEP : 0;
+    if (run > best) best = run;
+  }
+  return best / speed;
+}
+
+/** A ledge is passed by NOT jumping; prove the run-through is safe. */
+function runsUnder(c: Chunk, d: Difficulty, slot: { x0: number; x1: number }, speed: number): boolean {
+  return attemptSlot(isolatedWorld(c, d), slot, slot.x0 - 60, speed, false);
+}
+
+// ===========================================================================
 // run
 // ===========================================================================
 
@@ -558,8 +709,11 @@ console.log(
     `hang ${HOLD.air.toFixed(3)}s\n` +
     `  double tap  rise ${TAP2.rise.toFixed(1)}px (${(TAP2.rise / TILE).toFixed(2)} tiles), ` +
     `hang ${TAP2.air.toFixed(3)}s\n` +
-    `  derived caps: crate <= ${MAX_CRATE_H.toFixed(1)}px, ledge <= ${MAX_LEDGE_UP.toFixed(1)}px, ` +
-    `coin <= ${MAX_COIN_UP.toFixed(1)}px up\n` +
+    `  derived caps: obstacle clear-height <= ${MAX_HAZARD_UP.toFixed(1)}px ` +
+    `(${((MAX_HAZARD_UP / TAP.rise) * 100).toFixed(0)}% of a tap, ` +
+    `${((MAX_HAZARD_UP / TAP2.rise) * 100).toFixed(0)}% of a double), ` +
+    `ledge <= ${MAX_LEDGE_UP.toFixed(1)}px, coin <= ${MAX_COIN_UP.toFixed(1)}px up\n` +
+    `  no fatal may float more than ${MAX_FLOAT}px off the floor - the air is never blocked\n` +
     `  gap limits are per chunk: tap reach x difficulty safety, capped at ` +
     `${MAX_GAP_TILES} tiles`,
 );
@@ -618,7 +772,7 @@ let peak = 0;
 let coinsTested = 0;
 let coinsMissed = 0;
 
-function record(r: SimResult, label: string) {
+function record(r: SimResult, label: string, coinsMatter = true) {
   simSteps += r.steps;
   simFrames += r.frames;
   simRuns += 1;
@@ -627,6 +781,8 @@ function record(r: SimResult, label: string) {
   if (!r.survived) {
     fail(`${label}: UNSURVIVABLE - every line of play is dead by x=${r.diedAt.toFixed(0)} (${(r.diedAt / TILE).toFixed(0)}m)`);
   }
+  // A grid-restricted player is allowed to skip coins; only survival matters.
+  if (!coinsMatter) return;
   coinsTested += r.coins.length;
   const missed = r.got.filter((v) => !v).length;
   coinsMissed += missed;
@@ -668,6 +824,96 @@ console.log(
   `coins: ${coinsTested.toLocaleString()} checked, ${coinsMissed} unreachable ` +
     '(each proven collectable by a simulated jump)',
 );
+
+// --- forgiving pass 1: the sloppy-tap player --------------------------------
+// The exhaustive search proves SOME line survives, which is exactly how the
+// impassable wall shipped: the surviving line was one no kid plays. Re-run the
+// same courses with taps only (no held boost) that may only START every
+// REACT_GRID frames, at EVERY phase of that grid. Nothing may require better
+// than ~REACT_GRID/60 s of tap placement.
+{
+  const before = simRuns;
+  for (const d of DIFFICULTIES) {
+    for (const seed of RUN_SEEDS) {
+      const chunks: Chunk[] = [];
+      for (let i = 0; i < RUN_CHUNKS; i += 1) chunks.push(generateChunk(i, d, seed));
+      for (let phase = 0; phase < REACT_GRID; phase += 1) {
+        record(
+          simulate(chunks, d, 1, 2 * TILE, { grid: REACT_GRID, phase }),
+          `${d} seed${seed} SLOPPY-TAP run 0-${RUN_CHUNKS - 1} (grid ${REACT_GRID}, phase ${phase})`,
+          false,
+        );
+      }
+      for (const at of WINDOWS) {
+        const win: Chunk[] = [];
+        for (let i = at - 1; i <= at + 1; i += 1) win.push(generateChunk(i, d, seed));
+        for (let phase = 0; phase < REACT_GRID; phase += 1) {
+          record(
+            simulate(win, d, 1, win[0].x0 + 2 * TILE, { grid: REACT_GRID, phase }),
+            `${d} seed${seed} SLOPPY-TAP window ${at} (grid ${REACT_GRID}, phase ${phase})`,
+            false,
+          );
+        }
+      }
+    }
+  }
+  console.log(
+    `sloppy-tap pass: ${simRuns - before} courses survived with pure taps allowed ` +
+      `only every ${REACT_GRID} frames (${((REACT_GRID / 60) * 1000).toFixed(0)}ms grid), all phases`,
+  );
+}
+
+// --- forgiving pass 2: measured takeoff windows ------------------------------
+// For every feature, at both the slowest and fastest speed its chunk can be
+// run at, measure the contiguous stretch of floor from which ONE tap clears
+// it. Early chunks are covered exhaustively, later ones sampled to the static
+// horizon; the geometry caps above are what make the property structural, this
+// pass quantifies the margin and fails if it ever thins.
+{
+  let slots = 0;
+  for (const d of DIFFICULTIES) {
+    let worst = Infinity;
+    let worstAt = 'n/a';
+    for (const seed of RUN_SEEDS) {
+      for (let i = 0; i < STATIC_CHUNKS; i += 1) {
+        if (i >= 50 && i % 7 !== 0) continue;
+        const c = generateChunk(i, d, seed);
+        if (c.slots.length === 0) continue;
+        const slow = speedAt(c.m0, d) * (1 - NUDGE);
+        const fast = speedAt(c.m0 + CHUNK_TILES, d) * (1 + NUDGE);
+        for (const slot of c.slots) {
+          slots += 1;
+          if (slot.kind === 'ledge') {
+            for (const sp of [slow, fast]) {
+              if (!runsUnder(c, d, slot, sp)) {
+                fail(`${d} seed${seed} chunk${i}: running under the ledge at ${Math.round(slot.x0)} is unsafe at ${sp.toFixed(0)}px/s`);
+              }
+            }
+            continue;
+          }
+          let sec = Infinity;
+          for (const sp of [slow, fast]) sec = Math.min(sec, takeoffWindow(c, d, slot, sp));
+          if (sec < worst) {
+            worst = sec;
+            worstAt = `${slot.kind} in seed${seed} chunk${i}`;
+          }
+          if (sec < MIN_WINDOW_S[d]) {
+            fail(
+              `${d} seed${seed} chunk${i}: the ${slot.kind} at ${Math.round(slot.x0)} gives a ` +
+                `single-tap takeoff window of ${(sec * 1000).toFixed(0)}ms - below the ` +
+                `${(MIN_WINDOW_S[d] * 1000).toFixed(0)}ms a sloppy tap needs`,
+            );
+          }
+        }
+      }
+    }
+    console.log(
+      `${d.padEnd(6)} takeoff windows: every feature >= ${(MIN_WINDOW_S[d] * 1000).toFixed(0)}ms; ` +
+        `tightest ${(worst * 1000).toFixed(0)}ms (${worstAt})`,
+    );
+  }
+  console.log(`takeoff windows measured on ${slots} features (${windowSteps.toLocaleString()} steps)`);
+}
 
 // --- determinism ----------------------------------------------------------
 
@@ -833,30 +1079,30 @@ function findChunk(d: Difficulty, pick: (c: Chunk) => boolean): Chunk {
   );
 }
 
-// 3. drop an overhead hazard to head height. A runner cannot duck on touch, so
-//    this must be reported even though the box never touches the floor.
+// 3. recreate the old overhead beam - the impassable-wall bug. Lift the
+//    (now grounded) barrier into the air: physically a runner could still pass
+//    under it, but an airborne fatal is a trap on a screen that is one big jump
+//    button, so the geometry must reject ANY floating fatal outright. Then
+//    stretch it floor-to-ceiling, which no input beats: the simulation must die.
 {
   const base = findChunk('hard', (c) => c.fatals.some((f) => f.kind === 'beam'));
 
-  // Just into head height: the geometry check must object even though a HELD
-  // jump could still hop over it, because touch players cannot hold.
   const nudged = clone(base);
   const nb = nudged.fatals.find((f) => f.kind === 'beam');
-  if (!nb) throw new Error('no beam');
-  nb.y = -STAND_H - nb.h + 4;
+  if (!nb) throw new Error('no barrier');
+  nb.y -= 3 * TILE;
   const badNudged = checkChunk(nudged, 'hard', 0, null);
 
-  // Floor to ceiling: no input clears it, so the simulation must find no route.
   const broken = clone(base);
   const bb = broken.fatals.find((f) => f.kind === 'beam');
-  if (!bb) throw new Error('no beam');
+  if (!bb) throw new Error('no barrier');
   bb.h = BEST.rise * 1.5;
-  bb.y = -bb.h - 8;
+  bb.y = -bb.h;
   const r = simulate([broken], 'hard', 1, broken.x0 + 2 * TILE);
 
   expectCaught(
-    'beam dropped into head height, then floor to ceiling',
-    badNudged.some((e) => e.includes('overhead')) && !r.survived,
+    'barrier lifted into an airborne blocker, then raised floor-to-ceiling',
+    badNudged.some((e) => e.includes('floats')) && !r.survived,
     `${badNudged.length} geometry error(s); simulation died at x=${r.diedAt.toFixed(0)}`,
   );
 }
@@ -917,7 +1163,75 @@ function findChunk(d: Difficulty, pick: (c: Chunk) => boolean): Chunk {
   expectCaught(`seeds 3 and 4 differ at chunk ${LIVE_A}`, a !== b, 'courses are distinct');
 }
 
-// 8. a pit deeper than the fatal depth must still be fatal, not a shortcut.
+// 8. THE REGRESSION THAT SHIPPED THE WALL, REBUILT: a crate just above the tap
+//    rise. The exhaustive search still calls it survivable - land on top of it
+//    off a double jump - which is precisely the blind spot that let the wall
+//    through. The height cap AND the takeoff-window check must both scream
+//    while the old-style proof stays green.
+{
+  const base = findChunk(
+    'normal',
+    (c) =>
+      c.solids.some((s) => s.kind === 'crate') &&
+      c.slots.some(
+        (sl) => sl.kind === 'crate' && c.solids.some((s) => s.kind === 'crate' && Math.abs(s.x - sl.x0) < 0.5),
+      ),
+  );
+  const c = clone(base);
+  const crate = c.solids.find((s) => s.kind === 'crate');
+  if (!crate) throw new Error('no crate');
+  const slot = c.slots.find((sl) => sl.kind === 'crate' && Math.abs(crate.x - sl.x0) < 0.5);
+  if (!slot) throw new Error('no crate slot');
+  const h = TAP.rise * 1.1;
+  crate.y = -h;
+  crate.h = h;
+  const bad = checkChunk(c, 'normal', 0, null);
+  const r = simulate([c], 'normal', 1, c.x0 + 2 * TILE);
+  const speed = speedAt(c.m0, 'normal') * (1 - NUDGE);
+  const sec = takeoffWindow(c, 'normal', slot, speed);
+  expectCaught(
+    `crate raised to ${h.toFixed(0)}px - above a tap, still inside a double jump`,
+    r.survived && bad.some((e) => e.includes('crate top')) && sec < MIN_WINDOW_S.normal,
+    `exhaustive search STILL survives (the old blind spot); height cap screams, ` +
+      `single-tap window collapses to ${(sec * 1000).toFixed(0)}ms`,
+  );
+}
+
+// 9. a wall the height caps cannot see: stretch the barrier to nine tiles WIDE
+//    at a perfectly legal height. Every geometry check stays green and the
+//    exhaustive search clears it with a stretched double jump - only the
+//    measured takeoff window notices that no single tap can span it.
+{
+  const base = findChunk(
+    'normal',
+    (c) =>
+      c.fatals.some((f) => f.kind === 'beam') &&
+      c.slots.some(
+        (sl) => sl.kind === 'beam' && c.fatals.some((f) => f.kind === 'beam' && Math.abs(f.x - sl.x0) < 0.5),
+      ),
+  );
+  const c = clone(base);
+  const f = c.fatals.find((ff) => ff.kind === 'beam');
+  if (!f) throw new Error('no barrier');
+  const slot = c.slots.find((sl) => sl.kind === 'beam' && Math.abs(f.x - sl.x0) < 0.5);
+  if (!slot) throw new Error('no barrier slot');
+  f.w = 9 * TILE;
+  slot.x1 = slot.x0 + f.w;
+  const heightOrFloat = checkChunk(c, 'normal', 0, null).filter(
+    (e) => e.includes('reaches') || e.includes('floats'),
+  );
+  const r = simulate([c], 'normal', 1, c.x0 + 2 * TILE);
+  const speed = speedAt(c.m0, 'normal') * (1 - NUDGE);
+  const sec = takeoffWindow(c, 'normal', slot, speed);
+  expectCaught(
+    'barrier stretched to 9 tiles wide at a legal height',
+    heightOrFloat.length === 0 && r.survived && sec < MIN_WINDOW_S.normal,
+    `height/float checks stay green and the exhaustive search survives, but the ` +
+      `single-tap window is ${(sec * 1000).toFixed(0)}ms - the margin check alone catches it`,
+  );
+}
+
+// 10. a pit deeper than the fatal depth must still be fatal, not a shortcut.
 {
   const c = clone(findChunk('normal', (cc) => gapsOf(cc).length > 0));
   const r = simulate([c], 'normal', 1, c.x0 + 2 * TILE);
@@ -951,7 +1265,9 @@ if (errors.length > 0) {
   process.exit(1);
 }
 console.log(
-  `Every chunk on every seed: gaps within the probed jump, nothing unreachably ` +
-    `tall, no hazard inside another, every coin collectable, and every simulated ` +
-    `course survivable using jumps alone.`,
+  `Every chunk on every seed: gaps within the probed jump, every obstacle ` +
+    `floor-mounted and capped well inside a single tap (nothing ever blocks the ` +
+    `air), no hazard inside another, every coin collectable, every course ` +
+    `survivable by a player restricted to sloppy pure taps, and every feature ` +
+    `carrying a measured takeoff window wide enough for imperfect timing.`,
 );

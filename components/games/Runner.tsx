@@ -24,11 +24,22 @@
  *    key only ever buys extra height. (This replaced the old `lanes` swipe-up
  *    jump, which was unreliable on the iPad - "the swipe is still not working".)
  *
- * 3. HAZARDS COME IN TWO FLAVOURS, ON PURPOSE. "Jump this" (gaps, spikes,
- *    crates, saws) and "do not jump here" (overhead beams and bobbing flies,
- *    which a running player passes under untouched). Two verbs, two answers,
- *    readable by a five-year-old. Coins are the signposting: an arc of coins
- *    means jump, a line of coins on the floor means stay down.
+ * 3. EVERY HAZARD IS ANSWERED BY ONE VERB: JUMP OVER IT. There used to be a
+ *    second flavour - overhead beams (and high bobbing flies) that a runner was
+ *    meant to pass UNDER - and it produced the game's worst real-world bug.
+ *    The beam's fatal box hung ABOVE the tap arc with a slit of ground
+ *    clearance below, and it rendered as a four-tile brick wall with chains to
+ *    the top of the screen: at speed that reads as "a massive wall I can't
+ *    jump over or run under". With the whole screen being a jump button, a
+ *    kid's instinct at a wall is to tap, and tapping was precisely what killed
+ *    them; arriving airborne (say, off a double jump over the gap before it)
+ *    was just as fatal, even though the verifier could always thread SOME
+ *    jump-free line through. So overhead hazards are gone as a class: every
+ *    obstacle now sits ON the floor and tops out well inside the tap arc, the
+ *    checker rejects any fatal box that floats off the ground OR pokes above
+ *    the comfort cap, and it also measures the tap-timing window on every
+ *    feature so sloppy timing clears it, not frame-perfect play. Coins arc
+ *    over each obstacle as the signpost: coins always mean "jump here".
  */
 
 import { useEffect, useRef } from 'react';
@@ -386,8 +397,6 @@ type Knobs = {
   gapSafety: number;
   /** Clear ground between features, in tap-jump lengths. */
   spacing: number;
-  /** Pixels of headroom under an overhead hazard for a standing runner. */
-  beamClear: number;
   landTol: number;
   inset: number;
   /** Every Nth chunk is a breather. 0 disables. */
@@ -406,7 +415,6 @@ export const KNOBS: Record<Difficulty, Knobs> = {
   easy: {
     gapSafety: 0.45,
     spacing: 1.8,
-    beamClear: 11,
     landTol: 9,
     inset: 3,
     breather: 2,
@@ -418,7 +426,6 @@ export const KNOBS: Record<Difficulty, Knobs> = {
   normal: {
     gapSafety: 0.56,
     spacing: 1.25,
-    beamClear: 8,
     landTol: 7,
     inset: 2,
     breather: 3,
@@ -430,7 +437,6 @@ export const KNOBS: Record<Difficulty, Knobs> = {
   hard: {
     gapSafety: 0.64,
     spacing: 1,
-    beamClear: 6,
     landTol: 5,
     inset: 1,
     breather: 5,
@@ -554,14 +560,6 @@ function arcCoins(g: Gen, x0: number, x1: number, n: number, takeoffBack = 14) {
   }
 }
 
-function groundCoins(g: Gen, x0: number, x1: number, n: number) {
-  const count = Math.max(1, Math.round(n * g.k.coinMul));
-  for (let i = 0; i < count; i += 1) {
-    const f = count === 1 ? 0.5 : i / (count - 1);
-    coin(g, x0 + (x1 - x0) * f, -0.85 * TILE);
-  }
-}
-
 /** Emits one feature starting at `x`. Returns the x-width it occupies. */
 function emit(g: Gen, kind: FeatureKind, x: number): number {
   const r = g.rand;
@@ -600,8 +598,10 @@ function emit(g: Gen, kind: FeatureKind, x: number): number {
     }
     case 'saw': {
       // Slides along the floor. The wavelength is set from the nominal speed so
-      // the sweep reads at roughly 1.1 Hz however fast the world is moving.
-      const amp = (1.2 + r() * 1.6) * TILE;
+      // the sweep reads at roughly 1.1 Hz however fast the world is moving. The
+      // sweep is kept short so the whole travel zone still fits comfortably
+      // under one tap arc - a wide sweep shrank the safe-takeoff window.
+      const amp = (1.0 + r() * 1.0) * TILE;
       g.chunk.fatals.push({
         kind: 'saw',
         x: x + amp,
@@ -618,17 +618,18 @@ function emit(g: Gen, kind: FeatureKind, x: number): number {
       return amp * 2 + TILE;
     }
     case 'beam': {
-      // Hangs low enough that jumping into it is the mistake, high enough that a
-      // standing runner passes under untouched. Never requires the duck, because
-      // touch has no down input.
-      const cols = 2 + Math.floor(r() * 3);
-      const w = cols * TILE;
-      const bottom = -(STAND_H + g.k.beamClear);
-      const h = 4 * TILE;
+      // A GROUNDED spiked pillar, jumped over like everything else. This used
+      // to be an overhead beam the player had to run UNDER - the source of the
+      // "massive wall I can't jump over or run under" bug (see the header):
+      // with tap-anywhere controls, tapping at it was fatal. Nothing may hang
+      // in the air any more, so it stands on the floor, two tiles tall - well
+      // inside the tap arc, same as a crate, but lethal to touch.
+      const w = TILE;
+      const h = 2 * TILE;
       g.chunk.fatals.push({
         kind: 'beam',
         x,
-        y: bottom - h,
+        y: -h,
         w,
         h,
         k: 0,
@@ -637,39 +638,39 @@ function emit(g: Gen, kind: FeatureKind, x: number): number {
         phase: 0,
         graze: false,
       });
-      groundCoins(g, x + TILE * 0.3, x + w - TILE * 0.3, 4);
+      arcCoins(g, x, x + w, 3);
       return w;
     }
     case 'flyer': {
-      const n = 1 + Math.floor(r() * 2);
+      // One fly, buzzing LOW: it bobs between brushing the floor and about two
+      // tiles up, so a tap arc sails over it with room to spare. It used to
+      // hover above head height as a "do not jump" hazard - the same airborne
+      // blocker class as the old beam, removed for the same reason.
       const w = 1.1 * TILE;
-      let used = 0;
-      for (let i = 0; i < n; i += 1) {
-        const amp = 0.75 * TILE;
-        // Base chosen so the LOWEST point of the bob still clears a standing head.
-        const base = -(STAND_H + g.k.beamClear + amp + w);
-        g.chunk.fatals.push({
-          kind: 'fly',
-          x: x + used,
-          y: base,
-          w,
-          h: w,
-          k: (Math.PI * 2) / Math.max(90, g.nominal * 0.85),
-          ampX: 0,
-          ampY: amp,
-          phase: r() * Math.PI * 2,
-          graze: false,
-        });
-        used += w + TILE * 1.6;
-      }
-      groundCoins(g, x, x + used, 4);
-      return used;
+      const amp = 0.5 * TILE;
+      g.chunk.fatals.push({
+        kind: 'fly',
+        x,
+        y: -(amp + w),
+        w,
+        h: w,
+        k: (Math.PI * 2) / Math.max(90, g.nominal * 0.85),
+        ampX: 0,
+        ampY: amp,
+        phase: r() * Math.PI * 2,
+        graze: false,
+      });
+      arcCoins(g, x, x + w, 3);
+      return w;
     }
     case 'ledge': {
       const cols = 3 + Math.floor(r() * 4);
       const w = cols * TILE;
       // The top is a fraction of the measured rise, so it is always landable.
-      const rows = Math.max(2, Math.floor((TAP.rise * 0.7) / TILE));
+      // The floor of 3 rows guarantees a standing runner passes UNDERNEATH with
+      // headroom - a ledge is the one optional platform, never a wall: bonking
+      // its underside is harmless and running under it must always be safe.
+      const rows = Math.max(3, Math.floor((TAP.rise * 0.7) / TILE));
       const top = -rows * TILE;
       g.chunk.solids.push({ kind: 'ledge', x, y: top, w, h: TILE });
       for (let i = 0; i < cols; i += 1) coin(g, x + i * TILE + TILE / 2, top - 0.85 * TILE);
@@ -952,8 +953,25 @@ function cameraFor(px: number, viewW: number, frac: number): number {
 }
 
 type Puff = { x: number; y: number; vx: number; vy: number; life: number; max: number; r: number };
-type Spark = { x: number; y: number; vx: number; vy: number; life: number };
+type Spark = { x: number; y: number; vx: number; vy: number; life: number; color: string };
 type Note = { x: number; y: number; life: number; text: string };
+/** Ambient weather flecks (snow, sand, leaves, spores). Screen space, capped. */
+type Amb = { x: number; y: number; vx: number; vy: number; sway: number; r: number; color: string };
+
+/** What falls out of the sky in each biome. Pure decoration, Math.random is fine. */
+const WEATHER: Record<Biome, { color: string[]; fall: number; drift: number; rate: number }> = {
+  grass: { color: ['#8fd977', '#d8ef86', '#f2f7bd'], fall: 26, drift: 22, rate: 5 },
+  sand: { color: ['#f2d38c', '#e8bd6d'], fall: 8, drift: 85, rate: 7 },
+  stone: { color: ['#cdd9e4', '#aebccb'], fall: 14, drift: 18, rate: 3 },
+  snow: { color: ['#ffffff', '#eaf6ff'], fall: 34, drift: 26, rate: 12 },
+  purple: { color: ['#e3b6ff', '#b98cf5', '#ffd6f2'], fall: -12, drift: 16, rate: 6 },
+  dirt: { color: ['#d9a066', '#b07945'], fall: 12, drift: 30, rate: 3 },
+};
+
+/** Confetti palette for milestones and speed-ups. */
+const PARTY = ['#ff5d5d', '#5dff8a', '#5db8ff', '#ffd75e', '#e58cff'];
+
+const TIER_NOTES = ['ZOOM!', 'TURBO!', 'BLAZING!', 'MAX SPEED!'];
 
 type State = {
   seed: number;
@@ -969,16 +987,23 @@ type State = {
   buffer: number;
   /** Positive squashes on landing, negative stretches on takeoff. */
   squash: number;
+  /** 1..0 while the double-jump somersault plays out. */
+  spin: number;
   nudge: number;
   animTime: number;
   puffs: Puff[];
   sparks: Spark[];
   notes: Note[];
+  ambient: Amb[];
   slowmo: number;
   flash: number;
   hurt: number;
   nextMilestone: number;
   nextStatus: number;
+  /** Speed tier already celebrated, so each one fires exactly once. */
+  tier: number;
+  /** 1..0 scale pop on the combo counter when a coin lands. */
+  comboPop: number;
   debt: number;
   speed: number;
 };
@@ -1012,16 +1037,20 @@ function freshState(d: Difficulty, run: number): State {
     coyote: 0,
     buffer: 0,
     squash: 0,
+    spin: 0,
     nudge: 0,
     animTime: 0,
     puffs: [],
     sparks: [],
     notes: [],
+    ambient: [],
     slowmo: 0,
     flash: 0,
     hurt: 0,
     nextMilestone: MILESTONE_M,
     nextStatus: STATUS_M,
+    tier: 0,
+    comboPop: 0,
     debt: 0,
     speed: speedAt(0, d),
   };
@@ -1047,7 +1076,7 @@ function puff(s: State, x: number, y: number, n: number, power: number) {
   if (s.puffs.length > 90) s.puffs.splice(0, s.puffs.length - 90);
 }
 
-function sparkle(s: State, x: number, y: number, n: number) {
+function sparkle(s: State, x: number, y: number, n: number, color = '#fff4bf', life = 0.4) {
   for (let i = 0; i < n; i += 1) {
     const a = (i / n) * Math.PI * 2;
     s.sparks.push({
@@ -1055,10 +1084,18 @@ function sparkle(s: State, x: number, y: number, n: number) {
       y,
       vx: Math.cos(a) * 60 * (0.4 + Math.random()),
       vy: Math.sin(a) * 60 * (0.4 + Math.random()) - 30,
-      life: 0.4,
+      life,
+      color,
     });
   }
   if (s.sparks.length > 120) s.sparks.splice(0, s.sparks.length - 120);
+}
+
+/** A burst of multi-coloured confetti sparks around the player. */
+function confetti(s: State, x: number, y: number, n: number) {
+  for (let i = 0; i < n; i += 1) {
+    sparkle(s, x + (Math.random() - 0.5) * 26, y - Math.random() * 24, 4, PARTY[i % PARTY.length], 0.7);
+  }
 }
 
 export default function Runner({
@@ -1112,6 +1149,8 @@ export default function Runner({
       if (s.squash !== 0) {
         s.squash -= Math.sign(s.squash) * Math.min(Math.abs(s.squash), dt * 4.5);
       }
+      if (s.spin > 0) s.spin = Math.max(0, s.spin - dt * 2.2);
+      if (s.comboPop > 0) s.comboPop = Math.max(0, s.comboPop - dt * 3);
       if (s.comboTimer > 0) {
         s.comboTimer -= dt;
         if (s.comboTimer <= 0) s.combo = 0;
@@ -1135,6 +1174,12 @@ export default function Runner({
       const canJump = b.onGround || s.coyote > 0 || b.jumps < MAX_JUMPS;
       const firing = s.buffer > 0 && canJump;
       if (firing) {
+        // The second jump gets a full somersault plus a sparkle ring - the
+        // rescue move should feel like the coolest thing in the game.
+        if (!b.onGround && b.jumps >= 1) {
+          s.spin = 1;
+          sparkle(s, b.x + PW / 2, b.y - b.h / 2, 8, '#bfe8ff', 0.35);
+        }
         s.buffer = 0;
         s.coyote = 0;
         s.squash = -0.7;
@@ -1154,6 +1199,7 @@ export default function Runner({
         dt,
       );
       if (out.leftGround && b.vy >= 0) s.coyote = COYOTE;
+      if (b.onGround) s.spin = 0;
       if (out.landed > 150) {
         s.squash = Math.min(1, out.landed / 600);
         puff(s, b.x + PW / 2, b.y, 6, 55);
@@ -1169,6 +1215,25 @@ export default function Runner({
       while (s.debt >= 10) {
         s.debt -= 10;
         api.addScore(10);
+      }
+
+      // --- speed tiers ---
+      // The ramp is continuous, so mark the moments it crosses a quarter of the
+      // range: a named celebration makes "it is getting faster" a reward rather
+      // than a creeping threat.
+      const hotNow = Math.max(0, Math.min(1, (s.speed - BASE_SPEED) / (SPEED_CAP - BASE_SPEED)));
+      const tierNow = Math.min(4, Math.floor(hotNow * 4));
+      if (tierNow > s.tier) {
+        s.tier = tierNow;
+        s.notes.push({
+          x: b.x + PW / 2,
+          y: b.y - b.h - 18,
+          life: 1.1,
+          text: TIER_NOTES[Math.min(tierNow, TIER_NOTES.length) - 1],
+        });
+        confetti(s, b.x + PW / 2, b.y - b.h, 4);
+        s.flash = 0.5;
+        playSound('powerup');
       }
 
       // --- streaming ---
@@ -1195,6 +1260,7 @@ export default function Runner({
           s.coins += 1;
           s.combo += 1;
           s.comboTimer = 1.6;
+          s.comboPop = 1;
           sparkle(s, co.x, co.y, 6);
           api.addScore(10 + Math.min(s.combo, 10));
           playSound('coin', s.combo - 1);
@@ -1222,6 +1288,32 @@ export default function Runner({
           s.notes.push({ x: b.x, y: b.y - b.h - 12, life: 0.85, text: 'NICE!' });
           api.addScore(15);
         }
+      }
+
+      // --- ambient weather ---
+      // A handful of biome-coloured flecks drifting through the screen: snow in
+      // the snow band, blowing sand in the desert, rising spores in the purple
+      // night. Screen-space, hard-capped, pure decoration (Math.random is fine
+      // here - nothing the verifier replays depends on it).
+      {
+        const wx = WEATHER[biomeAt(s.metres)];
+        if (s.ambient.length < 46 && Math.random() < wx.rate * dt) {
+          const down = wx.fall >= 0;
+          s.ambient.push({
+            x: Math.random() * (cw + 60) - 20,
+            y: down ? -8 : playH + 6,
+            vx: -(wx.drift + s.speed * zoom * 0.14) * (0.6 + Math.random() * 0.8),
+            vy: wx.fall * (0.6 + Math.random() * 0.8),
+            sway: Math.random() * Math.PI * 2,
+            r: 1.4 + Math.random() * 1.4,
+            color: wx.color[Math.floor(Math.random() * wx.color.length)],
+          });
+        }
+        for (const a of s.ambient) {
+          a.x += a.vx * dt;
+          a.y += (a.vy + Math.sin(s.animTime * 2 + a.sway) * 9) * dt;
+        }
+        s.ambient = s.ambient.filter((a) => a.x > -30 && a.y < playH + 12 && a.y > -32);
       }
 
       // --- effects ---
@@ -1254,6 +1346,8 @@ export default function Runner({
       if (s.metres >= s.nextMilestone) {
         const at = s.nextMilestone;
         s.nextMilestone = at + MILESTONE_M;
+        confetti(s, b.x + PW / 2, b.y - b.h, 6);
+        s.flash = 0.6;
         playSound('levelClear');
         api.requestGate(`${at} m!`);
         draw(ctx, s, spritesRef.current, cw, ch, playH, zoom, viewW, groundY);
@@ -1406,6 +1500,21 @@ function draw(
   ctx.arc(cw * 0.78, skyH * 0.16, Math.max(26, skyH * 0.11), 0, Math.PI * 2);
   ctx.fill();
 
+  // The purple biome is the game's "night": a field of twinkling stars above
+  // the horizon, fading in with the biome cross-fade.
+  const starA = here === 'purple' ? 1 - fade : soon === 'purple' ? fade : 0;
+  if (starA > 0.02) {
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 26; i += 1) {
+      const sx = hash(i * 53 + 9) * cw;
+      const sy = hash(i * 29 + 3) * groundY * 0.55;
+      const tw = 0.35 + 0.65 * Math.abs(Math.sin(s.animTime * 1.7 + i * 1.9));
+      ctx.globalAlpha = starA * tw * 0.85;
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   for (const layer of [0, 1]) {
     const factor = layer === 0 ? 0.09 : 0.19;
     const spanW = cw + 320;
@@ -1503,7 +1612,7 @@ function draw(
       if (tx * TILE + TILE > so.x - 4 && tx * TILE < so.x + so.w + 4) clear = false;
     }
     for (const f of s.world.fatals) {
-      if (f.kind !== 'spike' && f.kind !== 'saw') continue;
+      // Every hazard sits on the ground now, so scenery keeps clear of them all.
       if (tx * TILE + TILE > f.x - f.ampX - 6 && tx * TILE < f.x + f.w + f.ampX + 6) clear = false;
     }
     if (!clear) continue;
@@ -1555,22 +1664,19 @@ function draw(
         drawFrame(ctx, sp.tiles, 'spikes', box.x + i * TILE, box.y - TILE * 0.45, TILE, TILE);
       }
     } else if (f.kind === 'beam') {
+      // A grounded pillar: spiked cap on top, brick below. Reads as "hop me".
       const rows = Math.max(1, Math.round(box.h / TILE));
       for (let i = 0; i < cols; i += 1) {
         for (let r = 0; r < rows; r += 1) {
           drawFrame(
             ctx,
             sp.tiles,
-            r === rows - 1 ? 'block_spikes' : 'brick_grey',
+            r === 0 ? 'block_spikes' : 'brick_grey',
             box.x + i * TILE,
             box.y + r * TILE,
             TILE,
             TILE,
           );
-        }
-        // Chains up into the sky, so the beam reads as hung rather than floating.
-        for (let cy = 1; cy <= 7; cy += 1) {
-          drawFrame(ctx, sp.tiles, 'chain', box.x + i * TILE, box.y - cy * TILE, TILE, TILE);
         }
       }
     } else if (f.kind === 'saw') {
@@ -1624,9 +1730,15 @@ function draw(
   if (!b.onGround) frame = 'character_beige_jump';
   else if (b.h < STAND_H) frame = 'character_beige_duck';
   ctx.save();
-  ctx.translate(b.x + PW / 2, b.y);
-  ctx.rotate(Math.max(-0.16, Math.min(0.16, b.vy / 2600)));
-  drawFrame(ctx, sp.characters, frame, -dw / 2, -dh, dw, dh);
+  ctx.translate(b.x + PW / 2, b.y - (s.spin > 0 ? dh / 2 : 0));
+  // Lean with vertical speed; a double jump overrides that with a full forward
+  // somersault around the body centre.
+  ctx.rotate(
+    s.spin > 0
+      ? (1 - s.spin) * Math.PI * 2
+      : Math.max(-0.16, Math.min(0.16, b.vy / 2600)),
+  );
+  drawFrame(ctx, sp.characters, frame, -dw / 2, s.spin > 0 ? -dh / 2 : -dh, dw, dh);
   ctx.restore();
 
   for (const p of s.puffs) {
@@ -1637,9 +1749,9 @@ function draw(
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#fff4bf';
   for (const p of s.sparks) {
-    ctx.globalAlpha = Math.max(0, p.life / 0.4);
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life / 0.4));
+    ctx.fillStyle = p.color;
     ctx.fillRect(p.x - 1.2, p.y - 1.2, 2.6, 2.6);
   }
   ctx.globalAlpha = 1;
@@ -1657,6 +1769,13 @@ function draw(
   ctx.restore();
 
   // --- screen-space juice ----------------------------------------------
+  for (const a of s.ambient) {
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = a.color;
+    ctx.fillRect(a.x, a.y, a.r, a.r);
+  }
+  ctx.globalAlpha = 1;
+
   const hot = Math.max(0, Math.min(1, (s.speed - BASE_SPEED) / (SPEED_CAP - BASE_SPEED)));
   if (hot > 0.05) {
     ctx.strokeStyle = '#ffffff';
@@ -1694,6 +1813,15 @@ function draw(
   ctx.fillText(`${Math.floor(s.metres)} m`, 10, 18);
   ctx.textAlign = 'right';
   ctx.fillText(`${s.coins} coins`, cw - 10, 18);
+  // Combo counter: pops when a coin lands, heats up as the chain grows. The
+  // rising coin pitch is the ear's half; this is the eye's half.
+  if (s.combo >= 3) {
+    const pop = 1 + s.comboPop * 0.45;
+    ctx.fillStyle = s.combo >= 8 ? '#ffb066' : '#ffd75e';
+    ctx.font = `bold ${Math.round(11 * pop)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.fillText(`COMBO x${s.combo}`, cw - 10, 40);
+    ctx.font = 'bold 13px ui-sans-serif, system-ui, sans-serif';
+  }
   ctx.textAlign = 'left';
 
   // Speed meter, so the ramp is something the player can watch coming. Kept
