@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Question } from '@/lib/questions/types';
 import { SUBJECT_LABELS } from '@/lib/questions/types';
+import { questionSpeech, speak, speechAvailable, stopSpeaking, toSpeakable } from '@/lib/speech';
 
 /** Seconds the advance button stays locked after a wrong answer. */
 const EXPLAIN_LOCK_SECONDS = 3;
@@ -30,6 +31,8 @@ export type QuestionGateProps = {
   /** What happens next, e.g. "Answer one question to get back in." */
   subhead: string;
   reward: number;
+  /** Read the question and choices aloud (for pre-reading kids: K / 1st grade). */
+  narrate?: boolean;
   onAnswered: (correct: boolean) => void;
 };
 
@@ -43,6 +46,7 @@ export default function QuestionGate({
   headline,
   subhead,
   reward,
+  narrate = false,
   onAnswered,
 }: QuestionGateProps) {
   const [picked, setPicked] = useState<number | null>(null);
@@ -56,6 +60,8 @@ export default function QuestionGate({
   const answered = picked !== null;
   const correct = picked === question.answer;
   const accent = SUBJECT_COLORS[question.subject];
+  const speechLine = questionSpeech(question.prompt, question.choices);
+  const canSpeak = speechAvailable();
 
   const choose = useCallback(
     (i: number) => {
@@ -81,6 +87,20 @@ export default function QuestionGate({
     const t = setTimeout(() => setReadLock((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [readLock]);
+
+  // Read the question and choices aloud for a pre-reading child, and stop any
+  // speech when the question changes or the gate closes.
+  useEffect(() => {
+    if (!narrate) return;
+    speak(speechLine);
+    return () => stopSpeaking();
+  }, [narrate, speechLine]);
+
+  // Speak the result too, so a non-reader hears whether they got it right.
+  useEffect(() => {
+    if (!narrate || picked === null) return;
+    speak(correct ? 'Correct! Great job!' : `Not quite. ${toSpeakable(question.explain)}`);
+  }, [narrate, picked, correct, question.explain]);
 
   // Bring the explanation into view once answered. After a reading question the
   // passage has pushed it well below the fold, so without this the feedback for
@@ -166,7 +186,23 @@ export default function QuestionGate({
             </p>
           )}
 
-          <p className="mb-4 text-xl font-semibold leading-snug text-white">{question.prompt}</p>
+          <div className="mb-4 flex items-start gap-3">
+            <p className="flex-1 text-xl font-semibold leading-snug text-white">{question.prompt}</p>
+            {canSpeak && (
+              <button
+                type="button"
+                onClick={() => speak(speechLine)}
+                aria-label="Hear the question"
+                className={`flex flex-shrink-0 items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-bold transition active:scale-95 ${
+                  narrate ? 'border-current' : 'border-white/20 text-white/70'
+                }`}
+                style={narrate ? { color: accent, background: `${accent}1f` } : undefined}
+              >
+                <span className="text-lg">🔊</span>
+                {narrate && <span>Hear it</span>}
+              </button>
+            )}
+          </div>
 
           {readLock > 0 && (
             <div

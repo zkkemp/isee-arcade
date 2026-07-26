@@ -722,6 +722,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               headline={headline}
               subhead={subhead}
               reward={CORRECT_REWARD}
+              // Read questions aloud for the pre-reading grades.
+              narrate={band === 'k' || band === 'grade1'}
               onAnswered={handleAnswered}
             />
           )}
