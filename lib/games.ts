@@ -352,7 +352,7 @@ export const HOW_TO: Record<GameId, string> = {
   snake:
     'Steer the snake to eat the food. Every bite makes it longer. Do not run into the walls or into your own tail.',
   platformer:
-    'Run and jump to the flag at the end. Collect coins, bounce on enemies to squash them, and watch out for spiky ones you cannot jump on. Jump over the pits!',
+    'Run and jump to the flag at the end. Collect coins, bounce on enemies to squash them, and watch out for spiky ones you cannot jump on. Jump over the pits! See a glowing OPEN door? Stand on it and STOP moving for a moment to warp to a hidden coin room.',
   runner:
     'You run automatically and the road never ends. Tap anywhere to jump over gaps and obstacles - tap again in the air for a double jump. See how far you can go!',
   breakout:
