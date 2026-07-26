@@ -146,6 +146,33 @@ export function isLegalPlay(card: Card, top: Card, activeColor: Color): boolean 
   return false;
 }
 
+/** Human-readable name for a rank - action cards get their real names, numbers pass through. */
+function rankWord(rank: Rank): string {
+  switch (rank) {
+    case 'skip':
+      return 'Skip';
+    case 'reverse':
+      return 'Reverse';
+    case 'draw2':
+      return 'Draw Two';
+    case 'wild':
+      return 'Rainbow';
+    case 'wild4':
+      return 'Rainbow +4';
+    default:
+      return rank;
+  }
+}
+
+/**
+ * A plain-English label for a card - "red 5", "blue Skip", "Rainbow" - used by the play
+ * banner so a kid can read exactly what was just played instead of only seeing the icon.
+ * Pure and exported so scripts/check-cardmatch.ts can prove it directly.
+ */
+export function describeCard(card: Card): string {
+  return card.color ? `${card.color} ${rankWord(card.rank)}` : rankWord(card.rank);
+}
+
 export type GameState = {
   hands: [Card[], Card[]];
   drawPile: Card[];
@@ -368,6 +395,8 @@ type Mode = 'cpu' | '2p';
 type Phase = 'menu' | 'pass' | 'play' | 'over';
 
 const TOP = 52;
+/** Height of the dedicated "other player" panel drawn just below the top bar. */
+const OPP_H = 62;
 
 export const COLOR_HEX: Record<Color, string> = {
   red: '#ff5a5a',
@@ -379,7 +408,21 @@ const WILD_BG = '#211d33';
 
 type HandSlot = { card: Card; x: number; y: number; w: number; h: number; playable: boolean };
 
-function layoutHand(hand: Card[], top: Card, activeColor: Color, cw: number, ch: number, inset: number): HandSlot[] {
+/**
+ * `interactive` is false whenever the fanned hand is not the one whose turn it actually is
+ * (e.g. the human's own hand shown - fixed, always visible - while the computer is thinking
+ * or its play is still animating). A non-interactive hand never raises or highlights a card,
+ * even one that would otherwise be legal, so a kid never sees a false "you can play this" cue.
+ */
+function layoutHand(
+  hand: Card[],
+  top: Card,
+  activeColor: Color,
+  cw: number,
+  ch: number,
+  inset: number,
+  interactive: boolean,
+): HandSlot[] {
   const n = hand.length;
   if (n === 0) return [];
   const maxW = Math.max(60, cw - 24);
@@ -392,7 +435,7 @@ function layoutHand(hand: Card[], top: Card, activeColor: Color, cw: number, ch:
   const out: HandSlot[] = [];
   for (let i = 0; i < n; i += 1) {
     const card = hand[i];
-    const playable = isLegalPlay(card, top, activeColor);
+    const playable = interactive && isLegalPlay(card, top, activeColor);
     out.push({ card, x: startX + i * overlap, y: baseY - (playable ? 10 : 0), w: cardW, h: cardH, playable });
   }
   return out;
@@ -409,13 +452,23 @@ function slotAtPoint(slots: HandSlot[], x: number, y: number): HandSlot | null {
 
 type PileRect = { x: number; y: number; w: number; h: number };
 
+/**
+ * The discard pile is drawn noticeably bigger than the draw pile - it is the one card every
+ * player must be able to read at a glance (color + number/symbol), so it gets the size budget.
+ */
 function pileLayout(cw: number, ch: number, inset: number): { draw: PileRect; discard: PileRect } {
-  const w = Math.min(64, cw * 0.16);
-  const h = w * 1.4;
-  const y = TOP + (ch - inset - TOP - h) / 2 - 30;
+  const top = TOP + OPP_H;
+  const discardW = Math.min(112, cw * 0.3);
+  const discardH = discardW * 1.4;
+  const drawW = Math.min(52, cw * 0.13);
+  const drawH = drawW * 1.4;
+  const gap = 20;
+  const totalW = drawW + gap + discardW;
+  const startX = cw / 2 - totalW / 2;
+  const y = top + (ch - inset - top - discardH) / 2 - 14;
   return {
-    draw: { x: cw / 2 - w - 10, y, w, h },
-    discard: { x: cw / 2 + 10, y, w, h },
+    draw: { x: startX, y: y + (discardH - drawH) / 2, w: drawW, h: drawH },
+    discard: { x: startX + drawW + gap, y, w: discardW, h: discardH },
   };
 }
 
@@ -425,8 +478,25 @@ function insideRect(r: PileRect, x: number, y: number): boolean {
 
 // --- component state -----------------------------------------------------------
 
-type Banner = { text: string; t: number };
 type Nudge = { cardId: number; t: number };
+
+/**
+ * A play (or draw) that just happened, held on screen for a visible beat before the game
+ * moves on. `card` is null for a draw (nothing to fly to the discard pile). `fromOpponent`
+ * is true only when the party who acted is NOT the person currently looking at the screen -
+ * the computer in vs-computer mode - which is the one case that must never fire instantly or
+ * chain without a pause. `settle` is the deferred turn/phase advance that used to run
+ * immediately; it now runs only once this beat finishes, so nothing changes on screen while
+ * the banner and animation are showing.
+ */
+type PlayAnim = {
+  text: string;
+  card: Card | null;
+  fromOpponent: boolean;
+  t: number;
+  duration: number;
+  settle: () => void;
+};
 
 type UIState = {
   mode: Mode;
@@ -434,12 +504,16 @@ type UIState = {
   game: GameState;
   /** Which hand index is the human's, in cpu mode. Alternates each round. */
   humanIndex: 0 | 1;
+  /** Whose hand is fanned at the bottom of the screen right now - see comment on assignment. */
+  viewer: 0 | 1;
   /** Whose turn the pass gate is about to reveal (2p mode). */
   pendingReveal: 0 | 1;
   pendingWild: Card | null;
   cpuWait: number;
   nudge: Nudge | null;
-  banner: Banner | null;
+  anim: PlayAnim | null;
+  /** Seconds remaining on a brief pulse of the active-color pill, right after a wild changes it. */
+  colorFlash: number;
   overWinner: 0 | 1 | null;
   time: number;
 };
@@ -450,11 +524,13 @@ function initialState(): UIState {
     phase: 'menu',
     game: newGame(lcg(1)),
     humanIndex: 1, // flips to 0 on the first cpu match, so the child opens.
+    viewer: 1,
     pendingReveal: 0,
     pendingWild: null,
     cpuWait: 0,
     nudge: null,
-    banner: null,
+    anim: null,
+    colorFlash: 0,
     overWinner: null,
     time: 0,
   };
@@ -479,10 +555,12 @@ function startRound(s: UIState, mode: Mode, rng: () => number, difficulty: Diffi
   s.pendingWild = null;
   s.cpuWait = 0;
   s.nudge = null;
-  s.banner = null;
+  s.anim = null;
+  s.colorFlash = 0;
   s.overWinner = null;
   if (mode === 'cpu') {
     s.humanIndex = s.humanIndex === 0 ? 1 : 0;
+    s.viewer = s.humanIndex;
     s.phase = 'play';
     if (s.game.turn !== s.humanIndex) s.cpuWait = CPU_THINK[difficulty];
   } else {
@@ -491,18 +569,67 @@ function startRound(s: UIState, mode: Mode, rng: () => number, difficulty: Diffi
   }
 }
 
-function effectLabel(effect: PlayEffect, opponentDrew: number, opponentName: string): string | null {
+/** "You" takes first-person verbs (lose/draw); every other seat takes third-person (loses/draws). */
+function loseVerb(seat: string): string {
+  return seat === 'You' ? 'lose' : 'loses';
+}
+function drawVerb(seat: string): string {
+  return seat === 'You' ? 'draw' : 'draws';
+}
+
+/** Who a hand index is, from the screen's point of view: "You" / "Computer" / "Player 2". */
+function seatLabel(mode: Mode, humanIndex: 0 | 1, idx: 0 | 1): string {
+  if (mode === 'cpu') return idx === humanIndex ? 'You' : 'Computer';
+  return `Player ${idx + 1}`;
+}
+
+/**
+ * The banner text for a just-played card - "Computer played red 5.", or with an effect,
+ * "Computer played red Draw Two! You draw 2." A wild that is colorless names the color it
+ * chose so the change is called out in words, not just shown as a swatch.
+ */
+function playBanner(
+  actorLabel: string,
+  card: Card,
+  effectiveColor: Color,
+  effect: PlayEffect,
+  opponentDrew: number,
+  opponentLabel: string,
+): string {
+  let base = `${actorLabel} played ${describeCard(card)}`;
+  if (!card.color) base += ` and chose ${effectiveColor}`;
   switch (effect) {
     case 'skip':
-      return `Skip! ${opponentName} loses a turn.`;
+      return `${base}! ${opponentLabel} ${loseVerb(opponentLabel)} a turn.`;
     case 'reverse':
-      return 'Reverse!';
+      return `${base}! Reverse.`;
     case 'draw2':
-      return `${opponentName} draws ${opponentDrew} and is skipped!`;
     case 'wild4':
-      return `${opponentName} draws ${opponentDrew} and is skipped!`;
+      return `${base}! ${opponentLabel} ${drawVerb(opponentLabel)} ${opponentDrew}.`;
     default:
-      return null;
+      return `${base}.`;
+  }
+}
+
+/**
+ * How long a play's banner + animation holds the screen before the game moves on.
+ * `fromOpponent` plays (the computer, in vs-computer mode) always get the full
+ * kid-readable pause (1.2-1.8s per the effect's weight); the viewer's own tap already has
+ * instant tactile feedback, so it only gets a short confirmation blip.
+ */
+function pickAnimDuration(fromOpponent: boolean, effect: PlayEffect): number {
+  if (!fromOpponent) return 0.55;
+  switch (effect) {
+    case 'wild4':
+      return 1.8;
+    case 'draw2':
+      return 1.65;
+    case 'skip':
+      return 1.5;
+    case 'reverse':
+      return 1.4;
+    default:
+      return 1.2;
   }
 }
 
@@ -529,11 +656,6 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
-  const opponentName = (s: UIState, forPlayer: 0 | 1): string => {
-    if (s.mode === 'cpu') return forPlayer === s.humanIndex ? 'Computer' : 'You';
-    return `Player ${forPlayer + 1}`;
-  };
-
   const resolveIfOver = (s: UIState, api: GameApi): boolean => {
     const w = winner(s.game);
     if (w === null) return false;
@@ -556,14 +678,13 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
     return true;
   };
 
-  /** Commits a resolved PlayResult: applies effects, checks for a winner, advances turn/phase. */
-  const commitPlay = (s: UIState, result: PlayResult, actingPlayer: 0 | 1, api: GameApi): void => {
-    s.game = result.state;
-    playSound('click');
-    const label = effectLabel(result.effect, result.opponentDrew, opponentName(s, otherPlayer(actingPlayer)));
-    if (label) s.banner = { text: label, t: 0 };
+  /**
+   * The turn/phase advance that used to happen the instant a play committed. Now deferred
+   * behind the play's on-screen beat (see PlayAnim) so a kid actually gets to read the banner
+   * and watch the card land before anything else moves - including the "you win" screen.
+   */
+  const afterPlaySettle = (s: UIState, actingPlayer: 0 | 1, api: GameApi): void => {
     if (resolveIfOver(s, api)) return;
-
     if (s.game.turn !== actingPlayer) {
       // Turn actually changed hands - in 2p mode, gate behind a pass screen.
       if (s.mode === '2p') {
@@ -574,9 +695,35 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
       }
     } else if (s.mode === 'cpu' && s.game.turn !== s.humanIndex) {
       // Skip/Reverse/Draw2/Wild4 kept the turn with the player who just acted,
-      // and that player is the computer - it goes again after a short beat.
+      // and that player is the computer - it goes again after its own beat.
       s.cpuWait = CPU_THINK[difficulty];
     }
+  };
+
+  /**
+   * Commits a resolved PlayResult (hands/turn/discard all update immediately - the rules
+   * never wait) and opens the visible beat: a banner naming the card, a card flying to the
+   * discard pile, and every tap ignored until it finishes. Only once that beat elapses does
+   * afterPlaySettle run, so the pass screen or the computer's next move never appears before
+   * the kid has had a chance to see what just happened.
+   */
+  const commitPlay = (s: UIState, result: PlayResult, actingPlayer: 0 | 1, api: GameApi): void => {
+    s.game = result.state;
+    playSound('click');
+    const playedCard = s.game.discard[s.game.discard.length - 1];
+    if (!playedCard.color) s.colorFlash = 1;
+    const fromOpponent = s.mode === 'cpu' && actingPlayer !== s.viewer;
+    const actorLabel = seatLabel(s.mode, s.humanIndex, actingPlayer);
+    const opponentLabel = seatLabel(s.mode, s.humanIndex, otherPlayer(actingPlayer));
+    const text = playBanner(actorLabel, playedCard, s.game.activeColor, result.effect, result.opponentDrew, opponentLabel);
+    s.anim = {
+      text,
+      card: playedCard,
+      fromOpponent,
+      t: 0,
+      duration: pickAnimDuration(fromOpponent, result.effect),
+      settle: () => afterPlaySettle(s, actingPlayer, api),
+    };
   };
 
   const playCard = (s: UIState, player: 0 | 1, card: Card, chosenColor: Color | null, api: GameApi): void => {
@@ -585,20 +732,21 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
   };
 
   const attemptDraw = (s: UIState, player: 0 | 1, api: GameApi): void => {
-    void api;
     s.game = drawCard(s.game, player, rngRef.current);
     playSound('brick');
-    const who = otherPlayerLabel(s.mode, s.humanIndex, player);
-    s.banner = { text: `${s.mode === '2p' ? who : player === s.humanIndex ? 'You' : 'Computer'} drew a card.`, t: 0 };
+    const actorLabel = seatLabel(s.mode, s.humanIndex, player);
     // Simplified house rule (kept deliberately for a young audience): drawing
     // always ends the turn, rather than allowing an immediate follow-up play.
     s.game = { ...s.game, turn: otherPlayer(player) };
-    if (s.mode === '2p') {
-      s.pendingReveal = s.game.turn;
-      s.phase = 'pass';
-    } else if (s.game.turn !== s.humanIndex) {
-      s.cpuWait = CPU_THINK[difficulty];
-    }
+    const fromOpponent = s.mode === 'cpu' && player !== s.viewer;
+    s.anim = {
+      text: `${actorLabel} drew a card.`,
+      card: null,
+      fromOpponent,
+      t: 0,
+      duration: fromOpponent ? 1.3 : 0.5,
+      settle: () => afterPlaySettle(s, player, api),
+    };
   };
 
   const onTap = (sx: number, sy: number, cw: number): void => {
@@ -615,6 +763,7 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
 
     if (s.phase === 'pass') {
       s.phase = 'play';
+      s.viewer = s.pendingReveal;
       playSound('click');
       return;
     }
@@ -631,6 +780,8 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
     }
 
     // phase === 'play'
+    if (s.anim) return; // a play (or the computer's) is still mid-beat - no input until it lands
+
     if (sx < 96 && sy < TOP) {
       s.phase = 'menu';
       playSound('click');
@@ -638,7 +789,7 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
     }
 
     const current = s.game.turn;
-    if (s.mode === 'cpu' && current !== s.humanIndex) return; // computer's turn
+    if (current !== s.viewer) return; // not the on-screen player's turn to act
 
     if (s.pendingWild) {
       for (const btn of colorButtonsRef.current) {
@@ -681,13 +832,19 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
 
       if (!paused) {
         s.time += dt;
-        if (s.banner) {
-          s.banner.t += dt;
-          if (s.banner.t > 1.4) s.banner = null;
-        }
         if (s.nudge) {
           s.nudge.t += dt;
           if (s.nudge.t > 0.3) s.nudge = null;
+        }
+        if (s.colorFlash > 0) s.colorFlash = Math.max(0, s.colorFlash - dt / 0.6);
+
+        if (s.anim) {
+          s.anim.t += dt;
+          if (s.anim.t >= s.anim.duration) {
+            const settle = s.anim.settle;
+            s.anim = null;
+            settle(); // runs the turn/phase advance that the beat above was holding back
+          }
         }
 
         if (
@@ -695,6 +852,7 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
           s.mode === 'cpu' &&
           s.game.turn !== s.humanIndex &&
           !s.pendingWild &&
+          !s.anim &&
           s.cpuWait > 0
         ) {
           s.cpuWait -= dt;
@@ -710,13 +868,15 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
 
       if (s.phase === 'play' && !s.pendingWild) {
         const top = s.game.discard[s.game.discard.length - 1];
+        const interactive = !s.anim && s.game.turn === s.viewer;
         handSlotsRef.current = layoutHand(
-          s.game.hands[s.game.turn],
+          s.game.hands[s.viewer],
           top,
           s.game.activeColor,
           cw,
           ch,
           controlsInset,
+          interactive,
         );
       } else {
         handSlotsRef.current = [];
@@ -738,11 +898,6 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
       onContextMenu={(e) => e.preventDefault()}
     />
   );
-}
-
-function otherPlayerLabel(mode: Mode, humanIndex: 0 | 1, player: 0 | 1): string {
-  if (mode === 'cpu') return player === humanIndex ? 'You' : 'Computer';
-  return `Player ${player + 1}`;
 }
 
 // --- drawing -------------------------------------------------------------------
@@ -777,9 +932,10 @@ function draw(
   }
 
   drawTopBar(ctx, s, cw, inset);
+  drawOpponentPanel(ctx, s, cw);
   drawPiles(ctx, s, cw, ch, inset);
   if (!s.pendingWild) drawHand(ctx, handSlots, s.nudge);
-  if (s.banner) drawBanner(ctx, s.banner, cw);
+  if (s.anim) drawPlayAnim(ctx, s, cw, ch, inset);
   if (s.phase === 'over') drawOver(ctx, s, cw, ch);
   if (s.pendingWild) drawColorPicker(ctx, cw, ch, colorButtonsRef);
   if (paused) dim(ctx, cw, ch);
@@ -852,24 +1008,70 @@ function drawTopBar(ctx: CanvasRenderingContext2D, s: UIState, cw: number, _inse
   ctx.textAlign = 'center';
   ctx.fillText('Menu', 48, TOP / 2 + 1);
 
-  const current = s.game.turn;
   const turnLabel =
-    s.mode === 'cpu'
-      ? current === s.humanIndex
-        ? 'Your turn'
-        : 'Computer thinking...'
-      : `Player ${current + 1}'s turn`;
+    s.game.turn === s.viewer
+      ? 'Your turn'
+      : s.mode === 'cpu' && s.cpuWait > 0
+        ? 'Computer thinking...'
+        : `${seatLabel(s.mode, s.humanIndex, s.game.turn)}'s turn`;
   ctx.textAlign = 'right';
   ctx.fillStyle = COLOR_HEX[s.game.activeColor];
   ctx.font = 'bold 17px system-ui, sans-serif';
-  ctx.fillText(turnLabel, cw - 16, TOP / 2 - 5);
+  ctx.fillText(turnLabel, cw - 16, TOP / 2 + 1);
+}
 
+/**
+ * The other player, drawn plainly: name/label, their hand shown ONLY as face-down backs (never
+ * their real cards - that would leak the computer's hand to the human), and a highlighted
+ * border the instant it is actually their turn (thinking, mid-beat, or genuinely playing).
+ */
+function drawOpponentPanel(ctx: CanvasRenderingContext2D, s: UIState, cw: number): void {
+  const oppIdx = otherPlayer(s.viewer);
+  const label = seatLabel(s.mode, s.humanIndex, oppIdx);
+  const count = s.game.hands[oppIdx].length;
+  const isTurn = s.game.turn === oppIdx;
+
+  const x = 14;
+  const y = TOP + 6;
+  const w = cw - 28;
+  const h = OPP_H - 12;
+
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.fillStyle = isTurn ? 'rgba(245,199,90,0.14)' : 'rgba(255,255,255,0.05)';
+  ctx.fill();
+  ctx.lineWidth = isTurn ? 3 : 1;
+  ctx.strokeStyle = isTurn ? '#ffd76a' : 'rgba(255,255,255,0.12)';
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = isTurn ? '#ffd76a' : 'rgba(255,255,255,0.85)';
+  ctx.font = `bold ${Math.min(16, w * 0.05)}px system-ui, sans-serif`;
+  ctx.fillText(label, x + 14, y + h / 2 - 5);
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.font = '600 13px system-ui, sans-serif';
-  const oppIdx = otherPlayer(current);
-  const oppCount = s.game.hands[oppIdx].length;
-  const oppLabel = otherPlayerLabel(s.mode, s.humanIndex, oppIdx);
-  ctx.fillText(`${oppLabel}: ${oppCount} cards`, cw - 16, TOP / 2 + 13);
+  ctx.font = '600 11px system-ui, sans-serif';
+  ctx.fillText(isTurn ? 'Playing now...' : `${count} card${count === 1 ? '' : 's'}`, x + 14, y + h / 2 + 14);
+
+  // Their hand, shown only as face-down backs - one per card, capped so a big hand does not
+  // spill off screen (an overflow badge covers the rest).
+  const maxShown = 7;
+  const shown = Math.max(0, Math.min(count, maxShown));
+  if (shown > 0) {
+    const bw = Math.min(24, (w * 0.44) / Math.max(3, shown));
+    const bh = bw * 1.34;
+    const step = bw * 0.44;
+    const totalW = bw + step * (shown - 1);
+    const startX = x + w - 14 - totalW;
+    const by = y + h / 2 - bh / 2;
+    for (let i = 0; i < shown; i += 1) {
+      drawCardBack(ctx, startX + i * step, by, bw, bh);
+    }
+    if (count > maxShown) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.fillText(`+${count - maxShown}`, startX + totalW + 15, by + bh / 2 + 4);
+    }
+  }
 }
 
 function drawPiles(ctx: CanvasRenderingContext2D, s: UIState, cw: number, ch: number, inset: number): void {
@@ -881,13 +1083,33 @@ function drawPiles(ctx: CanvasRenderingContext2D, s: UIState, cw: number, ch: nu
   ctx.font = '600 11px system-ui, sans-serif';
   ctx.fillText(`${s.game.drawPile.length} left`, p.draw.x + p.draw.w / 2, p.draw.y + p.draw.h + 16);
 
+  // The discard's top card is the one thing everyone must be able to read at a glance, so it
+  // gets a bright glow ring in the current color plus a big, boldly labelled color pill below
+  // it - since a played wild's own face is colorless, the pill is the only place that names the
+  // color that is actually in play. The pill pulses bigger for a moment right after a wild
+  // changes it (s.colorFlash), calling out the change instead of letting it slip by quietly.
   const top = s.game.discard[s.game.discard.length - 1];
+  ctx.save();
+  ctx.shadowColor = COLOR_HEX[s.game.activeColor];
+  ctx.shadowBlur = 16;
   drawCardFace(ctx, top, p.discard.x, p.discard.y, p.discard.w, p.discard.h, 1);
-  // Active color swatch under the discard, since a played wild's own color is null.
-  ctx.beginPath();
+  ctx.restore();
+
+  const flashScale = 1 + s.colorFlash * 0.3;
+  const pillW = Math.min(140, p.discard.w * 1.7) * flashScale;
+  const pillH = 28 * flashScale;
+  const pillX = p.discard.x + p.discard.w / 2 - pillW / 2;
+  const pillY = p.discard.y + p.discard.h + 12;
+  roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2);
   ctx.fillStyle = COLOR_HEX[s.game.activeColor];
-  ctx.arc(p.discard.x + p.discard.w / 2, p.discard.y + p.discard.h + 10, 7, 0, Math.PI * 2);
   ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.font = `bold ${13 * flashScale}px system-ui, sans-serif`;
+  ctx.fillText(s.game.activeColor.toUpperCase(), pillX + pillW / 2, pillY + pillH / 2 + 5 * flashScale);
 }
 
 /** Draws the current player's fan. Playable cards sit raised and full-bright; the rest are dimmed. */
@@ -903,17 +1125,78 @@ function drawHand(ctx: CanvasRenderingContext2D, slots: HandSlot[], nudge: Nudge
   }
 }
 
-function drawBanner(ctx: CanvasRenderingContext2D, banner: Banner, cw: number): void {
-  const alpha = banner.t < 1.1 ? 1 : Math.max(0, 1 - (banner.t - 1.1) / 0.3);
+/**
+ * The visible beat for a play: the banner naming exactly what was played (and what it did),
+ * plus - for an actual card, not a draw - that card flying from whoever played it toward the
+ * discard pile. The computer's plays fly in from the opponent panel up top; the viewer's own
+ * plays (and a 2p player's own plays, before the pass screen) fly in from their own hand at
+ * the bottom, so the direction of motion itself hints at who just acted.
+ */
+function drawPlayAnim(ctx: CanvasRenderingContext2D, s: UIState, cw: number, ch: number, inset: number): void {
+  const anim = s.anim;
+  if (!anim) return;
+  const pile = pileLayout(cw, ch, inset);
+
+  if (anim.card) {
+    const target = { x: pile.discard.x + pile.discard.w / 2, y: pile.discard.y + pile.discard.h / 2 };
+    const origin = anim.fromOpponent ? { x: cw / 2, y: TOP + OPP_H / 2 } : { x: cw / 2, y: ch - inset - 86 };
+    const travel = Math.min(1, anim.t / Math.max(0.3, anim.duration * 0.5));
+    const eased = 1 - (1 - travel) * (1 - travel) * (1 - travel);
+    const x = origin.x + (target.x - origin.x) * eased;
+    const y = origin.y + (target.y - origin.y) * eased;
+    const w = pile.discard.w * 0.78;
+    const h = w * 1.4;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((1 - eased) * 0.35 * (anim.fromOpponent ? -1 : 1));
+    ctx.translate(-x, -y);
+    drawCardFace(ctx, anim.card, x - w / 2, y - h / 2, w, h, 0.82 + eased * 0.18);
+    ctx.restore();
+  }
+
+  drawPlayBanner(ctx, anim, cw);
+}
+
+/** Word-wraps banner text so a long "drew 4 and is skipped" message never runs off screen. */
+function wrapBannerText(text: string, maxChars: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  for (const word of words) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (next.length > maxChars && cur) {
+      lines.push(cur);
+      cur = word;
+    } else {
+      cur = next;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+function drawPlayBanner(ctx: CanvasRenderingContext2D, anim: PlayAnim, cw: number): void {
+  const fadeIn = Math.min(1, anim.t / 0.15);
+  const remaining = anim.duration - anim.t;
+  const fadeOut = remaining < 0.3 ? Math.max(0, remaining / 0.3) : 1;
+  const alpha = Math.min(fadeIn, fadeOut);
+  if (alpha <= 0) return;
+
+  const lines = wrapBannerText(anim.text, 34);
+  const w = Math.min(360, cw - 24);
+  const h = 16 + lines.length * 20;
+  const x = cw / 2 - w / 2;
+  const y = TOP + OPP_H + 6;
+
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.textAlign = 'center';
-  roundRect(ctx, cw / 2 - 170, TOP + 8, 340, 34, 14);
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  roundRect(ctx, x, y, w, h, 14);
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
   ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.font = '600 14px system-ui, sans-serif';
-  ctx.fillText(banner.text, cw / 2, TOP + 8 + 22);
+  ctx.font = '700 14px system-ui, sans-serif';
+  lines.forEach((line, i) => ctx.fillText(line, cw / 2, y + 22 + i * 20));
   ctx.restore();
 }
 

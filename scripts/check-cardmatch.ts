@@ -27,6 +27,7 @@ import {
   chooseCpuPlay,
   COLORS,
   deal,
+  describeCard,
   drawCard,
   handIsEmpty,
   isLegalPlay,
@@ -329,7 +330,29 @@ function freshTestState(topRank: Rank, topColor: Color): GameState {
   assert(allLegal, 'chooseCpuPlay produced an illegal card on at least one random hand');
 }
 
-// --- 9) full random self-play games always terminate, legally, one winner --
+// --- 9) describeCard: plain-English labels for the play banner ("Computer played red 5") ---
+
+{
+  const numbered: Card = { id: 600, color: 'red', rank: '5' };
+  assert(describeCard(numbered) === 'red 5', `describeCard gave "${describeCard(numbered)}", expected "red 5"`);
+
+  const action: Card = { id: 601, color: 'blue', rank: 'draw2' };
+  assert(
+    describeCard(action) === 'blue Draw Two',
+    `describeCard gave "${describeCard(action)}", expected "blue Draw Two"`,
+  );
+
+  const wild: Card = { id: 602, color: null, rank: 'wild' };
+  assert(describeCard(wild) === 'Rainbow', `describeCard gave "${describeCard(wild)}", expected "Rainbow"`);
+
+  const wild4: Card = { id: 603, color: null, rank: 'wild4' };
+  assert(
+    describeCard(wild4) === 'Rainbow +4',
+    `describeCard gave "${describeCard(wild4)}", expected "Rainbow +4"`,
+  );
+}
+
+// --- 10) full random self-play games always terminate, legally, one winner -
 
 /**
  * Mirrors the orchestration CardMatch.tsx uses: chooseCpuPlay decides; if it
