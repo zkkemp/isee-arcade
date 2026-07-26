@@ -742,6 +742,43 @@ function checkLevel(level: number, d: Difficulty, tally: Tally) {
   if (lostCoins > 0) {
     fail(`${at}: ${lostCoins} coin(s) become unreachable once every brick is broken`);
   }
+
+  // --- the one enemy you must not stomp must never be the only way through ---
+  //
+  // Every other kind can be dealt with by jumping on it, so it can never trap a
+  // player - worst case they stomp it and carry on. A spiker cannot: touching it
+  // anywhere on its body costs a hit exactly like walking into it does. So its
+  // whole patrol strip (not just where it happens to be standing right now) is
+  // reproven as if it were a solid wall of spikes, and the search has to find a
+  // route to the flag and to every coin the normal run reaches that never has to
+  // touch that strip. This is the same technique as the "every brick broken"
+  // proof above: prove it by re-running the real search against a worse map,
+  // not by trusting that the placement code left room to jump over it.
+  for (const e of L.enemies) {
+    if (e.kind !== 'spiker') continue;
+    const loTx = Math.max(0, Math.floor(e.minX / TILE));
+    const hiTx = Math.min(COLS - 1, Math.ceil(e.maxX / TILE));
+    const loTy = Math.max(0, Math.floor(e.y / TILE));
+    const hiTy = Math.min(ROWS - 1, Math.floor((e.y + PH - 1) / TILE));
+    const walled = L.tiles.map((row) => row.slice()) as TileCode[][];
+    for (let ty = loTy; ty <= hiTy; ty += 1) {
+      for (let tx = loTx; tx <= hiTx; tx += 1) {
+        if (walled[ty][tx] === '.') walled[ty][tx] = 'X';
+      }
+    }
+    // Coins directly over the strip are not held to the same standard: a coin a
+    // hair's width from a hazard is normal platformer risk/reward (grab it and
+    // maybe take a hit), the same as a coin arc drawn low over a spike patch.
+    // What must never happen is the FLAG - the level itself - depending on
+    // contact with something you cannot safely stomp.
+    const detour = explore(L, { tiles: walled });
+    if (!detour.flag) {
+      fail(
+        `${at}: spiker at x=${Math.floor(e.x / TILE)} (patrol ${loTx}-${hiTx}) blocks every route ` +
+          'to the flag - there is no way to jump over or route around it',
+      );
+    }
+  }
 }
 
 // --- run ------------------------------------------------------------------

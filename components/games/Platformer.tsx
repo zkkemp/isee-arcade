@@ -771,6 +771,40 @@ const BAND: Record<Biome, string> = {
   purple: 'background_solid_dirt',
 };
 
+/**
+ * Ambient motes drifting in screen space, tinted and paced per biome: snow
+ * falls fast and straight, sand drifts sideways, everything else gets a slow
+ * lazy pollen-like float. Purely decorative canvas primitives - no sprite, no
+ * new asset, no gameplay effect - drawn once behind the world each frame.
+ */
+const AMBIENT: Record<Biome, { color: string; count: number; fall: number; drift: number; size: number }> = {
+  grass: { color: 'rgba(255,255,255,0.5)', count: 10, fall: 6, drift: 8, size: 1.5 },
+  sand: { color: 'rgba(255,224,150,0.55)', count: 14, fall: 3, drift: 22, size: 1.4 },
+  snow: { color: 'rgba(255,255,255,0.85)', count: 22, fall: 26, drift: 10, size: 1.8 },
+  stone: { color: 'rgba(210,220,230,0.35)', count: 8, fall: 4, drift: 5, size: 1.3 },
+  dirt: { color: 'rgba(255,214,150,0.4)', count: 10, fall: 5, drift: 9, size: 1.4 },
+  purple: { color: 'rgba(230,210,255,0.55)', count: 14, fall: 8, drift: 14, size: 1.6 },
+};
+
+function drawAmbient(ctx: CanvasRenderingContext2D, biome: Biome, t: number, cw: number, playH: number) {
+  const a = AMBIENT[biome];
+  ctx.fillStyle = a.color;
+  for (let i = 0; i < a.count; i += 1) {
+    // Deterministic per-index scatter computed from the index alone (no RNG,
+    // no stored state), so a mote's start position is stable across frames
+    // and this stays a pure function of the clock rather than something with
+    // its own state to manage.
+    const seedX = (i * 97 + 31) % 233;
+    const seedY = (i * 53 + 17) % 199;
+    const speedMul = 0.6 + ((i * 7) % 5) * 0.15;
+    const x = (((seedX / 233) * cw + t * a.drift * speedMul) % (cw + 20)) - 10;
+    const y = (((seedY / 199) * playH + t * a.fall * speedMul) % (playH + 20)) - 10;
+    ctx.beginPath();
+    ctx.arc(x, y, a.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 const DECOR_SPRITE: Record<DecorKind, string> = {
   bush: 'bush',
   cactus: 'cactus',
@@ -917,6 +951,13 @@ function draw(
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, cw, playH);
   ctx.globalCompositeOperation = 'source-over';
+
+  // Ambient atmosphere, screen-space and biome-tinted: snow drifts down, sand
+  // grains blow sideways, everything else gets soft floating motes. Pure
+  // canvas primitives - no new art, no new state, just a function of the
+  // clock the frame already carries - so it costs a couple dozen arcs and
+  // never touches gameplay or the seeded generator the checkers replay.
+  drawAmbient(ctx, biome, s.animTime, cw, playH);
 
   // World drawing happens in world units. `skyPad` is the surplus when the view
   // is taller than the world; `camY` is the scroll when it is shorter. Only one

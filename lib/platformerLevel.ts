@@ -357,6 +357,25 @@ const DECOR_FOR: Record<Biome, DecorKind[]> = {
   purple: ['mushroom_brown', 'rock', 'hill', 'bush'],
 };
 
+/**
+ * Per-biome skew on which filler structures get picked (multiplies the normal
+ * weight; anything absent is unbiased). This is what turns "levels 1-6 are
+ * grass" into "levels 1-6 are the easy grass world, 7-12 are the dune-and-pit
+ * desert, 13-18 the tunnel-and-tower mountain, ..." - a sense of place that a
+ * palette swap alone does not give. `grass` is deliberately unbiased: it is
+ * always the first world in the cycle (levels 1-6), and the warm-up levels
+ * that teach the very first mechanics live there, so it stays the neutral
+ * baseline every other world is a variation on.
+ */
+const WORLD_BIAS: Record<Biome, Partial<Record<string, number>>> = {
+  grass: {},
+  sand: { pit: 1.6, islands: 1.5, gauntlet: 1.3 },
+  snow: { spring: 1.6, hopledges: 1.5 },
+  stone: { tower: 1.7, tunnel: 1.6, stack: 1.3 },
+  dirt: { spikes: 1.5, shells: 1.4, tunnel: 1.2 },
+  purple: { gauntlet: 1.7, hopledges: 1.3, tower: 1.2 },
+};
+
 // --- Collision and physics ------------------------------------------------
 
 export function solidAt(tiles: TileCode[][], tx: number, ty: number): boolean {
@@ -880,6 +899,15 @@ type Gen = {
   coinKeys: Set<string>;
   k: Knobs;
   enemiesLeft: number;
+  /**
+   * Fixed for the whole level (picked before generation starts, not after), so
+   * the filler picker can skew toward the structures that fit it. Each biome
+   * gets a themed identity this way instead of only a different backdrop -
+   * "sand" reads as a pit-and-dune world, "stone" as a tunnel-and-tower world,
+   * and so on, which is what makes the six-level cycle feel like six different
+   * places rather than one place repainted.
+   */
+  biome: Biome;
 };
 
 const START_PAD = 6;
@@ -1030,21 +1058,33 @@ function putSpikes(g: Gen, tx: number, w: number) {
 /**
  * Spends one unit of the enemy budget. `surfaceRow` is the tile row the enemy
  * stands on; flyers hover a few tiles above it.
+ *
+ * A spiker is downgraded to a slime anywhere but true ground level. Base
+ * ground has a long, mostly flat runway on both sides, so a running jump can
+ * always clear a patrol span sized the way this file sizes them. An elevated
+ * perch - a plateau top, a stair peak, a cloud platform - is narrow enough
+ * that its own height eats into the jump budget needed to clear it, which can
+ * leave NO way to route around at all: the level's own top-surface limit
+ * (TOP_SURFACE_ROW) exists precisely because headroom above a high perch is
+ * tight, and a hazard that cannot be stomped has no fallback the way a
+ * stompable one does. Proven, not just argued: the checker walls off every
+ * spiker's patrol strip and re-runs the real search for a detour.
  */
 function addEnemy(g: Gen, tx: number, surfaceRow: number, kind: EnemyKind, span = 3) {
   if (g.enemiesLeft <= 0) return;
-  const speed = enemySpeedFor(kind) * g.k.speed;
+  const safeKind: EnemyKind = kind === 'spiker' && surfaceRow !== SURFACE ? 'slime' : kind;
+  const speed = enemySpeedFor(safeKind) * g.k.speed;
   const standY = surfaceRow * TILE - PH;
-  const baseY = kind === 'flyer' ? Math.max(SKY_TOP_ROW * TILE, (surfaceRow - 4) * TILE) : standY;
+  const baseY = safeKind === 'flyer' ? Math.max(SKY_TOP_ROW * TILE, (surfaceRow - 4) * TILE) : standY;
   g.enemies.push({
     x: tx * TILE + (TILE - PW) / 2,
     y: baseY,
     vx: g.rand() < 0.5 ? -speed : speed,
     vy: 0,
-    onGround: kind !== 'flyer',
+    onGround: safeKind !== 'flyer',
     alive: true,
     squash: 0,
-    kind,
+    kind: safeKind,
     mode: 'walk',
     wake: 0,
     hop: HOP_PERIOD * (0.4 + g.rand()),
@@ -1197,6 +1237,66 @@ function sBlockStack(g: Gen, x: number): number {
   if (g.rand() < 0.6) addEnemy(g, x + n + 2, SURFACE, groundKind(g), 2);
   claim(g, x, n + 3);
   return n + 3;
+}
+
+/**
+ * A run of narrow floating ledges over solid ground, not a pit: missing a hop
+ * just means walking underneath, so the challenge is precision timing rather
+ * than survival. Distinct rhythm from the stairs/plateau/tower family, which
+ * all climb - this one bobs up and down across a flat stretch.
+ */
+function sHopLedges(g: Gen, x: number): number {
+  const n = irand(g, 3, 4);
+  let cx = x + 1;
+  for (let i = 0; i < n; i += 1) {
+    const w = irand(g, 1, 2);
+    putPlatform(g, cx, w, ROW_A);
+    if (g.rand() < 0.6 * g.k.coinScale) putCoin(g, cx, ROW_A - 1);
+    cx += w + irand(g, 1, 2);
+  }
+  if (g.rand() < 0.35) addEnemy(g, x + 2, SURFACE, groundKind(g), 2);
+  const w = cx - x;
+  claim(g, x, w);
+  return w;
+}
+
+/**
+ * A sustained low ceiling over a long stretch of ground - the same clearance
+ * rule as every other platform (a grown player must still fit under it), but
+ * held for roughly twice as long as the short floating runs elsewhere, so it
+ * reads as walking through a tunnel rather than glancing up at one plank.
+ */
+function sTunnel(g: Gen, x: number): number {
+  const w = irand(g, 8, 10);
+  putPlatform(g, x + 1, w, ROW_A);
+  for (let i = 0; i < w; i += 1) {
+    if (g.rand() < 0.35 * g.k.coinScale) putCoin(g, x + 1 + i, SURFACE - 1);
+  }
+  if (g.rand() < 0.5) {
+    addEnemy(g, x + 1 + Math.floor(w / 2), SURFACE, groundKind(g), Math.max(2, Math.floor(w / 2) - 1));
+  }
+  claim(g, x, w + 2);
+  return w + 2;
+}
+
+/**
+ * A short, busy stretch mixing two or three enemy kinds at once. Every other
+ * lane teaches ONE kind at a time; this is the payoff once several have been
+ * taught, where the challenge is picking which one to stomp, kick, hop over or
+ * leave alone rather than timing one repeated obstacle. Gated on intensity so
+ * it never shows up before the player has met enough kinds to make a choice.
+ */
+function sGauntlet(g: Gen, x: number): number {
+  const w = 10;
+  const third: EnemyKind = g.k.hazards && g.rand() < 0.5 ? 'spiker' : groundKind(g);
+  addEnemy(g, x + 2, SURFACE, groundKind(g), 2);
+  addEnemy(g, x + 5, SURFACE, g.k.flyers && g.rand() < 0.3 ? 'flyer' : 'hopper', 1);
+  addEnemy(g, x + 8, SURFACE, third, 1);
+  for (let i = 1; i < w - 1; i += 2) {
+    if (g.rand() < 0.5 * g.k.coinScale) putCoin(g, x + i, SURFACE - 1);
+  }
+  claim(g, x, w);
+  return w;
 }
 
 function sIslands(g: Gen, x: number): number {
@@ -1470,6 +1570,14 @@ const STRUCTURES: Structure[] = [
   { name: 'shells', run: (g, x) => sShellLane(g, x, false), weight: (k) => 0.4 + k.intensity },
   { name: 'spikes', run: sSpikePatch, weight: (k) => (k.hazards ? 0.6 + k.intensity : 0), advanced: true },
   { name: 'stack', run: sBlockStack, weight: (k) => 0.7 + k.intensity * 0.4, advanced: true },
+  { name: 'hopledges', run: sHopLedges, weight: () => 0.9, advanced: true },
+  { name: 'tunnel', run: sTunnel, weight: (k) => 0.6 + k.intensity * 0.3, advanced: true },
+  {
+    name: 'gauntlet',
+    run: sGauntlet,
+    weight: (k) => (k.intensity > 0.45 ? 0.5 + k.intensity * 0.6 : 0),
+    advanced: true,
+  },
 ];
 
 const BLOCKS_STRUCTURE = STRUCTURES.find((s) => s.name === 'blocks') as Structure;
@@ -1479,11 +1587,13 @@ const BLOCKS_STRUCTURE = STRUCTURES.find((s) => s.name === 'blocks') as Structur
  * levels do not read as the same soup of parts.
  */
 function pickStructure(g: Gen, boosted: string[], last: string): Structure {
+  const bias = WORLD_BIAS[g.biome];
   const weights = STRUCTURES.map((s) => {
     if (g.k.warmup && s.advanced) return 0;
     let w = s.weight(g.k);
     if (boosted.includes(s.name)) w *= 2.4;
     if (s.name === last) w *= 0.3; // discourage immediate repeats
+    w *= bias[s.name] ?? 1;
     return w;
   });
   const total = weights.reduce((a, b) => a + b, 0);
@@ -1908,6 +2018,9 @@ function ensureSpring(g: Gen) {
 export function buildLevel(level: number, difficulty: Difficulty = 'normal'): Level {
   const diffSeed = difficulty === 'easy' ? 1 : difficulty === 'normal' ? 2 : 3;
   const k = knobsFor(level, difficulty);
+  // Picked before generation starts, not after, so the filler picker can skew
+  // toward this world's themed structures (see WORLD_BIAS).
+  const biome = BIOMES[(level - 1) % BIOMES.length];
   const g: Gen = {
     rand: lcg(level * 7919 + diffSeed * 104729 + 13),
     tiles: Array.from({ length: ROWS }, () => Array<TileCode>(COLS).fill('.')),
@@ -1925,6 +2038,7 @@ export function buildLevel(level: number, difficulty: Difficulty = 'normal'): Le
     coinKeys: new Set<string>(),
     k,
     enemiesLeft: k.enemyBudget,
+    biome,
   };
 
   for (let x = 0; x < COLS; x += 1) fillDown(g, x, GROUND_TOP);
@@ -1944,17 +2058,32 @@ export function buildLevel(level: number, difficulty: Difficulty = 'normal'): Le
     x += w + irand(g, 1, 2);
   };
 
-  // The designed spine: teach, breathe, test, breathe, twist, pay, hide.
+  // The designed spine: teach, breathe, test, breathe, twist, pay, hide. The
+  // beats themselves are fixed (that pacing is deliberate teaching, not
+  // filler), but two of the connective beats are randomised per level so the
+  // spine does not read as one hand-built template with the numbers swapped:
+  // the second breather is sometimes on-theme filler instead of always flat
+  // ground, and the payoff pair can land hidden-cave-first or open-reward-first.
   runBeat(`teach:${lesson.name}`, lesson.beat(g, x, 0));
   runBeat('flat', sFlat(g, x));
   runBeat(`test:${lesson.name}`, lesson.beat(g, x, 1));
   if (!k.warmup) {
-    runBeat('flat', sFlat(g, x));
+    if (g.rand() < 0.45) {
+      const filler = pickStructure(g, boosted, lesson.name);
+      runBeat(filler.name, filler.run(g, x));
+    } else {
+      runBeat('flat', sFlat(g, x));
+    }
     runBeat(`twist:${lesson.name}`, lesson.beat(g, x, 2));
   }
   checkpointX = x * TILE;
-  runBeat('reward', sReward(g, x));
-  runBeat('secret', sSecretCave(g, x));
+  if (g.rand() < 0.5) {
+    runBeat('reward', sReward(g, x));
+    runBeat('secret', sSecretCave(g, x));
+  } else {
+    runBeat('secret', sSecretCave(g, x));
+    runBeat('reward', sReward(g, x));
+  }
 
   // Weighted filler fills whatever is left. Stop while a whole structure still
   // fits: a half-placed one could leave a platform sticking into the flag pad,
@@ -1969,8 +2098,10 @@ export function buildLevel(level: number, difficulty: Difficulty = 'normal'): Le
     runBeat(s.name, w);
   }
 
-  // A door shortcut on levels where there is a stretch worth skipping.
-  if (!k.warmup && level % 3 === 0) {
+  // A door shortcut on levels where there is a stretch worth skipping. Seeded
+  // rather than a fixed `level % 3`, so which levels get one varies across
+  // difficulties and does not fall on the same three-level drumbeat every time.
+  if (!k.warmup && g.rand() < 0.4) {
     const from = START_PAD + 4;
     const span = 10 + irand(g, 0, 6);
     if (groundRunAround(g, from, 2)) {
@@ -2055,7 +2186,6 @@ export function buildLevel(level: number, difficulty: Difficulty = 'normal'): Le
   // Last, and after every filter, so nothing downstream can empty a band again.
   guaranteeUpperAir(g, flagCol);
 
-  const biome = BIOMES[(level - 1) % BIOMES.length];
   scatterDecor(g, biome);
 
   return {
