@@ -14,7 +14,8 @@ export type GameId =
   | 'breakout'
   | 'climber'
   | 'maze'
-  | 'tictactoe';
+  | 'tictactoe'
+  | 'memory';
 
 /**
  * How a game is driven on touch.
@@ -189,6 +190,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'board',
     aspect: 3 / 4,
   },
+  memory: {
+    id: 'memory',
+    name: 'Memory Match',
+    tagline: 'Flip two, find the match, clear the whole family.',
+    gateNote: 'Study time buys play time.',
+    icon: '🧠',
+    accent: '#ff6a9e',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -203,6 +214,7 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.frogger,
   GAMES.snake,
   GAMES.tictactoe,
+  GAMES.memory,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));
