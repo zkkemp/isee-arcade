@@ -143,7 +143,10 @@ export function makeGeom(cw: number, ch: number, controlsInset: number): Geom {
   const usable = Math.max(0, ch - controlsInset);
   const h = Math.max(FIELD_W * 0.9, usable / scale);
   const basketH = clamp(h * 0.05, 7, 14);
-  const basketY = h - clamp(h * 0.09, 12, 26) - basketH;
+  // Lift the basket well clear of the bottom edge and reserve a thick ground band
+  // beneath it, so a thumb dragging along the bottom rests ON the ground below
+  // the basket instead of covering it (the grass strip in draw() fills this band).
+  const basketY = h - clamp(h * 0.2, 64, 150) - basketH;
   return { h, scale, basketY, basketH };
 }
 
