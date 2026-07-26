@@ -335,6 +335,62 @@ export const GAMES: Record<GameId, GameMeta> = {
   },
 };
 
+/**
+ * A kid-readable "how to play" for each game - the OBJECTIVE and rules, not just
+ * the controls. Shown in the in-game info panel (and auto-shown the first time a
+ * game is opened), so a child who has never seen the game knows what to do.
+ */
+export const HOW_TO: Record<GameId, string> = {
+  match3:
+    'Swap two touching candies to line up three or more of the same kind. They pop, you score, and new candies fall in. Make big matches for chains!',
+  blocks:
+    'Drag the shapes from the tray onto the board. Fill a whole row or a whole column and it clears away. Each level starts with a fun picture to clear. It ends when no shape fits - so leave yourself room!',
+  tetris:
+    'Shapes fall from the top. Move and rotate them so they fit together with no gaps. Fill a whole row and it disappears. Keep the stack from reaching the top.',
+  frogger:
+    'Hop across the road and river to reach the safe spots at the top. Dodge the cars, and ride the logs and lily pads across the water - do not fall in! Grab coins along the way.',
+  snake:
+    'Steer the snake to eat the food. Every bite makes it longer. Do not run into the walls or into your own tail.',
+  platformer:
+    'Run and jump to the flag at the end. Collect coins, bounce on enemies to squash them, and watch out for spiky ones you cannot jump on. Jump over the pits!',
+  runner:
+    'You run automatically and the road never ends. Tap anywhere to jump over gaps and obstacles - tap again in the air for a double jump. See how far you can go!',
+  breakout:
+    'Slide the paddle to bounce the ball up and smash all the bricks. Do not let the ball fall past your paddle. Clear the whole wall to win.',
+  climber:
+    'Bounce higher and higher up the platforms. Move side to side to land on the next one. Do not fall off the bottom!',
+  maze:
+    'Munch all the dots in the maze. Move around the paths and avoid the ghosts chasing you. Clear every dot to finish.',
+  tictactoe:
+    'Take turns placing your mark. Get three of yours in a row - across, down, or diagonally - before the other player does. Play a friend or the computer.',
+  memory:
+    'Flip two cards at a time to find matching pairs. Remember where each face is! Match them all to clear the board, then a bigger board appears.',
+  merge:
+    'Slide ALL the tiles one direction (swipe or use the arrows). When two tiles with the SAME number touch, they join into one tile worth double (2+2 makes 4, 4+4 makes 8). A new tile appears after each slide. Keep merging to reach big numbers - the game ends only when the board is full with no moves left.',
+  bubble:
+    'Aim and shoot bubbles up at the cluster. Match three or more of the same color to pop them. Any bubbles left hanging drop too. Do not let the bubbles reach the bottom.',
+  checkers:
+    'Move your pieces diagonally. Jump over an opponent piece to capture it - and chain jumps if you can. Reach the far side to make a King that moves both ways. Play a friend or the computer.',
+  echo:
+    'Watch the pattern of pads light up, then tap them back in the same order. Each round adds one more step. How long a pattern can you remember?',
+  fruit:
+    'Slide the basket left and right to catch the falling fruit. Catch the good fruit for points, and let the yucky ones fall past. Do not miss too many!',
+  chess:
+    'The classic game. Each piece moves its own way. Capture pieces and trap the other king in checkmate to win. Play a friend or the computer.',
+  tapattack:
+    'Critters pop out of the holes - tap the friendly ones fast for points before they duck back down. Do NOT tap the grumpy ones! It speeds up as you go.',
+  sudoku:
+    'Fill the grid so every row, every column, and every box has each number exactly once. Tap a square, then tap a number. The given numbers cannot change.',
+  dots:
+    'Take turns drawing one line between two dots. Finish the fourth side of a box to claim it and go again. Whoever owns the most boxes wins. Play a friend or the computer.',
+  cards:
+    'Play a card that matches the color OR the number of the top card. No match? Draw a card. Use Rainbow cards to change the color. First to empty their hand wins!',
+  wordhunt:
+    'Find the hidden words in the letter grid. Drag from the first letter to the last - words go across, down, and diagonally. Find them all to move on.',
+  spelling:
+    'A word flashes on the screen - memorize it! Then it hides and you tap the scrambled letters in the right order to spell it. Stuck? Use the Peek button.',
+};
+
 export const GAME_LIST: GameMeta[] = [
   GAMES.match3,
   GAMES.blocks,

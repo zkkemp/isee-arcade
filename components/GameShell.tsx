@@ -7,7 +7,7 @@ import DPad from './DPad';
 import QuestionGate from './QuestionGate';
 import RunJumpBar from './RunJumpBar';
 import TouchOverlay from './TouchOverlay';
-import type { GameApi, GameComponent, GameMeta } from '@/lib/games';
+import { HOW_TO, type GameApi, type GameComponent, type GameMeta } from '@/lib/games';
 import { useCharacter } from '@/lib/characters';
 import { useDifficulty } from '@/lib/difficulty';
 import { clearPendingGate, loadPendingGate, savePendingGate } from '@/lib/pendingGate';
@@ -113,6 +113,20 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
   }, []);
+
+  // Show the how-to-play card automatically the first time each game is opened on
+  // this device, so a kid who has never seen it knows the goal before playing.
+  useEffect(() => {
+    const key = `isee-arcade:howto-seen:${meta.id}`;
+    try {
+      if (!window.localStorage.getItem(key)) {
+        setInfoOpen(true);
+        window.localStorage.setItem(key, '1');
+      }
+    } catch {
+      // Private browsing: they just do not get the auto-open. The ⓘ button remains.
+    }
+  }, [meta.id]);
   /** Level-clear card: Marty's face and a congratulations. */
   const [celebration, setCelebration] = useState<{ headline: string; note: string | null } | null>(
     null,
@@ -549,100 +563,100 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none', userSelect: 'none' }}
       onPointerDown={unlockAudio}
     >
-      {/* HUD. Sizes step up on iPad, where the phone-sized bar looked lost. */}
-      <header className="flex flex-shrink-0 items-center gap-2.5 px-3 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5 sm:gap-3 sm:px-5 sm:pb-2.5">
-        <Link
-          href="/"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white/70 transition active:scale-95 sm:h-11 sm:w-11 sm:text-lg"
-          aria-label="Back to game list"
-        >
-          ←
-        </Link>
+      {/* HUD - two rows so a long game name and the stats never fight the
+          buttons for space. Row 1: back, title, clock, score. Row 2: stats and
+          the action buttons. */}
+      <header className="flex flex-shrink-0 flex-col gap-1 px-3 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5 sm:gap-1.5 sm:px-5 sm:pb-2.5">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <Link
+            href="/"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white/70 transition active:scale-95 sm:h-11 sm:w-11 sm:text-lg"
+            aria-label="Back to game list"
+          >
+            ←
+          </Link>
 
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold leading-tight text-white sm:text-lg">
+          <div className="min-w-0 flex-1 truncate text-base font-bold leading-tight text-white sm:text-xl">
             {meta.name}
           </div>
-          <div className="flex items-center gap-2 text-[11px] leading-tight text-white/40 sm:gap-3 sm:text-sm">
+
+          {/* Play clock. The one thing that ends a window, so it is never hidden. */}
+          {!gate && (
+            <div
+              className={`flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1 sm:px-3.5 sm:py-1.5 ${
+                clockLow
+                  ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
+                  : 'border-emerald-400/40 bg-emerald-400/10'
+              }`}
+              title="Play time left. Answer questions to earn more."
+            >
+              <span className="text-sm sm:text-base">⏱</span>
+              <span
+                className={`text-sm font-bold tabular-nums sm:text-lg ${
+                  clockLow ? 'text-amber-300' : 'text-emerald-300'
+                }`}
+              >
+                {formatClock(msLeft)}
+              </span>
+            </div>
+          )}
+
+          <div className="flex-shrink-0 text-right">
+            <div className="text-xl font-bold leading-none sm:text-3xl" style={{ color: meta.accent }}>
+              {score}
+            </div>
+            <div className="text-[10px] uppercase tracking-widest text-white/35 sm:text-xs">
+              score
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-3 truncate text-[11px] leading-tight text-white/40 sm:text-sm">
             <span>best {best}</span>
             {asked > 0 && (
               <span>
                 {gotRight}/{asked} right
               </span>
             )}
-            {correctStreak > 1 && (
-              <span className="text-amber-300/90">{correctStreak} streak</span>
-            )}
+            {correctStreak > 1 && <span className="text-amber-300/90">{correctStreak} streak</span>}
           </div>
-        </div>
 
-        {/* Play clock. The one thing that ends a window, so it is never hidden. */}
-        {!gate && (
-          <div
-            className={`flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1 sm:px-3.5 sm:py-1.5 ${
-              clockLow
-                ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
-                : 'border-emerald-400/40 bg-emerald-400/10'
-            }`}
-            title="Play time left. Answer questions to earn more."
+          <button
+            type="button"
+            onClick={() => setInfoOpen((v) => !v)}
+            aria-label="How to play"
+            className="flex h-8 flex-shrink-0 items-center gap-1 rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/75 transition active:scale-95 sm:h-9 sm:text-sm"
           >
-            <span className="text-sm sm:text-base">⏱</span>
-            <span
-              className={`text-sm font-bold tabular-nums sm:text-lg ${
-                clockLow ? 'text-amber-300' : 'text-emerald-300'
-              }`}
-            >
-              {formatClock(msLeft)}
-            </span>
-          </div>
-        )}
+            ⓘ How to play
+          </button>
 
-        <div className="flex-shrink-0 text-right">
-          <div
-            className="text-xl font-bold leading-none sm:text-3xl"
-            style={{ color: meta.accent }}
+          <button
+            type="button"
+            onClick={() => setMuted(!muted)}
+            aria-label={muted ? 'Unmute' : 'Mute'}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-9 sm:w-9"
           >
-            {score}
-          </div>
-          <div className="text-[10px] uppercase tracking-widest text-white/35 sm:text-xs">
-            score
-          </div>
+            {muted ? '🔇' : '🔊'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setManualPause((v) => !v)}
+            aria-label={manualPause ? 'Resume' : 'Pause'}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-9 sm:w-9"
+          >
+            {manualPause ? '▶' : '❚❚'}
+          </button>
+
+          <button
+            type="button"
+            onClick={restart}
+            className="flex h-8 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition active:scale-95 sm:h-9 sm:px-4 sm:text-sm"
+          >
+            Restart
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setInfoOpen((v) => !v)}
-          aria-label="How to play"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm font-bold text-white/75 transition active:scale-95 sm:h-11 sm:w-11 sm:text-base"
-        >
-          ⓘ
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMuted(!muted)}
-          aria-label={muted ? 'Unmute' : 'Mute'}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-11 sm:w-11 sm:text-base"
-        >
-          {muted ? '🔇' : '🔊'}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setManualPause((v) => !v)}
-          aria-label={manualPause ? 'Resume' : 'Pause'}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-11 sm:w-11 sm:text-base"
-        >
-          {manualPause ? '▶' : '❚❚'}
-        </button>
-
-        <button
-          type="button"
-          onClick={restart}
-          className="flex h-9 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition active:scale-95 sm:h-11 sm:px-4 sm:text-sm"
-        >
-          Restart
-        </button>
       </header>
 
       {/* Stage. The canvas fills everything above the control strip; a portrait
@@ -751,16 +765,24 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           onClick={() => setInfoOpen(false)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl border-2 bg-[#12121e] px-6 py-6 text-center shadow-2xl"
+            className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-3xl border-2 bg-[#12121e] px-6 py-6 text-center shadow-2xl"
             style={{ borderColor: meta.accent }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-lg font-extrabold text-white sm:text-2xl">How to play</div>
-            <div className="mt-1 text-sm font-semibold" style={{ color: meta.accent }}>
+            <div className="text-2xl font-extrabold" style={{ color: meta.accent }}>
               {meta.name}
             </div>
-            <p className="mt-4 text-sm leading-relaxed text-white/70 sm:text-base">{controlsHelp}</p>
-            <p className="mt-3 text-xs text-white/40">
+            <div className="mt-0.5 text-xs font-bold uppercase tracking-widest text-white/40">
+              How to play
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-white/80 sm:text-base">
+              {HOW_TO[meta.id]}
+            </p>
+            <p className="mt-3 text-xs leading-relaxed text-white/45">
+              <span className="font-semibold text-white/60">Controls: </span>
+              {controlsHelp}
+            </p>
+            <p className="mt-3 text-xs leading-relaxed text-white/40">
               Answer a short study block to earn play time. Dying is free until the clock runs out.
               Tap 1–4 to answer a question.
             </p>
