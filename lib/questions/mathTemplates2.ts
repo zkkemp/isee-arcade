@@ -75,12 +75,6 @@ function digitSum(n: number): number {
     .reduce((s, c) => s + Number(c), 0);
 }
 
-function isPrime(n: number): boolean {
-  if (n < 2) return false;
-  for (let i = 2; i * i <= n; i += 1) if (n % i === 0) return false;
-  return true;
-}
-
 /** Smallest divisor above 1 (equals n when n is prime). */
 function smallestFactor(n: number): number {
   for (let i = 2; i * i <= n; i += 1) if (n % i === 0) return i;

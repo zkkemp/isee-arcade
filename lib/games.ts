@@ -16,7 +16,8 @@ export type GameId =
   | 'maze'
   | 'tictactoe'
   | 'memory'
-  | 'merge';
+  | 'merge'
+  | 'bubble';
 
 /**
  * How a game is driven on touch.
@@ -211,6 +212,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'dpad',
     aspect: 1,
   },
+  bubble: {
+    id: 'bubble',
+    name: 'Bubble Pop',
+    tagline: "Aim, pop three, don't let the ceiling win.",
+    gateNote: 'Study time buys play time.',
+    icon: '🫧',
+    accent: '#4be3c2',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -227,6 +238,7 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.tictactoe,
   GAMES.memory,
   GAMES.merge,
+  GAMES.bubble,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

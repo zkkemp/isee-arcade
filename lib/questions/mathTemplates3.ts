@@ -55,7 +55,7 @@ function sample<T>(rng: Rng, pool: readonly T[], k: number): T[] {
 
 /** "3", "2 1/2", "3/4" - a normalized mixed number, fraction part reduced. */
 function mixedStr(whole: number, n: number, d: number): string {
-  let w = whole + Math.floor(n / d);
+  const w = whole + Math.floor(n / d);
   let r = n % d;
   const g = gcd(r, d) || 1;
   r = r / g;
