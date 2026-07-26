@@ -101,6 +101,18 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const [correctStreak, setCorrectStreak] = useState(0);
   const [manualPause, setManualPause] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  // The games are laid out for portrait. On a touch device held sideways they
+  // squash unusably, so we pause and ask for a rotate. Gated on `pointer: coarse`
+  // so a desktop in a wide window (which plays fine) never sees the nag.
+  const [rotate, setRotate] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(orientation: landscape) and (pointer: coarse)');
+    const update = () => setRotate(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   /** Level-clear card: Marty's face and a congratulations. */
   const [celebration, setCelebration] = useState<{ headline: string; note: string | null } | null>(
     null,
@@ -268,7 +280,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     });
   }, [gate, meta.id]);
 
-  const paused = gate !== null || manualPause;
+  const paused = gate !== null || manualPause || rotate;
 
   /**
    * The play clock. Runs only while actually playing - not while a question is up,
@@ -717,6 +729,18 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           {progress.totalSeen} answered all time
           {sessionAccuracy !== null && ` · ${sessionAccuracy}% this run`}
         </p>
+      )}
+
+      {rotate && (
+        <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center gap-5 bg-[#0b0b14] p-8 text-center">
+          <div className="text-6xl" style={{ animation: 'none' }}>
+            📱↻
+          </div>
+          <div className="text-2xl font-extrabold text-white">Turn your screen up and down</div>
+          <p className="max-w-xs text-sm text-white/60">
+            These games play best held tall (portrait). Rotate your device to keep playing.
+          </p>
+        </div>
       )}
 
       {infoOpen && (
