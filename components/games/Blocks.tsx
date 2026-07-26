@@ -38,7 +38,14 @@ import { useCanvasGame } from '@/lib/useCanvasGame';
 
 // --- board -----------------------------------------------------------------
 
-export const GRID = 8;
+/**
+ * 10x10 (Session: kids' feedback pass) - up from 8x8. More, smaller cells is
+ * what makes the level-start pictures in the pattern section below actually
+ * read as a smiley or a cat instead of a blur of four squares, while still
+ * leaving every piece in the catalogue - the biggest is a 3x3 footprint -
+ * comfortably drawable and droppable with a fingertip on an iPad.
+ */
+export const GRID = 10;
 /** All GRID columns occupied, as a bitmask. */
 export const FULL_ROW = (1 << GRID) - 1;
 
@@ -462,6 +469,220 @@ export function refillTray(b: Board, rng: () => number, d: Difficulty): Piece[] 
   return out;
 }
 
+// --- level patterns ----------------------------------------------------------
+//
+// A level opens with the board seeded from a picture instead of starting empty,
+// so a kid recognises what level they are on before making a single move, and
+// clearing the picture through ordinary play is exactly what a normal game does
+// anyway - the pattern is just colour on cells that count like any other.
+//
+// Every mask below is built from a formula (a circle, a rhombus, an implicit
+// heart curve, a star polygon, an ellipse) and combined with union/subtract,
+// never hand-typed row by row. That means a mask can never be malformed or
+// sized wrong for the grid - every cell it touches comes from a loop bounded by
+// GRID - and the only hand-picked numbers are which small handful of cells read
+// as eyes, ears or a grin. scripts/check-blocks.ts still holds every mask to a
+// density band (a "picture" that is 95% full or 2% full is not a picture) and
+// to the same fit-guarantee the rest of the game promises: refilling the tray
+// against a freshly seeded board must never hand out a dead deal.
+
+/** Shared centre coordinate: exactly between the two middle cells on any GRID. */
+const MID = (GRID - 1) / 2;
+
+function emptyMask(): boolean[] {
+  return new Array<boolean>(GRID * GRID).fill(false);
+}
+
+function setMaskCell(mask: boolean[], r: number, c: number, v: boolean): void {
+  if (r < 0 || r >= GRID || c < 0 || c >= GRID) return;
+  mask[r * GRID + c] = v;
+}
+
+function maskWhere(pred: (row: number, col: number) => boolean): boolean[] {
+  const out = emptyMask();
+  for (let r = 0; r < GRID; r += 1) {
+    for (let c = 0; c < GRID; c += 1) if (pred(r, c)) out[r * GRID + c] = true;
+  }
+  return out;
+}
+
+function circleMask(cy: number, cx: number, r: number): boolean[] {
+  return maskWhere((row, col) => (row - cy) ** 2 + (col - cx) ** 2 <= r * r);
+}
+
+function ellipseMask(cy: number, cx: number, ry: number, rx: number): boolean[] {
+  return maskWhere((row, col) => ((row - cy) / ry) ** 2 + ((col - cx) / rx) ** 2 <= 1);
+}
+
+function diamondMask(cy: number, cx: number, r: number): boolean[] {
+  return maskWhere((row, col) => Math.abs(row - cy) + Math.abs(col - cx) <= r);
+}
+
+/** The classic implicit heart curve (x^2+y^2-1)^3 <= x^2*y^3, scaled to the grid. */
+function heartMask(cy: number, cx: number, scale: number): boolean[] {
+  return maskWhere((row, col) => {
+    const x = (col - cx) / scale;
+    const y = -(row - cy) / scale + 0.2;
+    const a = x * x + y * y - 1;
+    return a * a * a - x * x * y * y * y <= 0;
+  });
+}
+
+function pointInPolygon(poly: Array<[number, number]>, px: number, py: number): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** A point-up n-pointed star. Polygon vertices are stored as [x, y] (col, row). */
+function starMask(cy: number, cx: number, rOuter: number, rInner: number, points = 5): boolean[] {
+  const poly: Array<[number, number]> = [];
+  for (let i = 0; i < points * 2; i += 1) {
+    const rad = i % 2 === 0 ? rOuter : rInner;
+    const ang = -Math.PI / 2 + (i * Math.PI) / points;
+    poly.push([cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad]);
+  }
+  return maskWhere((row, col) => pointInPolygon(poly, col, row));
+}
+
+function triangleMask(a: [number, number], b: [number, number], c: [number, number]): boolean[] {
+  const poly: Array<[number, number]> = [[a[1], a[0]], [b[1], b[0]], [c[1], c[0]]];
+  return maskWhere((row, col) => pointInPolygon(poly, col, row));
+}
+
+function unionMasks(...masks: boolean[][]): boolean[] {
+  const out = emptyMask();
+  for (const m of masks) for (let i = 0; i < out.length; i += 1) if (m[i]) out[i] = true;
+  return out;
+}
+
+/** Reflects a mask left-right, for a pair of ears drawn once and mirrored. */
+function mirrorMask(mask: boolean[]): boolean[] {
+  const out = emptyMask();
+  for (let r = 0; r < GRID; r += 1) {
+    for (let c = 0; c < GRID; c += 1) {
+      if (mask[r * GRID + c]) out[r * GRID + (GRID - 1 - c)] = true;
+    }
+  }
+  return out;
+}
+
+function withHoles(mask: boolean[], holes: Array<[number, number]>): boolean[] {
+  const out = mask.slice();
+  for (const [r, c] of holes) setMaskCell(out, r, c, false);
+  return out;
+}
+
+function buildSmiley(): boolean[] {
+  const face = circleMask(MID, MID, GRID * 0.435);
+  return withHoles(face, [
+    [3, 3],
+    [3, 6],
+    [7, 3],
+    [8, 4],
+    [8, 5],
+    [7, 6],
+  ]);
+}
+
+function buildHeart(): boolean[] {
+  // The implicit curve alone reads as a rounded blob at 10 cells across - the
+  // top lobes need the notch between them carved out by hand to read as a
+  // heart rather than an egg.
+  const heart = heartMask(MID, MID, GRID * 0.315);
+  return withHoles(heart, [
+    [2, 4],
+    [2, 5],
+  ]);
+}
+
+function buildCat(): boolean[] {
+  const face = circleMask(MID + 0.7, MID, GRID * 0.36);
+  const leftEar = triangleMask([0, MID - 3.2], [2.4, MID - 4.6], [2.4, MID - 1.4]);
+  const rightEar = mirrorMask(leftEar);
+  const whole = unionMasks(face, leftEar, rightEar);
+  // Eyes sit a row below the ears, where the face circle is at its widest, so
+  // punching them out leaves a clean cheek on either side instead of slicing
+  // into the ear seam. The nose/mouth gap sits lower, on its own row.
+  return withHoles(whole, [
+    [5, 3],
+    [5, 6],
+    [7, 4],
+    [7, 5],
+  ]);
+}
+
+function buildDog(): boolean[] {
+  const face = circleMask(MID + 1.0, MID, GRID * 0.27);
+  const leftEar = ellipseMask(MID - 0.9, 1.0, GRID * 0.16, GRID * 0.115);
+  const rightEar = mirrorMask(leftEar);
+  const whole = unionMasks(face, leftEar, rightEar);
+  return withHoles(whole, [
+    [5, 3],
+    [5, 6],
+    [7, 4],
+    [7, 5],
+  ]);
+}
+
+function buildStar(): boolean[] {
+  return starMask(MID, MID, GRID * 0.49, GRID * 0.16, 5);
+}
+
+function buildDiamond(): boolean[] {
+  return diamondMask(MID, MID, GRID * 0.44);
+}
+
+/** Name, mask builder. Order is the cycle order levels advance through. */
+const PATTERN_BUILDERS: Array<{ name: string; build: () => boolean[] }> = [
+  { name: 'smiley', build: buildSmiley },
+  { name: 'heart', build: buildHeart },
+  { name: 'cat', build: buildCat },
+  { name: 'star', build: buildStar },
+  { name: 'dog', build: buildDog },
+  { name: 'diamond', build: buildDiamond },
+];
+
+export const PATTERN_NAMES: string[] = PATTERN_BUILDERS.map((p) => p.name);
+const PATTERN_MASKS: boolean[][] = PATTERN_BUILDERS.map((p) => p.build());
+
+export function patternIndexForLevel(level: number): number {
+  const n = PATTERN_MASKS.length;
+  return ((Math.max(1, Math.floor(level)) - 1) % n + n) % n;
+}
+
+export function patternNameForLevel(level: number): string {
+  return PATTERN_NAMES[patternIndexForLevel(level)];
+}
+
+export function patternMaskForLevel(level: number): boolean[] {
+  return PATTERN_MASKS[patternIndexForLevel(level)];
+}
+
+/** The tone every cell of a level's picture is drawn in - one flat colour, so it reads as a stencil rather than a jumble. */
+export function patternToneForLevel(level: number): number {
+  return patternIndexForLevel(level) % TONE_COUNT;
+}
+
+/** A fresh board seeded from the level's picture, masks and colour cells in sync. */
+export function patternBoard(level: number): Board {
+  const mask = patternMaskForLevel(level);
+  const tone = patternToneForLevel(level);
+  const b = makeBoard();
+  for (let r = 0; r < GRID; r += 1) {
+    for (let c = 0; c < GRID; c += 1) {
+      if (!mask[r * GRID + c]) continue;
+      b.cells[r * GRID + c] = tone;
+      b.rows[r] |= 1 << c;
+    }
+  }
+  return b;
+}
+
 export type Applied = {
   cleared: Clear;
   lines: number;
@@ -533,7 +754,11 @@ export function applyPlacement(
 // the 3/4 canvas this game gets: the grid takes the top two thirds and the tray
 // sits in a band under it, well clear of where a hand rests.
 
-const CELL = 30;
+// 24 rather than the old 30: the grid grew from 8x8 to 10x10 in the same
+// footprint, so cells shrank proportionally - BOARD_W below still comes out to
+// exactly what it was, and every downstream layout number (tray, HUD, drag
+// lift) still derives from CELL and GRID rather than a hard-coded pixel count.
+const CELL = 24;
 const PAD = 6;
 const HUD_H = 26;
 export const BOARD_W = GRID * CELL + PAD * 2;
@@ -572,6 +797,40 @@ const CLEAR_DUR = 0.26;
 /** Seconds of delay per cell of distance from the impact, for the sweep. */
 const SWEEP_SPACING = 0.028;
 const MAX_SPARKS = 240;
+
+/**
+ * Smoothness pass (kids' feedback: "needs to run smoother"). Three things used
+ * to happen in a single frame with no transition at all: a level's picture
+ * appeared fully solid the instant it was seeded, a placed piece was full size
+ * the instant it landed, and a refilled tray just materialised. All three now
+ * ease in instead of popping, matching the polish level of Match3's intro deal
+ * and landing squash.
+ */
+/** Total seconds the level-start picture takes to finish rippling in. */
+const REVEAL_TOTAL = 1.3;
+/** How long each individual cell takes to fade/pop in, once its delay elapses. */
+const REVEAL_DUR = 0.46;
+/** Seconds of delay per cell of distance from the board's centre, for the reveal wave. */
+const REVEAL_SPACING = 0.05;
+/** Seconds a just-placed piece takes to settle from a small pop to full size. */
+const LAND_DUR = 0.16;
+/** Seconds a freshly refilled tray slot takes to scale in from empty. */
+const TRAY_SPAWN_DUR = 0.32;
+/** Seconds the background hue takes to catch up to a level change, so a jump in
+ *  level eases the palette across rather than snapping it. */
+const PALETTE_EASE = 3.2;
+
+/** Overshoot-and-settle easing - the "pop" behind every entrance in this file. */
+function easeOutBack(t: number): number {
+  const k = clamp(t, 0, 1);
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+}
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
+}
 
 export type Layout = { scale: number; ox: number; oy: number };
 
@@ -620,6 +879,9 @@ type Drag = {
 
 type Snap = { r: number; c: number; w: number; h: number; t: number };
 
+/** A cell mid-pop, either the level's picture rippling in or a just-placed piece settling. */
+type CellPop = { r: number; c: number; t: number; dur: number };
+
 type GameApi = GameCanvasProps['api'];
 
 type State = {
@@ -635,6 +897,22 @@ type State = {
   score: number;
   lines: number;
   level: number;
+  /** Smoothed toward `level` every frame, so the background hue eases across a
+   *  level change instead of snapping - see `paletteFor`. */
+  displayLevel: number;
+  /** The level's picture, shown next to LEVEL in the HUD. */
+  patternName: string;
+  /** Seconds since this level's picture was seeded, for the reveal wave. */
+  levelT: number;
+  /** True for a cell that belongs to the level's picture, as seeded - consulted
+   *  only while `levelT` is inside the reveal window. */
+  isPatternCell: boolean[];
+  /** Per-cell reveal delay, seconds, indexed like `board.cells`. */
+  reveal: number[];
+  /** Cells still popping in from a placement, board-space, oldest first. */
+  landCells: CellPop[];
+  /** Countdown per tray slot for the scale-in after a refill. 0 is settled. */
+  traySpawn: number[];
   /** Consecutive clearing placements. Resets on a placement that clears nothing. */
   streak: number;
   drag: Drag | null;
@@ -661,9 +939,51 @@ type State = {
   dimAt: { w: number; h: number } | null;
 };
 
+/** Per-cell delay for the level-start reveal wave: rings outward from the board's centre. */
+function computeReveal(mask: boolean[]): number[] {
+  const out = new Array<number>(GRID * GRID).fill(0);
+  for (let r = 0; r < GRID; r += 1) {
+    for (let c = 0; c < GRID; c += 1) {
+      const i = r * GRID + c;
+      if (!mask[i]) continue;
+      out[i] = Math.hypot(r - MID, c - MID) * REVEAL_SPACING;
+    }
+  }
+  return out;
+}
+
+/**
+ * Seeds the board from a level's picture: fresh tray, run-scoped effects
+ * cleared, the reveal wave armed. Used both at the very start of a run (level
+ * 1's picture) and every time the level advances - and, deliberately, every
+ * time the board dies mid-level, so retrying a level shows the same picture
+ * again rather than a blank grid (see `resetBoard`).
+ */
+function seedLevel(s: State, level: number): void {
+  const mask = patternMaskForLevel(level);
+  s.level = level;
+  s.board = patternBoard(level);
+  s.tray = refillTray(s.board, s.rng, s.difficulty);
+  s.patternName = patternNameForLevel(level);
+  s.isPatternCell = mask;
+  s.reveal = computeReveal(mask);
+  s.levelT = 0;
+  s.landCells = [];
+  s.traySpawn = [1, 1, 1];
+  s.streak = 0;
+  s.drag = null;
+  s.reject = null;
+  s.clears = [];
+  s.clearT = 0;
+  s.snap = null;
+  s.shake = 0;
+  s.dirty = true;
+}
+
 function freshState(difficulty: Difficulty, seed: number): State {
   const rng = lcg(seed);
-  const board = makeBoard();
+  const mask = patternMaskForLevel(1);
+  const board = patternBoard(1);
   return {
     difficulty,
     board,
@@ -673,6 +993,13 @@ function freshState(difficulty: Difficulty, seed: number): State {
     score: 0,
     lines: 0,
     level: 1,
+    displayLevel: 1,
+    patternName: patternNameForLevel(1),
+    levelT: 0,
+    isPatternCell: mask,
+    reveal: computeReveal(mask),
+    landCells: [],
+    traySpawn: [1, 1, 1],
     streak: 0,
     drag: null,
     reject: null,
@@ -690,17 +1017,15 @@ function freshState(difficulty: Difficulty, seed: number): State {
   };
 }
 
-/** The board after a death: empty, fresh tray, level and totals untouched. */
+/**
+ * The board after a death: the CURRENT level's picture again (not empty) - a
+ * kid trying to clear "the cat" who jams the board gets the cat back, not a
+ * blank slate, because the picture is the point of the level. Score, lines and
+ * level are all untouched.
+ */
 function resetBoard(s: State): void {
-  s.board = makeBoard();
-  s.tray = refillTray(s.board, s.rng, s.difficulty);
-  s.streak = 0;
-  s.drag = null;
-  s.clears = [];
-  s.clearT = 0;
-  s.snap = null;
+  seedLevel(s, s.level);
   s.deadFor = 0.5;
-  s.dirty = true;
 }
 
 function remainingShapes(s: State): Shape[] {
@@ -780,6 +1105,10 @@ export default function Blocks({
       s.time += dt;
       if (s.hint > 0) s.hint -= dt;
       if (s.deadFor > 0) s.deadFor -= dt;
+      if (s.levelT < REVEAL_TOTAL) s.levelT += dt;
+      // Eases the background palette toward the real level instead of snapping
+      // to it the instant the score crosses a threshold - see `paletteFor`.
+      s.displayLevel += (s.level - s.displayLevel) * Math.min(1, dt * PALETTE_EASE);
       advanceEffects(s, dt);
 
       // --- input ---
@@ -813,8 +1142,19 @@ export default function Blocks({
       // --- level and game over ---
       const want = levelForScore(s.score);
       if (want > s.level) {
-        s.level = want;
+        // Filling in a picture (or just placing enough on top of it) is what
+        // pushes the score across the threshold, so levelling up and seeding
+        // the next picture are one and the same event - see `seedLevel`.
+        seedLevel(s, want);
         playSound('levelClear');
+        s.pops.push({
+          x: GRID_X + (GRID * CELL) / 2,
+          y: GRID_Y + (GRID * CELL) / 2,
+          text: `Level ${want}! ${capitalize(s.patternName)}`,
+          t: 0,
+          life: 1.8,
+          big: true,
+        });
         api.requestGate(`Level ${want}!`);
       }
       if (s.dirty && s.deadFor <= 0) {
@@ -956,6 +1296,16 @@ function drop(s: State, api: GameApi): void {
   landDust(s, shape, aim.ar, aim.ac);
   playSound('land');
 
+  // Every cell the piece just filled gets a quick settle-in pop instead of
+  // appearing at full size the instant it lands - the placement half of the
+  // "smoother" pass, matched to the same overshoot used for the level reveal.
+  for (const cell of shape.cells) {
+    s.landCells.push({ r: aim.ar + cell.dr, c: aim.ac + cell.dc, t: 0, dur: LAND_DUR });
+  }
+  // A tray that just emptied gets a fresh set of pieces - scale them in rather
+  // than having them appear mid-frame.
+  if (res.refilled) s.traySpawn = [1, 1, 1];
+
   if (res.lines === 0) return;
 
   s.lines += res.lines;
@@ -1085,6 +1435,16 @@ function advanceEffects(s: State, dt: number): void {
     const p = s.pops[i];
     p.t += dt;
     if (p.t >= p.life) s.pops.splice(i, 1);
+  }
+
+  for (let i = s.landCells.length - 1; i >= 0; i -= 1) {
+    const lc = s.landCells[i];
+    lc.t += dt;
+    if (lc.t >= lc.dur) s.landCells.splice(i, 1);
+  }
+
+  for (let i = 0; i < s.traySpawn.length; i += 1) {
+    if (s.traySpawn[i] > 0) s.traySpawn[i] = Math.max(0, s.traySpawn[i] - dt / TRAY_SPAWN_DUR);
   }
 }
 
@@ -1254,7 +1614,11 @@ function draw(
   ch: number,
   dim: boolean,
 ): void {
-  const p = paletteFor(s.level);
+  // Eased toward the real level (see `displayLevel`'s update in the step loop)
+  // rather than read straight off it, so a level-up recolours the room over
+  // about a third of a second instead of snapping on the frame the score
+  // crossed the threshold.
+  const p = paletteFor(s.displayLevel);
 
   const bg = ctx.createLinearGradient(0, 0, 0, ch);
   bg.addColorStop(0, p.bgTop);
@@ -1306,7 +1670,7 @@ function drawHud(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
   ctx.globalAlpha = 0.85;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.fillText(`LEVEL ${s.level}`, PAD + 1, HUD_H / 2 + 1);
+  ctx.fillText(`LEVEL ${s.level} · ${capitalize(s.patternName)}`, PAD + 1, HUD_H / 2 + 1);
   ctx.textAlign = 'right';
   ctx.fillText(`${s.lines} LINES`, BOARD_W - PAD - 1, HUD_H / 2 + 1);
   ctx.globalAlpha = 1;
@@ -1378,18 +1742,45 @@ function ghostLines(s: State): { rows: Set<number>; cols: Set<number> } {
   return { rows, cols };
 }
 
+/**
+ * A cell's entrance state: 0 alpha/scale is invisible, 1/1 is fully settled.
+ * Two independent sources of "just arrived", checked in order because a cell
+ * can only be one or the other: the level's picture rippling in (checked while
+ * `levelT` is inside the reveal window) and a piece the player just placed
+ * settling from a small pop to full size.
+ */
+function cellAnim(s: State, r: number, c: number): { alpha: number; scale: number } {
+  const i = r * GRID + c;
+  if (s.levelT < REVEAL_TOTAL && s.isPatternCell[i]) {
+    const local = clamp((s.levelT - s.reveal[i]) / REVEAL_DUR, 0, 1);
+    return { alpha: local, scale: easeOutBack(local) };
+  }
+  for (const lc of s.landCells) {
+    if (lc.r === r && lc.c === c) {
+      const local = clamp(lc.t / lc.dur, 0, 1);
+      return { alpha: 1, scale: 0.55 + 0.45 * easeOutBack(local) };
+    }
+  }
+  return { alpha: 1, scale: 1 };
+}
+
 function drawPlaced(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
   for (let r = 0; r < GRID; r += 1) {
     for (let c = 0; c < GRID; c += 1) {
       const tone = s.board.cells[r * GRID + c];
       if (tone < 0) continue;
+      const anim = cellAnim(s, r, c);
+      if (anim.alpha <= 0.01 || anim.scale <= 0.02) continue;
+      const base = CELL - 2;
+      const size = base * anim.scale;
+      const off = (base - size) / 2;
       drawBlock(
         ctx,
-        GRID_X + c * CELL + 1,
-        GRID_Y + r * CELL + 1,
-        CELL - 2,
+        GRID_X + c * CELL + 1 + off,
+        GRID_Y + r * CELL + 1 + off,
+        size,
         p.tones[tone % p.tones.length],
-        { shadow: 0.5 },
+        { shadow: 0.5, alpha: anim.alpha },
       );
     }
   }
@@ -1481,7 +1872,7 @@ function drawTray(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
     if (!piece) continue;
     // The piece being dragged is drawn at the finger, not in its slot.
     if (s.drag?.slot === i) continue;
-    drawPreview(ctx, piece, slot, p, s.time + i);
+    drawPreview(ctx, piece, slot, p, s.time + i, s.traySpawn[i]);
   }
 }
 
@@ -1491,6 +1882,7 @@ function drawPreview(
   slot: { x: number; y: number; w: number; h: number },
   p: Palette,
   phase: number,
+  spawn: number,
 ): void {
   const shape = piece.shape;
   const size = Math.min(
@@ -1503,9 +1895,21 @@ function drawPreview(
   const ox = slot.x + (slot.w - shape.w * size) / 2;
   const oy = slot.y + (slot.h - shape.h * size) / 2 + bob;
   const tone = p.tones[piece.tone % p.tones.length];
+  // A freshly refilled slot scales in from nothing rather than appearing
+  // whole - `spawn` counts down from 1 (just arrived) to 0 (settled).
+  const settle = 1 - clamp(spawn, 0, 1);
+  const scale = 0.3 + 0.7 * easeOutBack(settle);
+  const alpha = clamp(settle * 1.6, 0, 1);
+  const cx = ox + (shape.w * size) / 2;
+  const cy = oy + (shape.h * size) / 2;
   for (const cell of shape.cells) {
-    drawBlock(ctx, ox + cell.dc * size, oy + cell.dr * size, size - 1, tone, {
+    const bx = ox + cell.dc * size;
+    const by = oy + cell.dr * size;
+    const sx = cx + (bx - cx) * scale;
+    const sy = cy + (by - cy) * scale;
+    drawBlock(ctx, sx, sy, (size - 1) * scale, tone, {
       shadow: 0.7,
+      alpha,
     });
   }
 }

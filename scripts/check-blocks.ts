@@ -62,6 +62,12 @@ import {
   refillTray,
   slotIndexAt,
   toBoard,
+  PATTERN_NAMES,
+  patternBoard,
+  patternIndexForLevel,
+  patternMaskForLevel,
+  patternNameForLevel,
+  patternToneForLevel,
   type Board,
   type Clear,
   type Piece,
@@ -689,6 +695,76 @@ let hardDeadTrays = 0;
   }
 }
 
+// --- 7b. level pictures ------------------------------------------------------
+//
+// Each level seeds the board from a picture (lib/games' "kids' feedback" pass:
+// a smiley, a heart, a cat, a star, a dog, a diamond) instead of starting
+// empty. Three things could quietly ruin that: a mask so full there is nowhere
+// left to place a single piece, a mask so sparse it barely reads as a picture,
+// and - the one that actually matters for play - a freshly seeded board whose
+// first refill breaks the same easy/normal "at least one piece fits" promise
+// checked above for random boards. `patternBoard` is exercised directly rather
+// than reconstructed, since it is the same function the component calls.
+
+/** A picture that is nearly the whole board or barely a speck is not a picture. */
+function checkPatternDensity(mask: boolean[], name: string): string[] {
+  const out: string[] = [];
+  const filled = mask.filter(Boolean).length;
+  const frac = filled / (GRID * GRID);
+  if (frac < 0.06) out.push(`${name}: only ${filled}/${GRID * GRID} cells filled (${(frac * 100).toFixed(0)}%) - too sparse to read as a picture`);
+  if (frac > 0.62) out.push(`${name}: ${filled}/${GRID * GRID} cells filled (${(frac * 100).toFixed(0)}%) - too full to leave room to play`);
+  return out;
+}
+
+let patternLevelsChecked = 0;
+{
+  if (PATTERN_NAMES.length < 4) fail(`only ${PATTERN_NAMES.length} level pictures defined`);
+
+  // Two full cycles, so the wrap-around (level PATTERN_NAMES.length + 1 back to
+  // the first picture) is exercised, not just the first pass through the list.
+  const span = PATTERN_NAMES.length * 2;
+  for (let level = 1; level <= span; level += 1) {
+    patternLevelsChecked += 1;
+    const idx = patternIndexForLevel(level);
+    if (idx < 0 || idx >= PATTERN_NAMES.length) {
+      fail(`level ${level}: pattern index ${idx} out of range`);
+    }
+    if (patternIndexForLevel(level) !== patternIndexForLevel(level - PATTERN_NAMES.length) && level > PATTERN_NAMES.length) {
+      fail(`level ${level}: did not cycle back to the same picture as level ${level - PATTERN_NAMES.length}`);
+    }
+    const name = patternNameForLevel(level);
+    if (name !== PATTERN_NAMES[idx]) fail(`level ${level}: name ${name} does not match index ${idx}`);
+
+    const mask = patternMaskForLevel(level);
+    if (mask.length !== GRID * GRID) fail(`${name}: mask has ${mask.length} cells, expected ${GRID * GRID}`);
+    for (const e of checkPatternDensity(mask, `level ${level} (${name})`)) fail(e);
+
+    const tone = patternToneForLevel(level);
+    if (tone < 0 || tone >= TONE_COUNT) fail(`${name}: tone ${tone} out of range`);
+
+    const board = patternBoard(level);
+    if (!masksAgree(board)) fail(`${name}: patternBoard's row bitmasks disagree with its cells`);
+    for (let i = 0; i < GRID * GRID; i += 1) {
+      const want = mask[i] ? tone : -1;
+      if (board.cells[i] !== want) {
+        fail(`${name}: cell ${i} is ${board.cells[i]}, expected ${want} from the mask`);
+        break;
+      }
+    }
+
+    // The exact guarantee already proven for random crowded boards, now proven
+    // for the actual board a level opens on: a fresh deal against a level's
+    // picture must never be a dead deal on easy or normal.
+    const rng = lcg(0xf17e ^ level);
+    for (const d of ['easy', 'normal'] as const) {
+      const tray = refillTray(board, rng, d);
+      if (!refAnyFit(board, tray.map((p) => p.shape))) {
+        fail(`${name} (${d}): the opening tray fits nowhere on the level's own picture`);
+      }
+    }
+  }
+}
+
 // --- 8. the touch layer ----------------------------------------------------
 //
 // This is the part a headless checker would normally have to skip, so the pointer
@@ -973,10 +1049,17 @@ const runStats: Record<Difficulty, RunStats[]> = { easy: [], normal: [], hard: [
  *           statement of "not unwinnable by construction".
  *  MEAN   - the game is systemically playable. This is the bar that would move
  *           if the bag, the clearing rule or the fit guarantee regressed.
+ *
+ * Re-measured for the 10x10 grid (up from 8x8): 56% more cells is a lot more
+ * room, and it shows - easy and normal both saturate the TURN_CAP on nearly
+ * every seed now, so their floors mostly guard against a future regression
+ * rather than describing a close call. Hard still runs out of room on its own
+ * (no fit guarantee, by design) and its floors moved up with it, but nowhere
+ * near as far.
  */
-const WORST_PLACEMENTS: Record<Difficulty, number> = { easy: 45, normal: 16, hard: 9 };
-const P10_PLACEMENTS: Record<Difficulty, number> = { easy: 200, normal: 45, hard: 18 };
-const MEAN_PLACEMENTS: Record<Difficulty, number> = { easy: 700, normal: 150, hard: 42 };
+const WORST_PLACEMENTS: Record<Difficulty, number> = { easy: 1300, normal: 90, hard: 28 };
+const P10_PLACEMENTS: Record<Difficulty, number> = { easy: 1450, normal: 350, hard: 42 };
+const MEAN_PLACEMENTS: Record<Difficulty, number> = { easy: 1450, normal: 950, hard: 110 };
 const RUNS = 120;
 
 function percentile(values: number[], p: number): number {
@@ -1213,6 +1296,22 @@ const selfTest = (name: string, caught: boolean, detail: string) => {
   );
 }
 
+{
+  // (g) A level-picture mask that is nearly the whole board or a single speck
+  //     must both be rejected, or the density check is decoration.
+  const full = new Array<boolean>(GRID * GRID).fill(true);
+  const empty = new Array<boolean>(GRID * GRID).fill(false);
+  const speck = new Array<boolean>(GRID * GRID).fill(false);
+  speck[0] = true;
+  selfTest(
+    'level-picture density',
+    checkPatternDensity(full, 'sabotage-full').length > 0 &&
+      checkPatternDensity(empty, 'sabotage-empty').length > 0 &&
+      checkPatternDensity(speck, 'sabotage-speck').length > 0,
+    'an all-filled, an all-empty and a single-cell mask are all rejected',
+  );
+}
+
 // --- summary ---------------------------------------------------------------
 
 const totalPlacements = DIFFICULTIES.reduce(
@@ -1225,6 +1324,11 @@ const totalLines = DIFFICULTIES.reduce(
 );
 
 console.log(`grid ${GRID}x${GRID}; ${bagSummary}`);
+console.log(
+  `${PATTERN_NAMES.length} level pictures (${PATTERN_NAMES.join(', ')}), ${patternLevelsChecked} ` +
+    `level numbers checked across two full cycles: every mask fits the grid, sits in a sane ` +
+    `density band, and its own opening deal fits somewhere on easy and normal`,
+);
 console.log(
   `${randomBoards} random boards: ${randomAnchors} canPlace anchors cross-checked against ` +
     `brute force, ${randomClears} of them produced a line clear`,
