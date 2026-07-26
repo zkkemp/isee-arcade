@@ -22,10 +22,15 @@ export type Question = {
    */
   topic?: string;
   prompt: string;
-  /** Exactly four choices. */
-  choices: [string, string, string, string];
+  /**
+   * The answer options. Four for most kinds. Reading questions carry FIVE, on
+   * purpose: a reading right answer is worth a lot, so a blind guess is a
+   * one-in-five shot rather than one-in-four. Reading questions are also served
+   * only about one draw in eight, since the passages are long.
+   */
+  choices: string[];
   /** Index into `choices` of the correct answer. */
-  answer: 0 | 1 | 2 | 3;
+  answer: number;
   /** One or two sentences a 10-year-old can follow. Shown after answering. */
   explain: string;
   /** 1 = warm-up, 2 = on-level, 3 = stretch. */

@@ -18,7 +18,7 @@ import type { Question } from './questions/types';
 export type PendingGate = {
   /** Which game they were playing, so it can say so on resume. */
   gameId: string;
-  reason: 'death' | 'level';
+  reason: 'death' | 'level' | 'time';
   label: string;
   attempt: number;
   /** Correct answers still required. */
@@ -40,7 +40,11 @@ export function loadPendingGate(): PendingGate | null {
     if (!p || typeof p !== 'object' || !p.question || !Array.isArray(p.question.choices)) {
       return null;
     }
-    if (p.question.choices.length !== 4) return null;
+    // Four for most kinds, eight for reading. Anything under four is malformed.
+    if (p.question.choices.length < 4) return null;
+    if (typeof p.question.answer !== 'number' || p.question.answer >= p.question.choices.length) {
+      return null;
+    }
     return p;
   } catch {
     return null;

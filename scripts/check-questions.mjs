@@ -22,6 +22,8 @@ const BANK_DIR = join(HERE, '..', 'lib', 'questions');
 const FILES = [
   { file: 'verbal.ts', subject: 'verbal', prefix: 'vb', kinds: ['synonym', 'sentence_completion'] },
   { file: 'reading.ts', subject: 'reading', prefix: 'rc', kinds: ['reading'] },
+  { file: 'reading2.ts', subject: 'reading', prefix: 'rc2', kinds: ['reading'] },
+  { file: 'reading3.ts', subject: 'reading', prefix: 'rc3', kinds: ['reading'] },
   { file: 'vocab/ab.ts', subject: 'verbal', prefix: 'vc-ab', kinds: ['synonym'] },
   { file: 'vocab/cd.ts', subject: 'verbal', prefix: 'vc-cd', kinds: ['synonym'] },
   { file: 'vocab/eh.ts', subject: 'verbal', prefix: 'vc-eh', kinds: ['synonym'] },
@@ -101,8 +103,11 @@ for (const spec of FILES) {
       else seenWords.set(word, spec.file);
     }
 
-    if (!Array.isArray(q.choices) || q.choices.length !== 4) {
-      errors.push(`${at}: needs exactly 4 choices, has ${q.choices?.length}`);
+    // Reading questions carry five options, so a blind guess is one-in-five;
+    // every other kind is exactly four.
+    const wantChoices = q.kind === 'reading' ? 5 : 4;
+    if (!Array.isArray(q.choices) || q.choices.length !== wantChoices) {
+      errors.push(`${at}: needs exactly ${wantChoices} choices, has ${q.choices?.length}`);
     } else {
       q.choices.forEach((c, ci) => {
         if (typeof c !== 'string' || c.trim() === '') {
@@ -110,15 +115,19 @@ for (const spec of FILES) {
         }
       });
       const norm = q.choices.map((c) => String(c).trim().toLowerCase());
-      if (new Set(norm).size !== 4) {
+      if (new Set(norm).size !== wantChoices) {
         errors.push(`${at}: duplicate choices — ${JSON.stringify(q.choices)}`);
       }
     }
-    if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer > 3) {
-      errors.push(`${at}: answer must be an integer 0-3, got ${q.answer}`);
+    const maxAnswer = wantChoices - 1;
+    if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer > maxAnswer) {
+      errors.push(`${at}: answer must be an integer 0-${maxAnswer}, got ${q.answer}`);
     } else {
-      fileTally[q.answer] += 1;
-      answerTally[q.answer] += 1;
+      // The distribution tally only has four buckets; a fifth reading slot would
+      // skew "answers spread across positions", so it is counted mod 4.
+      const bucket = q.answer % 4;
+      fileTally[bucket] += 1;
+      answerTally[bucket] += 1;
     }
 
     if (![1, 2, 3].includes(q.difficulty)) {

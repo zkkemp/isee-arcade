@@ -2,19 +2,35 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CelebrationCard from './CelebrationCard';
 import QuestionGate from './QuestionGate';
 import RunJumpBar from './RunJumpBar';
 import TouchOverlay from './TouchOverlay';
 import type { GameApi, GameComponent, GameMeta } from '@/lib/games';
+import { useCharacter } from '@/lib/characters';
 import { useDifficulty } from '@/lib/difficulty';
-import {
-  clearPendingGate,
-  loadPendingGate,
-  savePendingGate,
-} from '@/lib/pendingGate';
+import { clearPendingGate, loadPendingGate, savePendingGate } from '@/lib/pendingGate';
 import { InputController, bindKeyboard } from '@/lib/input';
 import { pickQuestion } from '@/lib/questions';
 import type { Question, QuestionKind } from '@/lib/questions/types';
+import { playSound, unlockAudio, useMuted } from '@/lib/sound';
+import {
+  BLOCK_SIZE,
+  COIN_BONUS_MS,
+  COIN_STEP,
+  LEVEL_BONUS_MS,
+  MAX_BONUS_MS,
+  PLAY_WINDOW_MS,
+  blockComplete,
+  emptySession,
+  formatClock,
+  loadSession,
+  newBlock,
+  questionsLeft,
+  saveSession,
+  type PlaySession,
+  type StudyBlock,
+} from '@/lib/playSession';
 import {
   emptyProgress,
   loadProgress,
@@ -25,26 +41,18 @@ import {
   type Progress,
 } from '@/lib/progress';
 
-/** Points for answering a gate question correctly. */
+/** Points for answering a study question correctly. */
 const CORRECT_REWARD = 50;
+/** Wrong answers in a row that add one extra question to the block. */
+const WRONG_STREAK_PENALTY = 3;
 
 /**
- * Free passes granted for getting a READING question right. A passage is long, so
- * it earns more than a synonym does — otherwise the rational move is to guess on
- * reading and hope for something short next time.
+ * Odds that a freshly drawn question is a reading passage. About one in eight, on
+ * request: passages are long, so they should turn up now and then rather than
+ * lead every block. At most one reading question per block, and nailing it is the
+ * shortcut that ends the block early.
  */
-const READING_PASSES = 2;
-/** Correct answers in a row that earn one free pass. */
-const STREAK_FOR_PASS = 3;
-/**
- * Correct answers required before play resumes. Two rather than one, because the
- * point of this app is the studying, not the game. They do NOT have to be
- * consecutive - a wrong answer in between costs another question of that kind but
- * does not reset progress toward the two.
- */
-const OWED_BASE = 2;
-/** Wrong answers in a row after which one extra correct answer is required. */
-const WRONG_STREAK_PENALTY = 3;
+const READING_CHANCE = 1 / 8;
 
 /**
  * The run/jump buttons used to sit on top of the canvas, so games reserved a band
@@ -54,18 +62,21 @@ const WRONG_STREAK_PENALTY = 3;
  */
 const RUN_JUMP_INSET = 0;
 
-type GateReason = 'death' | 'level';
+/** How often the play clock ticks. Frequent enough to look live, cheap enough to ignore. */
+const TICK_MS = 250;
 
 type Gate = {
   question: Question;
-  reason: GateReason;
-  label: string;
-  /** 1 for the first question, 2 after one wrong answer, and so on. */
+  /** 1 for the first question of the block, incrementing per question served. */
   attempt: number;
+  /** Set when this question is a retry of one just missed. */
+  isRetry: boolean;
 };
 
 export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameComponent }) {
   const [difficulty] = useDifficulty();
+  const [character] = useCharacter();
+  const [muted, setMuted] = useMuted();
 
   const [score, setScore] = useState(0);
   const [gate, setGate] = useState<Gate | null>(null);
@@ -75,83 +86,35 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const [gotRight, setGotRight] = useState(0);
   const [progress, setProgress] = useState<Progress>(emptyProgress);
   const [best, setBest] = useState(0);
-
-  /** Deaths that can be shrugged off without a question. */
-  const [passes, setPasses] = useState(0);
   const [correctStreak, setCorrectStreak] = useState(0);
-  /** Correct answers still required before play resumes. */
-  const [owed, setOwed] = useState(OWED_BASE);
-  /** Manual pause, separate from a question gate. */
   const [manualPause, setManualPause] = useState(false);
+  /** Level-clear card: Marty's face and a congratulations. */
+  const [celebration, setCelebration] = useState<{ headline: string; note: string | null } | null>(
+    null,
+  );
 
-  // Refs mirror what the game API and callbacks touch, so the API object stays
+  /** Mirrors the persisted session so the HUD can render it. */
+  const [msLeft, setMsLeft] = useState(0);
+  const [block, setBlock] = useState<StudyBlock | null>(null);
+
+  // Refs mirror what the game API and the clock touch, so the API object stays
   // stable for the lifetime of the mount without going stale.
   const scoreRef = useRef(0);
   const progressRef = useRef<Progress>(emptyProgress());
+  const sessionRef = useRef<PlaySession>(emptySession());
   const gateOpenRef = useRef(false);
-  const passesRef = useRef(0);
   const correctStreakRef = useRef(0);
   const wrongStreakRef = useRef(0);
-  const owedRef = useRef(OWED_BASE);
   const seenIdsRef = useRef<string[]>([]);
   const seenPassagesRef = useRef<string[]>([]);
   /** Kind of the last question answered, so the next one rotates away from it. */
   const lastKindRef = useRef<QuestionKind | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const celebrateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [input] = useState(() => new InputController());
 
   const controlsInset = meta.controls === 'run-jump' ? RUN_JUMP_INSET : 0;
-
-  useEffect(() => {
-    const p = loadProgress();
-    progressRef.current = p;
-    setProgress(p);
-    setBest(p.highScores[meta.id] ?? 0);
-
-    // A question owed from a previous session is restored before play can start,
-    // including when it was owed in a different game. Quitting is not an escape.
-    const pending = loadPendingGate();
-    if (pending) {
-      gateOpenRef.current = true;
-      owedRef.current = pending.owed;
-      wrongStreakRef.current = pending.wrongStreak;
-      setOwed(pending.owed);
-      setGate({
-        question: pending.question,
-        reason: pending.reason,
-        label:
-          pending.gameId === meta.id
-            ? pending.label
-            : `Unfinished question from ${pending.gameId}`,
-        attempt: pending.attempt,
-      });
-    }
-  }, [meta.id]);
-
-  useEffect(() => bindKeyboard(input), [input]);
-
-  useEffect(
-    () => () => {
-      if (statusTimer.current) clearTimeout(statusTimer.current);
-    },
-    [],
-  );
-
-  // Mirror the live gate to storage so a reload cannot shake it off. Keyed on the
-  // gate itself, so it also captures the raised bar after wrong answers.
-  useEffect(() => {
-    if (!gate) return;
-    savePendingGate({
-      gameId: meta.id,
-      reason: gate.reason,
-      label: gate.label,
-      attempt: gate.attempt,
-      owed: owedRef.current,
-      wrongStreak: wrongStreakRef.current,
-      question: gate.question,
-    });
-  }, [gate, meta.id]);
 
   const flashStatus = useCallback((text: string | null, ms = 1700) => {
     setStatus(text);
@@ -159,20 +122,47 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     if (text) statusTimer.current = setTimeout(() => setStatus(null), ms);
   }, []);
 
+  const celebrate = useCallback((headline: string, note: string | null, ms = 2400) => {
+    setCelebration({ headline, note });
+    if (celebrateTimer.current) clearTimeout(celebrateTimer.current);
+    celebrateTimer.current = setTimeout(() => setCelebration(null), ms);
+  }, []);
+
+  const persist = useCallback(() => {
+    saveSession(sessionRef.current);
+  }, []);
+
   /**
-   * Draws a question. `sameKindAs` keeps them on something they just missed;
-   * otherwise the last kind answered is avoided so sections rotate.
+   * Draws a question for the block.
+   *
+   * `retryOf` keeps them on something they just missed - for templated maths that
+   * is the same shape with new numbers, so there is no way through but to do it.
+   * Otherwise the reading question is served first and once, and every later
+   * question in the block avoids reading (one passage per block) and rotates away
+   * from whatever was just answered.
    */
-  const draw = useCallback((sameKindAs: Question | null = null) => {
+  const drawFor = useCallback((b: StudyBlock, retryOf: Question | null): Question => {
     const p = progressRef.current;
+    // Reading turns up about one draw in eight, at most once per block, and never
+    // on a retry. Everything else rotates away from reading and from the last
+    // kind answered, so passages stay rare and sections keep changing.
+    const wantReading = !retryOf && !b.readingServed && Math.random() < READING_CHANCE;
+    const avoid: QuestionKind[] = [];
+    if (!wantReading && !retryOf) {
+      avoid.push('reading');
+      if (lastKindRef.current) avoid.push(lastKindRef.current);
+    }
+
     const question = pickQuestion({
       recentIds: seenIdsRef.current,
       recentPassageIds: seenPassagesRef.current,
       missed: p.missed,
       recentAccuracy: recentAccuracy(p),
-      sameKindAs,
-      avoidKind: sameKindAs ? null : lastKindRef.current,
+      sameKindAs: retryOf,
+      forceKind: wantReading ? 'reading' : null,
+      avoidKind: avoid.length > 0 ? avoid : null,
     });
+
     seenIdsRef.current = [...seenIdsRef.current, question.id].slice(-40);
     if (question.passageId) {
       seenPassagesRef.current = [...seenPassagesRef.current, question.passageId].slice(-14);
@@ -180,17 +170,135 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     return question;
   }, []);
 
-  const openGate = useCallback(
-    (reason: GateReason, label: string) => {
+  /** Opens the study block. Idempotent, so a tick and a death cannot double-fire it. */
+  const openStudy = useCallback(
+    (restored?: { question: Question; attempt: number }) => {
       if (gateOpenRef.current) return;
-      // Drop held keys so the player does not resume mid-move after answering.
+      // Drop held keys so play does not resume mid-move after answering.
       input.clear();
       gateOpenRef.current = true;
-      owedRef.current = OWED_BASE;
-      setOwed(OWED_BASE);
-      setGate({ question: draw(null), reason, label, attempt: 1 });
+
+      const s = sessionRef.current;
+      const b = s.study ?? newBlock();
+      sessionRef.current = { ...s, msLeft: 0, study: b };
+      setBlock(b);
+      setMsLeft(0);
+      persist();
+
+      const q = restored?.question ?? drawFor(b, null);
+      if (q.kind === 'reading' && !restored) {
+        // Mark it served the moment it is shown, not when it is answered. A kid
+        // who reads the passage and force quits should not be handed a second one.
+        const served = { ...b, readingServed: true };
+        sessionRef.current = { ...sessionRef.current, study: served };
+        setBlock(served);
+        persist();
+      }
+      setGate({ question: q, attempt: restored?.attempt ?? 1, isRetry: false });
     },
-    [draw, input],
+    [drawFor, input, persist],
+  );
+
+  // Hydrate progress and the play session, then either restore an owed question
+  // or hand back whatever play time is left.
+  useEffect(() => {
+    const p = loadProgress();
+    progressRef.current = p;
+    setProgress(p);
+    setBest(p.highScores[meta.id] ?? 0);
+
+    const s = loadSession();
+    sessionRef.current = s;
+    setMsLeft(s.msLeft);
+    setBlock(s.study);
+
+    // A question owed from a previous session is restored before play can start,
+    // including when it was owed in a different game. Quitting is not an escape,
+    // and the exact question is restored so quitting cannot reroll a long passage
+    // into a short synonym.
+    const pending = loadPendingGate();
+    if (s.study && !blockComplete(s.study)) {
+      openStudy(pending ? { question: pending.question, attempt: pending.attempt } : undefined);
+    } else if (s.msLeft <= 0) {
+      openStudy();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot hydration; openStudy is stable and re-running would reopen the gate
+  }, [meta.id]);
+
+  useEffect(() => bindKeyboard(input), [input]);
+
+  useEffect(
+    () => () => {
+      if (statusTimer.current) clearTimeout(statusTimer.current);
+      if (celebrateTimer.current) clearTimeout(celebrateTimer.current);
+    },
+    [],
+  );
+
+  // Mirror the live question to storage so a reload cannot shake it off.
+  useEffect(() => {
+    if (!gate) return;
+    const b = sessionRef.current.study;
+    savePendingGate({
+      gameId: meta.id,
+      reason: 'time',
+      label: 'Study time',
+      attempt: gate.attempt,
+      owed: b ? questionsLeft(b) : 1,
+      wrongStreak: wrongStreakRef.current,
+      question: gate.question,
+    });
+  }, [gate, meta.id]);
+
+  const paused = gate !== null || manualPause;
+
+  /**
+   * The play clock. Runs only while actually playing - not while a question is up,
+   * not while paused, and not while the tab is hidden, since a backgrounded iPad
+   * should not silently burn a window the kid never got to use.
+   */
+  useEffect(() => {
+    if (paused) return;
+    let last = Date.now();
+    const id = setInterval(() => {
+      const now = Date.now();
+      const dt = now - last;
+      last = now;
+      if (document.visibilityState === 'hidden') return;
+
+      const s = sessionRef.current;
+      if (s.study && !blockComplete(s.study)) return;
+
+      const next = Math.max(0, s.msLeft - dt);
+      sessionRef.current = { ...s, msLeft: next };
+      setMsLeft(next);
+
+      if (next <= 0) {
+        persist();
+        playSound('gameOver');
+        openStudy();
+      } else if (Math.floor(next / 2000) !== Math.floor(s.msLeft / 2000)) {
+        // Persisted every couple of seconds rather than every tick: often enough
+        // that a force quit cannot bank much free time, cheap enough to ignore.
+        persist();
+      }
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, [paused, openStudy, persist]);
+
+  /** Adds play time, respecting the per-window bonus ceiling. Returns what was granted. */
+  const grantBonus = useCallback(
+    (ms: number): number => {
+      const s = sessionRef.current;
+      const room = Math.max(0, MAX_BONUS_MS - s.bonusMs);
+      const give = Math.min(ms, room);
+      if (give <= 0) return 0;
+      sessionRef.current = { ...s, msLeft: s.msLeft + give, bonusMs: s.bonusMs + give };
+      setMsLeft(sessionRef.current.msLeft);
+      persist();
+      return give;
+    },
+    [persist],
   );
 
   const api = useMemo<GameApi>(
@@ -198,31 +306,45 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       addScore: (delta) => {
         scoreRef.current += delta;
         setScore(scoreRef.current);
-      },
-      died: (label = 'You crashed') => {
-        // A free pass, earned by a reading answer or a 3-answer streak, lets the
-        // death slide without a question.
-        if (passesRef.current > 0) {
-          passesRef.current -= 1;
-          setPasses(passesRef.current);
-          flashStatus(
-            `Free pass used - ${passesRef.current} left`,
-            1900,
-          );
-          return;
+
+        // Playing well buys time. This is the "more coins means more play" lever:
+        // every COIN_STEP points is another minute, capped per window.
+        const s = sessionRef.current;
+        if (scoreRef.current - s.bonusAtScore >= COIN_STEP && s.bonusMs < MAX_BONUS_MS) {
+          const steps = Math.floor((scoreRef.current - s.bonusAtScore) / COIN_STEP);
+          sessionRef.current = {
+            ...sessionRef.current,
+            bonusAtScore: s.bonusAtScore + steps * COIN_STEP,
+          };
+          const given = grantBonus(steps * COIN_BONUS_MS);
+          if (given > 0) {
+            playSound('powerup');
+            flashStatus(`+${Math.round(given / 60_000)} min of play time!`, 2200);
+          }
         }
-        openGate('death', label);
       },
-      requestGate: (label) => openGate('level', label),
+      // Dying is free inside a window. That is the point of the redesign: a kid
+      // who dies a lot used to face a question every few seconds.
+      died: (label = 'You crashed') => {
+        playSound('gameOver');
+        flashStatus(`${label} - keep going`, 1500);
+      },
+      // Clearing a level tops the clock up instead of interrupting with a question.
+      requestGate: (label) => {
+        playSound('levelClear');
+        const given = grantBonus(LEVEL_BONUS_MS);
+        celebrate(label, given > 0 ? `+${Math.round(given / 1000)} seconds of play time` : null);
+      },
       setStatus: (text) => flashStatus(text),
     }),
-    [flashStatus, openGate],
+    [celebrate, flashStatus, grantBonus],
   );
 
   const handleAnswered = useCallback(
     (correct: boolean) => {
       const g = gate;
-      if (!g) return;
+      const b = sessionRef.current.study;
+      if (!g || !b) return;
 
       const updated = recordAnswer(progressRef.current, {
         id: g.question.id,
@@ -235,36 +357,39 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
       setAsked((n) => n + 1);
       lastKindRef.current = g.question.kind;
+      const wasReading = g.question.kind === 'reading';
 
       if (!correct) {
+        playSound('wrong');
         correctStreakRef.current = 0;
         setCorrectStreak(0);
         wrongStreakRef.current += 1;
 
-        // Three wrong in a row raises the bar: two correct answers to resume.
-        let note = '';
-        if (
-          wrongStreakRef.current >= WRONG_STREAK_PENALTY &&
-          owedRef.current < OWED_BASE + 1
-        ) {
-          owedRef.current = OWED_BASE + 1;
-          setOwed(owedRef.current);
-          note = `${owedRef.current} right answers needed now.`;
+        let next = b;
+        // Three wrong in a row adds a question. The bar lives on the block so a
+        // restart cannot shake it off.
+        if (wrongStreakRef.current >= WRONG_STREAK_PENALTY) {
+          wrongStreakRef.current = 0;
+          next = { ...next, penalty: next.penalty + 1 };
+          flashStatus('Three missed - one extra question added.', 2600);
         }
-        if (note) flashStatus(note.trim(), 2600);
+        sessionRef.current = { ...sessionRef.current, study: next };
+        setBlock(next);
+        persist();
 
-        // Same kind again — for templated math that is the same shape with new
-        // numbers, so there is no way through but to actually do it.
+        // A missed passage does NOT hand out another passage. The rest of the
+        // block is short questions, because three long passages in a row is how
+        // you teach a kid to hate reading. Everything else retries its own kind.
         setGate({
-          question: draw(g.question),
-          reason: g.reason,
-          label: g.label,
+          question: drawFor(next, wasReading ? null : g.question),
           attempt: g.attempt + 1,
+          isRetry: !wasReading,
         });
         return;
       }
 
       // --- correct ---
+      playSound('correct');
       setGotRight((n) => n + 1);
       wrongStreakRef.current = 0;
       correctStreakRef.current += 1;
@@ -273,135 +398,171 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       scoreRef.current += CORRECT_REWARD;
       setScore(scoreRef.current);
 
-      let earned = 0;
-      const rewards: string[] = [];
-      if (g.question.kind === 'reading') {
-        earned += READING_PASSES;
-        rewards.push(`+${READING_PASSES} free passes for the reading`);
-      }
-      if (correctStreakRef.current % STREAK_FOR_PASS === 0) {
-        earned += 1;
-        rewards.push(`${correctStreakRef.current} in a row - +1 free pass`);
-      }
-      if (earned > 0) {
-        passesRef.current += earned;
-        setPasses(passesRef.current);
-      }
+      const next: StudyBlock = {
+        ...b,
+        correct: b.correct + 1,
+        readingWon: b.readingWon || wasReading,
+      };
+      sessionRef.current = { ...sessionRef.current, study: next };
+      setBlock(next);
 
-      owedRef.current -= 1;
-      setOwed(Math.max(0, owedRef.current));
-
-      if (owedRef.current > 0) {
-        // Still owed one — rotate to a different kind rather than repeating.
-        setGate({
-          question: draw(null),
-          reason: g.reason,
-          label: g.label,
-          attempt: g.attempt + 1,
-        });
+      if (!blockComplete(next)) {
+        persist();
+        setGate({ question: drawFor(next, null), attempt: g.attempt + 1, isRetry: false });
         return;
       }
 
+      // --- block done: buy the window ---
       const banked = recordHighScore(progressRef.current, meta.id, scoreRef.current);
       progressRef.current = banked;
       setProgress(banked);
       setBest(banked.highScores[meta.id] ?? 0);
       saveProgress(banked);
 
+      sessionRef.current = {
+        msLeft: PLAY_WINDOW_MS,
+        bonusMs: 0,
+        bonusAtScore: scoreRef.current,
+        blocksDone: sessionRef.current.blocksDone + 1,
+        study: null,
+      };
+      setMsLeft(PLAY_WINDOW_MS);
+      setBlock(null);
+      persist();
+
       gateOpenRef.current = false;
       setGate(null);
       clearPendingGate();
+      playSound('pass');
       flashStatus(
-        rewards.length > 0
-          ? rewards.join(' - ')
-          : g.reason === 'death'
-            ? `+${CORRECT_REWARD} - back in!`
-            : `+${CORRECT_REWARD} - next level!`,
-        rewards.length > 0 ? 2600 : 1800,
+        next.readingWon && wasReading
+          ? `Nailed the reading - ${Math.round(PLAY_WINDOW_MS / 60_000)} minutes of play!`
+          : `Study block done - ${Math.round(PLAY_WINDOW_MS / 60_000)} minutes of play!`,
+        2800,
       );
     },
-    [draw, flashStatus, gate, meta.id],
+    [drawFor, flashStatus, gate, meta.id, persist],
   );
 
   const restart = useCallback(() => {
-    // Deliberately does NOT clear a pending question: restarting would otherwise
-    // be a one-tap way out of answering.
+    // Deliberately does NOT clear an owed block or refill the clock: restarting
+    // would otherwise be a one-tap way out of studying.
     if (gateOpenRef.current) return;
     scoreRef.current = 0;
-    gateOpenRef.current = false;
-    passesRef.current = 0;
     correctStreakRef.current = 0;
     wrongStreakRef.current = 0;
-    owedRef.current = OWED_BASE;
     lastKindRef.current = null;
     setScore(0);
-    setGate(null);
     setAsked(0);
     setGotRight(0);
     setStatus(null);
-    setPasses(0);
+    setCelebration(null);
     setCorrectStreak(0);
-    setOwed(OWED_BASE);
     setManualPause(false);
     input.clear();
     setRestartToken((t) => t + 1);
   }, [input]);
 
-  const paused = gate !== null || manualPause;
   const sessionAccuracy = asked === 0 ? null : Math.round((gotRight / asked) * 100);
+  const left = block ? questionsLeft(block) : 0;
 
-  const subhead = (() => {
+  const headline = (() => {
     if (!gate) return '';
-    if (owed > 1) return `${owed} more to go - they do not have to be in a row.`;
-    if (gate.attempt > 1) return 'Last one. Same kind, since that one was missed.';
-    return 'One more to go.';
+    if (gate.question.kind === 'reading') return 'Reading question';
+    return `Study block - ${left} to go`;
   })();
 
+  const subhead = (() => {
+    if (!gate || !block) return '';
+    if (gate.question.kind === 'reading') {
+      return `Get this one right and you are straight back in - no other questions. Otherwise it is ${BLOCK_SIZE} short ones.`;
+    }
+    if (gate.isRetry) return 'Same kind again, since that one was missed.';
+    if (left === 1) return 'Last one, then 6 minutes of play.';
+    return `${left} more, then 6 minutes of play. They do not have to be in a row.`;
+  })();
+
+  const clockLow = msLeft > 0 && msLeft < 60_000;
+
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden">
-      {/* HUD */}
-      <header className="flex flex-shrink-0 items-center gap-2.5 px-3 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
+    <div
+      className="flex h-dvh w-full flex-col overflow-hidden"
+      onPointerDown={unlockAudio}
+    >
+      {/* HUD. Sizes step up on iPad, where the phone-sized bar looked lost. */}
+      <header className="flex flex-shrink-0 items-center gap-2.5 px-3 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5 sm:gap-3 sm:px-5 sm:pb-2.5">
         <Link
           href="/"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white/70 transition active:scale-95"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white/70 transition active:scale-95 sm:h-11 sm:w-11 sm:text-lg"
           aria-label="Back to game list"
         >
           ←
         </Link>
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold leading-tight text-white">{meta.name}</div>
-          <div className="flex items-center gap-2 text-[11px] leading-tight text-white/40">
+          <div className="truncate text-sm font-bold leading-tight text-white sm:text-lg">
+            {meta.name}
+          </div>
+          <div className="flex items-center gap-2 text-[11px] leading-tight text-white/40 sm:gap-3 sm:text-sm">
             <span>best {best}</span>
-            {asked > 0 && <span>{gotRight}/{asked} right</span>}
+            {asked > 0 && (
+              <span>
+                {gotRight}/{asked} right
+              </span>
+            )}
             {correctStreak > 1 && (
               <span className="text-amber-300/90">{correctStreak} streak</span>
             )}
           </div>
         </div>
 
-        {passes > 0 && (
+        {/* Play clock. The one thing that ends a window, so it is never hidden. */}
+        {!gate && (
           <div
-            className="flex flex-shrink-0 items-center gap-1 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-2 py-1"
-            title="Free passes: a death costs one of these instead of a question"
+            className={`flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1 sm:px-3.5 sm:py-1.5 ${
+              clockLow
+                ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
+                : 'border-emerald-400/40 bg-emerald-400/10'
+            }`}
+            title="Play time left. Answer questions to earn more."
           >
-            <span className="text-sm">🛡️</span>
-            <span className="text-sm font-bold text-emerald-300">{passes}</span>
+            <span className="text-sm sm:text-base">⏱</span>
+            <span
+              className={`text-sm font-bold tabular-nums sm:text-lg ${
+                clockLow ? 'text-amber-300' : 'text-emerald-300'
+              }`}
+            >
+              {formatClock(msLeft)}
+            </span>
           </div>
         )}
 
         <div className="flex-shrink-0 text-right">
-          <div className="text-xl font-bold leading-none" style={{ color: meta.accent }}>
+          <div
+            className="text-xl font-bold leading-none sm:text-3xl"
+            style={{ color: meta.accent }}
+          >
             {score}
           </div>
-          <div className="text-[10px] uppercase tracking-widest text-white/35">score</div>
+          <div className="text-[10px] uppercase tracking-widest text-white/35 sm:text-xs">
+            score
+          </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setMuted(!muted)}
+          aria-label={muted ? 'Unmute' : 'Mute'}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-11 sm:w-11 sm:text-base"
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
 
         <button
           type="button"
           onClick={() => setManualPause((v) => !v)}
           aria-label={manualPause ? 'Resume' : 'Pause'}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-11 sm:w-11 sm:text-base"
         >
           {manualPause ? '▶' : '❚❚'}
         </button>
@@ -409,26 +570,24 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         <button
           type="button"
           onClick={restart}
-          className="flex h-9 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition active:scale-95"
+          className="flex h-9 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition active:scale-95 sm:h-11 sm:px-4 sm:text-sm"
         >
           Restart
         </button>
       </header>
 
-      {/* Stage. For run/jump games the canvas is a window near the top and the
-          controls get their own strip; a narrow portrait screen cannot show both a
-          useful view width and little sky, so the canvas stops trying to fill the
-          height. Grid games keep the full area and centre their board. */}
-      <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1">
-        <div
-          className="relative w-full flex-1 overflow-hidden rounded-2xl bg-black shadow-2xl"
-        >
+      {/* Stage. The canvas fills everything above the control strip; a portrait
+          screen cannot show both a useful view width and little sky, so games lay
+          out against the size they are given rather than a fixed aspect. */}
+      <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1 sm:px-5 sm:pb-3">
+        <div className="relative w-full flex-1 overflow-hidden rounded-2xl bg-black shadow-2xl sm:rounded-3xl">
           <Game
             paused={paused}
             input={input}
             api={api}
             restartToken={restartToken}
             difficulty={difficulty}
+            character={character}
             controlsInset={controlsInset}
           />
 
@@ -441,37 +600,48 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
           {manualPause && !gate && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm">
-              <div className="text-sm font-bold uppercase tracking-widest text-white/60">
+              <div className="text-sm font-bold uppercase tracking-widest text-white/60 sm:text-lg">
                 Paused
+              </div>
+              <div className="text-xs text-white/40 sm:text-base">
+                Clock stopped - {formatClock(msLeft)} of play left
               </div>
               <button
                 type="button"
                 onClick={() => setManualPause(false)}
-                className="rounded-2xl px-8 py-4 text-base font-bold text-[#101020]"
+                className="rounded-2xl px-8 py-4 text-base font-bold text-[#101020] sm:px-12 sm:py-5 sm:text-xl"
                 style={{ background: meta.accent }}
               >
                 Resume
               </button>
-              <Link href="/" className="text-xs font-semibold text-white/50 underline">
+              <Link href="/" className="text-xs font-semibold text-white/50 underline sm:text-sm">
                 Quit to menu
               </Link>
             </div>
           )}
 
-          {status && !gate && !manualPause && (
-            <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-1.5 text-center text-xs font-semibold text-white shadow-lg">
+          {celebration && !gate && !manualPause && (
+            <CelebrationCard
+              headline={celebration.headline}
+              note={celebration.note}
+              accent={meta.accent}
+            />
+          )}
+
+          {status && !gate && !manualPause && !celebration && (
+            <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-1.5 text-center text-xs font-semibold text-white shadow-lg sm:top-5 sm:px-6 sm:py-2.5 sm:text-base">
               {status}
             </div>
           )}
 
           {gate && (
             <QuestionGate
-              // Remounting per attempt resets the gate's own state, and the
+              // Remounting per question resets the gate's own state, and the
               // attempt number is part of the key because a templated retry
               // reuses the same question id.
               key={`${gate.question.id}-${gate.attempt}`}
               question={gate.question}
-              headline={gate.label}
+              headline={headline}
               subhead={subhead}
               reward={CORRECT_REWARD}
               onAnswered={handleAnswered}
@@ -480,7 +650,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         </div>
 
         {meta.controls === 'run-jump' && (
-          <div className="pt-2">
+          <div className="pt-2 sm:pt-3">
             <RunJumpBar input={input} accent={meta.accent} disabled={paused} />
           </div>
         )}
@@ -489,12 +659,14 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       <p className="hidden flex-shrink-0 pb-1 text-center text-xs text-white/25 md:block">
         {meta.controls === 'run-jump'
           ? 'Arrow keys or A / D to move · Space to jump'
-          : 'Arrow keys or W A S D to move'}
+          : meta.controls === 'grid'
+            ? 'Tap and drag on the board'
+            : 'Arrow keys or W A S D to move'}
         {' · 1–4 to answer'}
       </p>
 
       {progress.totalSeen > 0 && (
-        <p className="flex-shrink-0 pb-[max(0.2rem,env(safe-area-inset-bottom))] text-center text-[11px] text-white/20">
+        <p className="flex-shrink-0 pb-[max(0.2rem,env(safe-area-inset-bottom))] text-center text-[11px] text-white/20 sm:text-sm">
           {progress.totalSeen} answered all time
           {sessionAccuracy !== null && ` · ${sessionAccuracy}% this run`}
         </p>

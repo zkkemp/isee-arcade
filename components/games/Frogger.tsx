@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { drawCharacterSprite, type Character } from '@/lib/characters';
 import type { GameCanvasProps } from '@/lib/games';
 import {
   CAR_NAMES,
@@ -139,6 +140,7 @@ export default function Frogger({
   api,
   restartToken,
   difficulty,
+  character,
 }: GameCanvasProps) {
   const stateRef = useRef<State>(freshState(1, difficulty));
   const sprites = useSprites();
@@ -146,6 +148,11 @@ export default function Frogger({
   useEffect(() => {
     spritesRef.current = sprites;
   }, [sprites]);
+
+  const characterRef = useRef<Character>(character);
+  useEffect(() => {
+    characterRef.current = character;
+  }, [character]);
 
   // Changing the skill setting mid-run rebuilds the lanes too.
   useEffect(() => {
@@ -238,7 +245,7 @@ export default function Frogger({
         }
       }
 
-      draw(ctx, stateRef.current, spritesRef.current, cw, ch);
+      draw(ctx, stateRef.current, spritesRef.current, cw, ch, characterRef.current);
     },
   });
 
@@ -267,16 +274,22 @@ function draw(
   sp: SpriteSet | null,
   cw: number,
   ch: number,
+  character: Character,
 ) {
   ctx.fillStyle = '#0d2b52';
   ctx.fillRect(0, 0, cw, ch);
   ctx.save();
   fitBoard(ctx, cw, ch, W, H);
-  drawBoard(ctx, s, sp);
+  drawBoard(ctx, s, sp, character);
   ctx.restore();
 }
 
-function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null) {
+function drawBoard(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  sp: SpriteSet | null,
+  character: Character,
+) {
   // --- water base, drawn under everything in the river band ---
   const water = ctx.createLinearGradient(0, RIVER_ROWS[0] * CELL, 0, (MEDIAN_ROW + 1) * CELL);
   water.addColorStop(0, THEME[s.biome].water[0]);
@@ -404,17 +417,36 @@ function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null
     ctx.arc(s.splash.x * CELL + CELL / 2, s.splash.y * CELL + CELL / 2, 6 + t * 18, 0, Math.PI * 2);
     ctx.stroke();
   } else {
+    // Whoever is selected, drawn rather than a stock frog. A hop lifts and
+    // stretches them, which reads as a jump at this size far better than a
+    // second sprite frame would.
     const hopping = s.hop > 0;
-    const lift = hopping ? 5 : 0;
-    const size = CELL - 4 + (hopping ? 4 : 0);
-    drawFrame(
+    const lift = hopping ? 6 : 0;
+    const size = CELL - 2;
+    const squash = hopping ? 1.12 : 1;
+
+    // Soft contact shadow, so they are not floating on the lane.
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(
+      s.x * CELL + CELL / 2,
+      s.row * CELL + CELL - 2,
+      size * (hopping ? 0.22 : 0.3),
+      size * 0.1,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+
+    drawCharacterSprite(
       ctx,
-      sp.enemies,
-      hopping ? 'frog_jump' : 'frog_idle',
+      character,
       s.x * CELL + (CELL - size) / 2,
-      s.row * CELL + (CELL - size) / 2 - lift,
+      s.row * CELL + (CELL - size) - lift,
       size,
       size,
+      { frame: 0, facing: 1, squash, airborne: hopping },
     );
   }
 

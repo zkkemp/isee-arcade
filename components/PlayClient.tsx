@@ -8,6 +8,8 @@ import Runner from './games/Runner';
 import Breakout from './games/Breakout';
 import Climber from './games/Climber';
 import Maze from './games/Maze';
+import Match3 from './games/Match3';
+import Blocks from './games/Blocks';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -22,6 +24,8 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   breakout: Breakout,
   climber: Climber,
   maze: Maze,
+  match3: Match3,
+  blocks: Blocks,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

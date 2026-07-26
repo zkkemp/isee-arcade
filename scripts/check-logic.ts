@@ -83,16 +83,12 @@ for (let level = 1; level <= LEVELS_TO_CHECK; level += 1) {
     const cx = Math.floor(c.x / TILE);
     const cy = Math.floor(c.y / TILE);
     if (solidAt(L.tiles, cx, cy)) fail(`${at}: coin at (${cx},${cy}) is inside a solid tile`);
-    let support = -1;
-    for (let y = cy + 1; y < ROWS; y += 1) {
-      if (solidAt(L.tiles, cx, y)) {
-        support = y;
-        break;
-      }
-    }
-    if (support !== -1 && support - cy > 4) {
-      fail(`${at}: coin at (${cx},${cy}) floats ${support - cy} tiles above support`);
-    }
+    // Coins deliberately float now: the Mario redesign lays them in arcs along
+    // the real jump parabola, so a coin five tiles above the ground is a coin
+    // the player collects mid-jump, not a bug. Whether every coin is actually
+    // REACHABLE is proven properly in check-platformer.ts, which simulates the
+    // jump envelope - a naive "must sit near support" rule tests the wrong thing
+    // and would reject the arcs the design is built around.
   }
 
   totalEnemies += L.enemies.length;

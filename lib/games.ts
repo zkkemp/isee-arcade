@@ -1,8 +1,11 @@
 import type { ComponentType } from 'react';
 import type { Difficulty } from './difficulty';
 import type { InputController } from './input';
+import type { Character } from './characters';
 
 export type GameId =
+  | 'match3'
+  | 'blocks'
   | 'frogger'
   | 'snake'
   | 'platformer'
@@ -17,8 +20,9 @@ export type GameId =
  *  run-jump  - hold arrows in a strip below, tap the right half to jump
  *  lanes     - tap left/right halves to change lane, swipe up to jump
  *  paddle    - drag anywhere to move a paddle
+ *  grid      - tap and drag on a board; both pointer axes plus press/release edges
  */
-export type ControlScheme = 'dpad' | 'run-jump' | 'lanes' | 'paddle';
+export type ControlScheme = 'dpad' | 'run-jump' | 'lanes' | 'paddle' | 'grid';
 
 export type GameMeta = {
   id: GameId;
@@ -58,6 +62,8 @@ export type GameCanvasProps = {
   restartToken: number;
   /** Skill setting. Games scale speed, hazard density and ramp from this. */
   difficulty: Difficulty;
+  /** The chosen family character, so every game can draw the same avatar. */
+  character: Character;
   /**
    * Screen pixels at the bottom of the canvas occupied by thumb controls. Games
    * must keep gameplay above this band so a hand never covers the action.
@@ -72,7 +78,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     id: 'frogger',
     name: 'Road Hopper',
     tagline: 'Dodge the traffic, ride the logs, reach the far bank.',
-    gateNote: 'A question when you reach the bank, or when you get squashed.',
+    gateNote: 'Study time buys play time.',
     icon: '🐸',
     accent: '#3ddc84',
     controls: 'dpad',
@@ -82,17 +88,37 @@ export const GAMES: Record<GameId, GameMeta> = {
     id: 'snake',
     name: 'Byte Snake',
     tagline: 'Eat, grow, and try not to trip over yourself.',
-    gateNote: 'A question when you crash.',
+    gateNote: 'Study time buys play time.',
     icon: '🐍',
     accent: '#4ea8ff',
     controls: 'dpad',
     aspect: 1,
   },
+  match3: {
+    id: 'match3',
+    name: 'Sugar Swap',
+    tagline: 'Swap the candies, line up three, set off a chain.',
+    gateNote: 'Study time buys play time.',
+    icon: '🍬',
+    accent: '#ff6fb5',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
+  blocks: {
+    id: 'blocks',
+    name: 'Block Drop',
+    tagline: 'Drop the shapes, fill the lines, clear the board.',
+    gateNote: 'Study time buys play time.',
+    icon: '🟦',
+    accent: '#5ec8ff',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
   runner: {
     id: 'runner',
     name: 'Dash Run',
-    tagline: 'Sprint down three lanes, dodge everything, grab every coin.',
-    gateNote: 'A question when you crash.',
+    tagline: 'Run, jump, and do not stop. The road never ends.',
+    gateNote: 'Study time buys play time.',
     icon: '🏃',
     accent: '#ff8f5d',
     controls: 'lanes',
@@ -102,7 +128,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     id: 'breakout',
     name: 'Brick Buster',
     tagline: 'Bounce the ball, smash every brick, clear the wall.',
-    gateNote: 'A question when you clear a wall or lose the ball.',
+    gateNote: 'Study time buys play time.',
     icon: '🧱',
     accent: '#ffd75e',
     controls: 'paddle',
@@ -112,7 +138,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     id: 'climber',
     name: 'Sky Hopper',
     tagline: 'Bounce higher and higher. Do not look down.',
-    gateNote: 'A question when you fall.',
+    gateNote: 'Study time buys play time.',
     icon: '☁️',
     accent: '#7ec8ff',
     controls: 'lanes',
@@ -122,7 +148,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     id: 'maze',
     name: 'Dot Muncher',
     tagline: 'Eat every dot. Do not get caught.',
-    gateNote: 'A question when you clear the maze or get caught.',
+    gateNote: 'Study time buys play time.',
     icon: '👻',
     accent: '#c77dff',
     controls: 'dpad',
@@ -132,7 +158,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     id: 'platformer',
     name: 'Coin Runner',
     tagline: 'Run, jump, stomp, and collect every coin.',
-    gateNote: 'A question at each flag, or when you fall.',
+    gateNote: 'Study time buys play time.',
     icon: '🍄',
     accent: '#ffb84e',
     controls: 'run-jump',
@@ -141,6 +167,8 @@ export const GAMES: Record<GameId, GameMeta> = {
 };
 
 export const GAME_LIST: GameMeta[] = [
+  GAMES.match3,
+  GAMES.blocks,
   GAMES.platformer,
   GAMES.runner,
   GAMES.breakout,

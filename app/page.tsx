@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import CharacterPicker from '@/components/CharacterPicker';
 import DifficultyPicker from '@/components/DifficultyPicker';
 import ProgressStrip from '@/components/ProgressStrip';
 import { GAME_LIST } from '@/lib/games';
@@ -10,13 +11,14 @@ export default function Home() {
   const subjects = Object.keys(counts) as Subject[];
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-10 pt-6">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-10 pt-6 sm:max-w-5xl sm:px-8 sm:pt-10">
       <header className="mb-6">
         <h1 className="text-3xl font-extrabold tracking-tight text-white">
           ISEE <span className="text-[#a78bfa]">Arcade</span>
         </h1>
         <p className="mt-1 text-sm text-white/55">
-          Real games. When you die or clear a level, one question stands between you and playing on.
+          Real games. Answer a short study block to earn play time, then play - dying is free
+          until the clock runs out.
         </p>
       </header>
 
@@ -25,6 +27,8 @@ export default function Home() {
       </div>
 
       <div className="mb-6">
+        <CharacterPicker />
+
         <DifficultyPicker />
       </div>
 

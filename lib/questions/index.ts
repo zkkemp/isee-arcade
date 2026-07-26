@@ -2,6 +2,8 @@ import type { Question, QuestionKind, Subject } from './types';
 import { instantiate, type QuestionTemplate } from './templates';
 import { VERBAL_QUESTIONS } from './verbal';
 import { READING_QUESTIONS } from './reading';
+import { READING_QUESTIONS_2 } from './reading2';
+import { READING_QUESTIONS_3 } from './reading3';
 import { VOCAB_AB } from './vocab/ab';
 import { VOCAB_CD } from './vocab/cd';
 import { VOCAB_EH } from './vocab/eh';
@@ -21,6 +23,8 @@ export * from './types';
 export const STATIC_QUESTIONS: Question[] = [
   ...VERBAL_QUESTIONS,
   ...READING_QUESTIONS,
+  ...READING_QUESTIONS_2,
+  ...READING_QUESTIONS_3,
   ...VOCAB_AB,
   ...VOCAB_CD,
   ...VOCAB_EH,
@@ -106,12 +110,22 @@ export type PickArgs = {
    */
   sameKindAs?: Question | null;
   /**
+   * Restrict to one kind. The study block uses this to serve exactly one reading
+   * question per block, rather than leaving it to chance.
+   */
+  forceKind?: QuestionKind | null;
+  /**
    * Kind to steer away from, so questions rotate between sections instead of
    * serving two of the same in a row. Reading passages are long, and two back to
    * back is where a kid checks out. Ignored when `sameKindAs` is set, because a
    * wrong answer deliberately keeps them on the same kind.
    */
-  avoidKind?: QuestionKind | null;
+  /**
+   * Kinds to rotate away from. Takes a list because the study block needs to
+   * exclude reading for the rest of the block AND still rotate away from
+   * whatever was just answered.
+   */
+  avoidKind?: QuestionKind | QuestionKind[] | null;
 };
 
 export function pickQuestion(args: PickArgs = {}): Question {
@@ -123,6 +137,7 @@ export function pickQuestion(args: PickArgs = {}): Question {
     recentAccuracy = null,
     sameKindAs = null,
     avoidKind = null,
+    forceKind = null,
   } = args;
 
   // --- retry path: stay on the thing they just missed ---
@@ -152,10 +167,18 @@ export function pickQuestion(args: PickArgs = {}): Question {
   let inScope = CANDIDATES.filter((c) => !allowed || allowed.has(c.subject));
   if (inScope.length === 0) return pickRandom(CANDIDATES).materialize();
 
+  // An explicit kind wins over rotation. Falls back rather than returning
+  // nothing if that kind is somehow empty.
+  if (forceKind) {
+    const only = inScope.filter((c) => c.kind === forceKind);
+    if (only.length > 0) inScope = only;
+  }
+
   // Rotate sections. Falls back to the unfiltered pool if avoiding the kind
   // would leave nothing to serve.
   if (avoidKind) {
-    const rotated = inScope.filter((c) => c.kind !== avoidKind);
+    const avoid = new Set(Array.isArray(avoidKind) ? avoidKind : [avoidKind]);
+    const rotated = inScope.filter((c) => !avoid.has(c.kind));
     if (rotated.length > 0) inScope = rotated;
   }
 

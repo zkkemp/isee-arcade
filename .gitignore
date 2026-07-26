@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Family reference photos. Used only locally to draw the avatars by hand.
+# NEVER served or committed - the whole point is that the real photos stay on this Mac.
+/reference/

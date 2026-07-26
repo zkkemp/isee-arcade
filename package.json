@@ -12,11 +12,15 @@
     "check:logic": "tsx scripts/check-logic.ts",
     "check:sprites": "node scripts/check-sprites.mjs",
     "check:platformer": "tsx scripts/check-platformer.ts",
-    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze",
-    "icons": "node scripts/make-icons.mjs",
-    "passcode": "node scripts/passcode-hash.mjs",
     "check:breakout": "tsx scripts/check-breakout.ts",
-    "check:maze": "tsx scripts/check-maze.ts"
+    "check:maze": "tsx scripts/check-maze.ts",
+    "check:blocks": "tsx scripts/check-blocks.ts",
+    "check:climber": "tsx scripts/check-climber.ts",
+    "check:match3": "tsx scripts/check-match3.ts",
+    "check:runner": "tsx scripts/check-runner.ts",
+    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner",
+    "icons": "node scripts/make-icons.mjs",
+    "passcode": "node scripts/passcode-hash.mjs"
   },
   "dependencies": {
     "next": "16.2.11",

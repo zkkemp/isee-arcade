@@ -29,9 +29,40 @@ export class InputController {
   private jumpEdge = false;
   jumpHeld = false;
 
+  /** Vertical pointer position across the play area, 0..1, or null. */
+  pointerY: number | null = null;
+  /** True while a finger or button is down. */
+  pointerDown = false;
+
+  private pressEdge = false;
+  private releaseEdge = false;
+
   /** Paddle surfaces report through this rather than assigning the field. */
   setPointerX(v: number | null): void {
     this.pointerX = v;
+  }
+
+  /** Grid and puzzle games get both axes plus press/release edges. */
+  setPointer(x: number | null, y: number | null, down: boolean): void {
+    if (down && !this.pointerDown) this.pressEdge = true;
+    if (!down && this.pointerDown) this.releaseEdge = true;
+    this.pointerX = x;
+    this.pointerY = y;
+    this.pointerDown = down;
+  }
+
+  /** True once per press. */
+  consumePointerPress(): boolean {
+    const v = this.pressEdge;
+    this.pressEdge = false;
+    return v;
+  }
+
+  /** True once per release. */
+  consumePointerRelease(): boolean {
+    const v = this.releaseEdge;
+    this.releaseEdge = false;
+    return v;
   }
 
   press(dir: Direction): void {
@@ -71,6 +102,10 @@ export class InputController {
 
   clear(): void {
     this.pointerX = null;
+    this.pointerY = null;
+    this.pointerDown = false;
+    this.pressEdge = false;
+    this.releaseEdge = false;
     this.held = { up: false, down: false, left: false, right: false };
     this.tapQueue = [];
     this.jumpEdge = false;

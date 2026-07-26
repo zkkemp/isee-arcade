@@ -78,6 +78,41 @@ export default function TouchOverlay({
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
+  if (scheme === 'grid') {
+    // Puzzle boards need both axes and press/release edges, reported normalised
+    // so the game works out cells from its own layout.
+    const report = (e: React.PointerEvent, down: boolean) => {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      input.setPointer(
+        Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+        Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+        down,
+      );
+    };
+    return (
+      <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
+        <button
+          type="button"
+          aria-label="Play board"
+          className="absolute inset-0 h-full w-full"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+            setShowHint(false);
+            report(e, true);
+          }}
+          onPointerMove={(e) => {
+            if (!input.pointerDown) return;
+            report(e, true);
+          }}
+          onPointerUp={(e) => report(e, false)}
+          onPointerCancel={(e) => report(e, false)}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+      </div>
+    );
+  }
+
   if (scheme === 'paddle') {
     // Drag anywhere: the paddle follows the finger. Reported normalised so the
     // game does not need to know the canvas size.

@@ -14,6 +14,7 @@ export const READING_QUESTIONS: Question[] = [
       'The kelp hides it from hungry sharks.',
       'The kelp is anchored below, so the otter does not drift away.',
       'The kelp holds food the otter can eat when it wakes up.',
+      'The kelp warns other otters that it is already asleep.',
     ],
     answer: 2,
     explain:
@@ -33,6 +34,7 @@ export const READING_QUESTIONS: Question[] = [
       'sink straight to the ocean floor',
       'grow a thick layer of blubber instead',
       'sleep much longer than usual',
+      'float on top of the water more easily',
     ],
     answer: 0,
     explain:
@@ -52,6 +54,7 @@ export const READING_QUESTIONS: Question[] = [
       'The Fossil Hunter Who Was Left Out of the Story',
       'Life and Habits of the Ichthyosaur',
       'Selling Souvenirs to Seaside Tourists',
+      'A Brother and Sister Explore the Beach',
     ],
     answer: 1,
     explain:
@@ -71,6 +74,7 @@ export const READING_QUESTIONS: Question[] = [
       'they kept other scientists away from the cliffs',
       'they made the soft rock harder and easier to carry',
       'they crumbled the cliffs and exposed fossils that had been buried',
+      'they washed loose fossils up onto the sand for her to collect',
     ],
     answer: 3,
     explain:
@@ -90,6 +94,7 @@ export const READING_QUESTIONS: Question[] = [
       'bored with the book about volcanoes',
       'annoyed at her younger brother',
       'proud of the fort she had built',
+      'certain the book was lost for good',
     ],
     answer: 0,
     explain:
@@ -109,6 +114,7 @@ export const READING_QUESTIONS: Question[] = [
       'a comparison between two characters',
       'a problem followed by the solution Nora finds',
       'a list of library rules and the reasons behind them',
+      'a series of events told out of the order they happened',
     ],
     answer: 2,
     explain:
@@ -128,6 +134,7 @@ export const READING_QUESTIONS: Question[] = [
       'A thermos works by removing the paths that heat uses to travel.',
       'Air carries heat much better than metal does.',
       'A tight lid is the only reason a thermos works.',
+      'A thermos keeps a drink cold better than it keeps one hot.',
     ],
     answer: 1,
     explain:
@@ -142,7 +149,7 @@ export const READING_QUESTIONS: Question[] = [
     passage:
       "A thermos looks like a plain metal cup, but inside it there are two walls with almost nothing between them. Most of the air has been pumped out of that narrow gap. Heat travels easily through solids and through air, so removing the air removes the path heat would take. The inside wall is often coated with a shiny silver layer that bounces heat back toward the drink, the way a mirror bounces light. The lid seals the top so warm air cannot escape. None of this makes heat. A thermos only slows heat down, which is why it keeps cocoa hot and lemonade cold.",
     prompt: 'As used in the passage, the word "seals" most nearly means',
-    choices: ['decorates', 'measures', 'warms', 'closes tightly'],
+    choices: ['decorates', 'measures', 'warms', 'closes tightly', 'stamps with a mark'],
     answer: 3,
     explain:
       'The lid seals the top so warm air cannot escape. Something that stops air from escaping is closing it tightly.',
@@ -161,6 +168,7 @@ export const READING_QUESTIONS: Question[] = [
       'Along the coast of Texas',
       'In mountain fir forests in central Mexico',
       'In warm caves partway along the route',
+      'In the fir forests of southern California',
     ],
     answer: 2,
     explain:
@@ -180,6 +188,7 @@ export const READING_QUESTIONS: Question[] = [
       'The butterflies that reach Mexico have never been there before.',
       'The fir branches bend under the weight of the butterflies.',
       'The trip covers about two thousand miles.',
+      'The butterflies fly the whole way without stopping to rest.',
     ],
     answer: 1,
     explain:
@@ -194,7 +203,7 @@ export const READING_QUESTIONS: Question[] = [
     passage:
       "For eighteen months in the 1860s, mail crossed the American West on horseback. A rider carried a locked leather pouch about seventy five miles, changing horses every ten or fifteen miles at small stations, then handed the pouch to the next rider. Together the riders moved a letter from Missouri to California in about ten days, less than half the time a stagecoach took. Riders were hired for being light, not large, because a heavy man slowed the horse. The Pony Express became famous almost at once, and it lost money almost as fast. When the telegraph reached California, the service closed for good.",
     prompt: 'As used in the passage, the word "pouch" most nearly means',
-    choices: ['a locked room', 'a saddle', 'a small station', 'a bag'],
+    choices: ['a locked room', 'a saddle', 'a small station', 'a bag', 'a leather glove'],
     answer: 3,
     explain:
       'The rider carries a locked leather pouch of mail and hands it to the next rider. Something you carry mail in and hand off is a bag.',
@@ -213,6 +222,7 @@ export const READING_QUESTIONS: Question[] = [
       'the riders became too heavy for the horses',
       'stagecoaches began making the trip in ten days',
       'California no longer wanted mail from Missouri',
+      'the riders ran out of fresh horses at the stations',
     ],
     answer: 0,
     explain:
@@ -232,6 +242,7 @@ export const READING_QUESTIONS: Question[] = [
       'He is giving himself a moment to settle down.',
       'He is trying to remember the next eight measures.',
       'He is listening for whoever made the laughing sound.',
+      'He is waiting for his grandfather to arrive and watch.',
     ],
     answer: 1,
     explain:
@@ -246,7 +257,7 @@ export const READING_QUESTIONS: Question[] = [
     passage:
       "Mateo had practiced the same eight measures for three weeks, and in his bedroom they sounded fine. In the band room, with Ms. Okafor waiting and twelve other kids listening, the trumpet felt slippery and strange. He squeaked the second note. Somebody near the drums made a small sound that might have been a laugh. Mateo stopped, lowered the horn, and stared at the music stand. Then he did the thing his grandfather always did when a car would not start. He waited, counted slowly to five, and tried again. The second time through, he did not miss a single note.",
     prompt: 'As used in the passage, the word "measures" most nearly means',
-    choices: ['careful steps', 'rulers', 'short sections of music', 'hours of practice'],
+    choices: ['careful steps', 'rulers', 'short sections of music', 'hours of practice', 'beats in a song'],
     answer: 2,
     explain:
       'Mateo practices the same eight measures and later plays them all the way through on his trumpet, so measures must be pieces of the music.',
@@ -265,6 +276,7 @@ export const READING_QUESTIONS: Question[] = [
       'Water soaking into the flour',
       'Heat that melts the sugars',
       'Yeast cells growing much larger',
+      'Air the baker beats into the dough',
     ],
     answer: 0,
     explain:
@@ -284,6 +296,7 @@ export const READING_QUESTIONS: Question[] = [
       'an argument that homemade bread is better',
       "a story about a baker's morning",
       'the steps of a process, in the order they happen',
+      'a warning about the dangers of eating raw dough',
     ],
     answer: 3,
     explain:
@@ -298,7 +311,7 @@ export const READING_QUESTIONS: Question[] = [
     passage:
       "Thunder and lightning happen at the same moment, but you almost never see and hear them together. A lightning bolt heats the air around it to a temperature hotter than the surface of the sun. Air that hot explodes outward, and that blast of air is the sound we call thunder. Light travels so fast that the flash reaches your eyes almost instantly. Sound, by comparison, crawls along at about one mile every five seconds. So if you count five seconds between the flash and the rumble, the storm is roughly a mile away. A long, low growl usually means the bolt was far off.",
     prompt: 'According to the passage, if ten seconds pass between the flash and the thunder, the storm is about',
-    choices: ['half a mile away', 'one mile away', 'two miles away', 'ten miles away'],
+    choices: ['half a mile away', 'one mile away', 'two miles away', 'ten miles away', 'five miles away'],
     answer: 2,
     explain:
       'Sound travels about one mile every five seconds, so ten seconds means the sound covered about two miles.',
@@ -312,7 +325,7 @@ export const READING_QUESTIONS: Question[] = [
     passage:
       "Thunder and lightning happen at the same moment, but you almost never see and hear them together. A lightning bolt heats the air around it to a temperature hotter than the surface of the sun. Air that hot explodes outward, and that blast of air is the sound we call thunder. Light travels so fast that the flash reaches your eyes almost instantly. Sound, by comparison, crawls along at about one mile every five seconds. So if you count five seconds between the flash and the rumble, the storm is roughly a mile away. A long, low growl usually means the bolt was far off.",
     prompt: 'As used in the passage, the word "crawls" most nearly means',
-    choices: ['moves on hands and knees', 'travels slowly', 'grows louder', 'bounces back'],
+    choices: ['moves on hands and knees', 'travels slowly', 'grows louder', 'bounces back', 'fades away'],
     answer: 1,
     explain:
       'The word describes sound compared with light, which arrives almost instantly. Crawls is being used to mean slow travel.',
@@ -331,6 +344,7 @@ export const READING_QUESTIONS: Question[] = [
       'She wanted to perform at air shows in Paris.',
       'Her pilot license had to be written in French.',
       'Her family had already moved to France.',
+      'French flying schools were the best in the world.',
     ],
     answer: 0,
     explain:
@@ -350,6 +364,7 @@ export const READING_QUESTIONS: Question[] = [
       'was an unusually careful pilot',
       'needed a flight school of her very own',
       'used her fame to push back against unfair treatment',
+      'preferred performing for smaller, quieter crowds',
     ],
     answer: 3,
     explain:
@@ -369,6 +384,7 @@ export const READING_QUESTIONS: Question[] = [
       'the drawing gave her something she knew how to talk about',
       'she needed to borrow a pencil for her math test',
       'the cafeteria rule said February students sat there',
+      'the eighth graders had finished eating and left',
     ],
     answer: 1,
     explain:
@@ -388,6 +404,7 @@ export const READING_QUESTIONS: Question[] = [
       'argued with her about her lunch',
       'talked without including her',
       'explained the cafeteria rules to her',
+      'whispered unkind things behind her back',
     ],
     answer: 2,
     explain:
@@ -407,6 +424,7 @@ export const READING_QUESTIONS: Question[] = [
       'Large rings at the back wheel make a bicycle go faster than small ones.',
       'Climbing hills on a bicycle is mostly a matter of strong legs.',
       'A chain wears out faster on a bicycle that has many gears.',
+      'Shifting gears is the fastest way to climb any hill.',
     ],
     answer: 0,
     explain:
@@ -426,6 +444,7 @@ export const READING_QUESTIONS: Question[] = [
       'a small ring at the pedals',
       'no ring at all',
       'a large ring at the back wheel',
+      'a large ring at the pedals',
     ],
     answer: 3,
     explain:
@@ -445,6 +464,7 @@ export const READING_QUESTIONS: Question[] = [
       'it swims into brighter light',
       'muscles squeeze a sac of pigment flat',
       'sensors in its skin release paint',
+      'muscles let a sac of pigment shrink',
     ],
     answer: 2,
     explain:
@@ -464,6 +484,7 @@ export const READING_QUESTIONS: Question[] = [
       'the animal changes color only at night',
       'no other animal is able to change its texture',
       'the sacs of pigment are too small to study',
+      'it changes color faster than the eye can follow',
     ],
     answer: 0,
     explain:
@@ -483,6 +504,7 @@ export const READING_QUESTIONS: Question[] = [
       'wished that reporters would visit her more often',
       'was surprised by how strong she had become',
       'did not think her rowing skill was anything remarkable',
+      'hoped the newspapers would pay her for each rescue',
     ],
     answer: 3,
     explain:
@@ -502,6 +524,7 @@ export const READING_QUESTIONS: Question[] = [
       'her father was too ill to climb the stairs',
       'the harbor asked her to replace the keeper',
       'newspapers offered to pay her for the story',
+      'she wanted to become the strongest rower in the harbor',
     ],
     answer: 1,
     explain:
@@ -521,6 +544,7 @@ export const READING_QUESTIONS: Question[] = [
       'blame the broken plant on the wind',
       'repair what he could and then tell the truth',
       'wait for Grandma Ruth to notice the damage herself',
+      'hide the fallen plant behind the healthy rows',
     ],
     answer: 2,
     explain:
@@ -540,6 +564,7 @@ export const READING_QUESTIONS: Question[] = [
       'a large watering can',
       'a wooden stake',
       'a pair of garden gloves',
+      'a bag of potting soil',
     ],
     answer: 0,
     explain:
@@ -559,6 +584,7 @@ export const READING_QUESTIONS: Question[] = [
       'The moon makes a faint light of its own.',
       'Sunlight reaches the moon only at certain times of the month.',
       'The phases are changes in how much of the lit half we can see.',
+      'The moon slowly turns to face the sun once each month.',
     ],
     answer: 3,
     explain:
@@ -578,6 +604,7 @@ export const READING_QUESTIONS: Question[] = [
       'show that half of any round object near a light is always lit',
       'explain why the moon looks gray and dusty',
       'show how far the moon is from the sun',
+      'explain why the moon takes a month to circle Earth',
     ],
     answer: 1,
     explain:
@@ -597,6 +624,7 @@ export const READING_QUESTIONS: Question[] = [
       'the stiff hairs have time to finish growing',
       'an insect has time to walk deeper inside',
       'the roots can search the soil for nitrogen first',
+      'the stiff hairs can cross into a tight cage',
     ],
     answer: 0,
     explain:
@@ -616,6 +644,7 @@ export const READING_QUESTIONS: Question[] = [
       'poorly drained',
       'low in the nutrients plants need',
       'oddly shaped',
+      'packed hard and dry',
     ],
     answer: 2,
     explain:
@@ -635,6 +664,7 @@ export const READING_QUESTIONS: Question[] = [
       'How a Compass Works and How It Can Be Fooled',
       'The Best Gear for a Long Hike',
       "Earth's Journey Around the Sun",
+      'Why Metal Objects Ruin a Hike',
     ],
     answer: 1,
     explain:
@@ -654,6 +684,7 @@ export const READING_QUESTIONS: Question[] = [
       'explain how Earth became a magnet',
       'describe all the gear a hiker carries',
       'give advice for getting an accurate reading',
+      'list the metals that pull a needle off course',
     ],
     answer: 3,
     explain:
@@ -673,6 +704,7 @@ export const READING_QUESTIONS: Question[] = [
       'the size of the dust speck at its center',
       'the air the flake passed through on its way down',
       'how many other flakes it bumped into',
+      'the shape of the cloud it first formed in',
     ],
     answer: 2,
     explain:
@@ -687,7 +719,7 @@ export const READING_QUESTIONS: Question[] = [
     passage:
       "No two snowflakes are alike, and the reason is the trip down. A flake begins as a speck of dust with a bit of water frozen onto it, high inside a cloud. As it falls, water vapor freezes onto its six corners. How fast the arms grow, and whether they come out as flat plates or long needles, depends on the exact temperature and dampness of every layer of air the flake passes through. Two flakes falling a few feet apart pass through slightly different air, so they end up with different shapes. What they share is six sides, always.",
     prompt: 'According to the passage, what do all snowflakes have in common?',
-    choices: ['Six sides', 'Long needle arms', 'Exactly the same weight', 'Flat, plate-like shapes'],
+    choices: ['Six sides', 'Long needle arms', 'Exactly the same weight', 'Flat, plate-like shapes', 'A center made of frozen rain'],
     answer: 0,
     explain:
       'The last sentence says what they share is six sides, always. The plates and needles are the part that differs.',
@@ -706,6 +738,7 @@ export const READING_QUESTIONS: Question[] = [
       'Leaving school early can help an inventor think freely.',
       'Firefighting was dangerous work in 1914.',
       'Morgan invented by noticing everyday dangers other people ignored.',
+      'Morgan earned several patents over the course of his life.',
     ],
     answer: 3,
     explain:
@@ -720,7 +753,7 @@ export const READING_QUESTIONS: Question[] = [
     passage:
       "Garrett Morgan left school after the sixth grade and taught himself by reading and by taking machines apart. In 1914 he patented a hood that pulled clean air from near the floor through a long tube, letting firefighters breathe inside a smoky building. Then, after watching a wagon and a car collide at a Cleveland corner, he built a traffic signal with a third position that stopped traffic in both directions at once, giving drivers a moment to clear the intersection. He sold that patent to a large company for forty thousand dollars. Morgan invented for a plain reason: he kept noticing dangers other people had learned to ignore.",
     prompt: 'As used in the passage, the word "plain" most nearly means',
-    choices: ['flat', 'simple', 'unattractive', 'public'],
+    choices: ['flat', 'simple', 'unattractive', 'public', 'honest'],
     answer: 1,
     explain:
       'The passage says he invented for a plain reason and then gives one short, simple reason: he kept noticing problems others ignored.',

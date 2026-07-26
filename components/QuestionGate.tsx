@@ -7,7 +7,14 @@ import { SUBJECT_LABELS } from '@/lib/questions/types';
 /** Seconds the advance button stays locked after a wrong answer. */
 const EXPLAIN_LOCK_SECONDS = 3;
 
-const LETTERS = ['A', 'B', 'C', 'D'] as const;
+/**
+ * Seconds the answer buttons stay locked on a reading question before they can
+ * be touched. A reading right answer skips the rest of the study block, so this
+ * forces the passage to actually be sat with rather than tapped through blind.
+ */
+const READING_LOCK_SECONDS = 10;
+
+const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const;
 
 const SUBJECT_COLORS: Record<Question['subject'], string> = {
   verbal: '#a78bfa',
@@ -40,6 +47,10 @@ export default function QuestionGate({
 }: QuestionGateProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [lock, setLock] = useState(0);
+  // Reading starts locked; every other kind is answerable immediately.
+  const [readLock, setReadLock] = useState(
+    question.kind === 'reading' ? READING_LOCK_SECONDS : 0,
+  );
   const explainRef = useRef<HTMLDivElement | null>(null);
 
   const answered = picked !== null;
@@ -48,13 +59,15 @@ export default function QuestionGate({
 
   const choose = useCallback(
     (i: number) => {
-      if (picked !== null) return;
+      // The reading lock has to hold here too, not just disable the buttons, or a
+      // keyboard 1-8 press would walk straight past it.
+      if (picked !== null || readLock > 0) return;
       setPicked(i);
       // A wrong answer holds the explanation on screen. There is no skipping it,
       // and the next question will be the same kind.
       if (i !== question.answer) setLock(EXPLAIN_LOCK_SECONDS);
     },
-    [picked, question.answer],
+    [picked, question.answer, readLock],
   );
 
   useEffect(() => {
@@ -62,6 +75,12 @@ export default function QuestionGate({
     const t = setTimeout(() => setLock((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [lock]);
+
+  useEffect(() => {
+    if (readLock <= 0) return;
+    const t = setTimeout(() => setReadLock((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [readLock]);
 
   // Bring the explanation into view once answered. After a reading question the
   // passage has pushed it well below the fold, so without this the feedback for
@@ -82,14 +101,14 @@ export default function QuestionGate({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!answered) {
-        const byNumber = ['1', '2', '3', '4'].indexOf(e.key);
-        if (byNumber >= 0) {
+        const byNumber = ['1', '2', '3', '4', '5'].indexOf(e.key);
+        if (byNumber >= 0 && byNumber < question.choices.length) {
           e.preventDefault();
           choose(byNumber);
           return;
         }
-        const byLetter = ['a', 'b', 'c', 'd'].indexOf(e.key.toLowerCase());
-        if (byLetter >= 0) {
+        const byLetter = ['a', 'b', 'c', 'd', 'e'].indexOf(e.key.toLowerCase());
+        if (byLetter >= 0 && byLetter < question.choices.length) {
           e.preventDefault();
           choose(byLetter);
         }
@@ -102,7 +121,7 @@ export default function QuestionGate({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [answered, canAdvance, choose, correct, onAnswered]);
+  }, [answered, canAdvance, choose, correct, onAnswered, question.choices.length]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#0b0b16]/97 backdrop-blur-md">
@@ -149,6 +168,24 @@ export default function QuestionGate({
 
           <p className="mb-4 text-xl font-semibold leading-snug text-white">{question.prompt}</p>
 
+          {readLock > 0 && (
+            <div
+              className="mb-3 flex items-center gap-3 rounded-2xl border border-white/15 bg-white/[0.05] px-4 py-3"
+              role="status"
+            >
+              <span
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-[#101020]"
+                style={{ background: accent }}
+              >
+                {readLock}
+              </span>
+              <span className="text-sm text-white/70">
+                Take a moment to read. Answers unlock in {readLock} second
+                {readLock === 1 ? '' : 's'}.
+              </span>
+            </div>
+          )}
+
           <div className="grid gap-2.5">
             {question.choices.map((choice, i) => {
               const isAnswer = i === question.answer;
@@ -160,6 +197,9 @@ export default function QuestionGate({
                 if (isAnswer) cls = 'border-emerald-400/70 bg-emerald-400/15 text-emerald-100';
                 else if (isPicked) cls = 'border-rose-400/70 bg-rose-400/15 text-rose-100';
                 else cls = 'border-white/10 bg-white/[0.02] text-white/35';
+              } else if (readLock > 0) {
+                // Dimmed and untouchable until the reading timer runs out.
+                cls = 'border-white/10 bg-white/[0.02] text-white/40';
               }
 
               return (
@@ -167,8 +207,8 @@ export default function QuestionGate({
                   key={i}
                   type="button"
                   onClick={() => choose(i)}
-                  disabled={answered}
-                  className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left text-[17px] leading-snug transition ${cls}`}
+                  disabled={answered || readLock > 0}
+                  className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-left text-[17px] leading-snug transition disabled:cursor-not-allowed ${cls}`}
                 >
                   <span className="mt-[2px] flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl border border-current text-xs font-bold opacity-75">
                     {LETTERS[i]}
@@ -221,7 +261,9 @@ export default function QuestionGate({
             style={{ background: canAdvance ? accent : 'rgba(255,255,255,0.22)' }}
           >
             {!answered
-              ? 'Pick an answer'
+              ? readLock > 0
+                ? `Read the passage… ${readLock}`
+                : 'Pick an answer'
               : lock > 0
                 ? `Read the explanation… ${lock}`
                 : correct
