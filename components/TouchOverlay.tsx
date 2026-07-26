@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ControlScheme } from '@/lib/games';
 import type { Direction, InputController } from '@/lib/input';
 
@@ -24,11 +24,24 @@ import type { Direction, InputController } from '@/lib/input';
  * dragging a thumb never scrolls the page.
  */
 
-/** A flick this many CSS px in the dominant axis counts as a swipe. Low, so a
- *  small nudge already moves - the whole complaint was that moving was hard. */
-const SWIPE_MIN = 22;
+/**
+ * dpad swipe (the #1 recurring complaint - moving felt hard). The swipe is now
+ * detected DURING the drag, not on release: as soon as the finger travels
+ * SWIPE_MOVE px in its dominant axis, one move fires and the gesture re-anchors,
+ * so a slow continuous drag emits clean single moves and a small flick registers
+ * instantly. REARM_MS keeps one fast flick from firing three moves at once.
+ * FLICK_MIN is the release fallback for a flick so quick it produced no usable
+ * move event - decided from the whole gesture's travel.
+ */
+const SWIPE_MOVE = 13;
+const REARM_MS = 70;
+const FLICK_MIN = 10;
 /** A shorter upward flick jumps, because the runner jump had to get much easier. */
 const JUMP_MIN = 18;
+
+/** Live gesture state for the dpad swipe surface. `x`/`y` re-anchor on each fired
+ *  move; `ox`/`oy` are the untouched origin, for the release fallback. */
+type Swipe = { x: number; y: number; ox: number; oy: number; last: number; fired: boolean };
 
 export default function TouchOverlay({
   scheme,
@@ -41,6 +54,7 @@ export default function TouchOverlay({
 }) {
   // The hint is for the first run only; it gets in the way after that.
   const [showHint, setShowHint] = useState(true);
+  const swipeRef = useRef<Swipe | null>(null);
 
   useEffect(() => {
     if (!showHint) return;
@@ -205,26 +219,45 @@ export default function TouchOverlay({
     );
   }
 
-  // dpad: the entire play area is a 4-way swipe surface. A flick past SWIPE_MIN
-  // in its dominant axis fires one move in that direction; the DPad below the
-  // canvas covers precise single presses.
-  let sx = 0;
-  let sy = 0;
+  // dpad: the entire play area is a 4-way swipe surface, detected live during the
+  // drag (see the Swipe note above). The split DPad below the canvas covers
+  // precise single presses.
+  const emit = (dx: number, dy: number) => {
+    if (Math.abs(dx) > Math.abs(dy)) input.tap(dx > 0 ? 'right' : 'left');
+    else input.tap(dy > 0 ? 'down' : 'up');
+  };
   const onSwipeDown = (e: React.PointerEvent) => {
-    sx = e.clientX;
-    sy = e.clientY;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    swipeRef.current = { x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, last: 0, fired: false };
+  };
+  const onSwipeMove = (e: React.PointerEvent) => {
+    const g = swipeRef.current;
+    if (!g) return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_MOVE) return;
+    const now = e.timeStamp;
+    if (now - g.last < REARM_MS) return;
+    if (showHint) setShowHint(false);
+    emit(dx, dy);
+    g.last = now;
+    g.fired = true;
+    // Re-anchor: the next move needs a fresh threshold, so a continuous drag
+    // emits clean single steps instead of a burst.
+    g.x = e.clientX;
+    g.y = e.clientY;
   };
   const onSwipeUp = (e: React.PointerEvent) => {
     e.preventDefault();
-    const dx = e.clientX - sx;
-    const dy = e.clientY - sy;
-    if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) return;
-    setShowHint(false);
-    if (Math.abs(dx) > Math.abs(dy)) {
-      input.tap(dx > 0 ? 'right' : 'left');
-    } else {
-      input.tap(dy > 0 ? 'down' : 'up');
-    }
+    const g = swipeRef.current;
+    swipeRef.current = null;
+    // Fallback only for a flick so fast it emitted no move: judge the whole travel.
+    if (!g || g.fired) return;
+    const dx = e.clientX - g.ox;
+    const dy = e.clientY - g.oy;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < FLICK_MIN) return;
+    if (showHint) setShowHint(false);
+    emit(dx, dy);
   };
   return (
     <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
@@ -233,6 +266,7 @@ export default function TouchOverlay({
         aria-label="Swipe to move"
         className="absolute inset-0 h-full w-full"
         onPointerDown={onSwipeDown}
+        onPointerMove={onSwipeMove}
         onPointerUp={onSwipeUp}
         onPointerCancel={onSwipeUp}
         onContextMenu={(e) => e.preventDefault()}
