@@ -22,6 +22,7 @@ import Chess from './games/Chess';
 import TapAttack from './games/TapAttack';
 import Sudoku from './games/Sudoku';
 import DotsBoxes from './games/DotsBoxes';
+import CardMatch from './games/CardMatch';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -50,6 +51,7 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   tapattack: TapAttack,
   sudoku: Sudoku,
   dots: DotsBoxes,
+  cards: CardMatch,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

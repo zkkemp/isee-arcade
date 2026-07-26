@@ -30,7 +30,8 @@
     "check:tapattack": "tsx scripts/check-tapattack.ts",
     "check:sudoku": "tsx scripts/check-sudoku.ts",
     "check:dots": "tsx scripts/check-dotsboxes.ts",
-    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory && npm run check:merge && npm run check:bubble && npm run check:checkers && npm run check:echo && npm run check:fruit && npm run check:chess && npm run check:tapattack && npm run check:sudoku && npm run check:dots",
+    "check:cards": "tsx scripts/check-cardmatch.ts",
+    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory && npm run check:merge && npm run check:bubble && npm run check:checkers && npm run check:echo && npm run check:fruit && npm run check:chess && npm run check:tapattack && npm run check:sudoku && npm run check:dots && npm run check:cards",
     "icons": "node scripts/make-icons.mjs",
     "passcode": "node scripts/passcode-hash.mjs"
   },

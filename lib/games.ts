@@ -24,7 +24,8 @@ export type GameId =
   | 'chess'
   | 'tapattack'
   | 'sudoku'
-  | 'dots';
+  | 'dots'
+  | 'cards';
 
 /**
  * How a game is driven on touch.
@@ -299,6 +300,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'board',
     aspect: 3 / 4,
   },
+  cards: {
+    id: 'cards',
+    name: 'Color Cascade',
+    tagline: 'Match the color, dodge the wilds, empty your hand!',
+    gateNote: 'Study time buys play time.',
+    icon: '🃏',
+    accent: '#ff5252',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -323,6 +334,7 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.echo,
   GAMES.fruit,
   GAMES.tapattack,
+  GAMES.cards,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));
