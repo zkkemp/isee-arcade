@@ -8,57 +8,107 @@ import {
 } from './templates';
 
 /**
- * Kindergarten (~5-year-old) question templates.
+ * Kindergarten question bank, rewritten for a child ENTERING kindergarten who
+ * cannot read yet (~5 years old).
  *
- * This is the youngest bank in the app, so the bar is different from the ISEE
- * Lower Level templates elsewhere in this folder: every instance must be
- * solvable BY A KINDERGARTNER using counting, the alphabet, or shapes she has
- * already been taught — no multi-step arithmetic, no reading a paragraph, no
- * negative numbers, nothing past 20. `difficulty` here only ever takes the
- * value 1 (warm-up) or 2 (a small stretch); 3 is reserved for older grades.
+ * The player app reads every prompt and every choice ALOUD (text-to-speech)
+ * for this profile, and shows any "* * *"-style marks on screen. So a
+ * non-reader answers by LISTENING to the question and the choices, and/or by
+ * LOOKING at the marks, then tapping the numbered choice they heard. That
+ * drives every design rule below:
  *
- * Every generator below is written so the candidate list passed to
- * `buildChoices` is PROVABLY at least 3 distinct values apart from the
- * correct answer for every value the random ranges can produce — not just
- * for typical values. Where that took real reasoning (see the "difference
- * between groups" and "letter after/before" templates) the comment explains
- * why the bound holds for the whole range, not only the common case.
+ *   - Prompts are natural spoken sentences a grown-up would say out loud —
+ *     no symbol soup, no "___" left for the ear to parse.
+ *   - Choices are always SHORT: a single number, a single color word, a
+ *     single shape word, or one other short word. Long phrases are hard to
+ *     tell apart by ear, so none are used as choices here.
+ *   - Anything that needs a visible count puts the countable marks directly
+ *     in the prompt (e.g. "How many stars? * * * *") — those marks render on
+ *     screen; everything else is answerable purely by ear.
+ *   - Nothing requires reading a word's letters to answer. Rhyming and
+ *     first-sound questions are about SOUND, not letter shapes.
+ *
+ * Calibration: entering-K is a mix of late pre-K skills and the very start
+ * of kindergarten, so this is deliberately easy. `difficulty` is 1 (warm-up)
+ * for most templates and 2 (a small stretch) for a few; 3 never appears here
+ * — that's reserved for older grades.
+ *
+ * Every generator is written so the candidate list passed to `buildChoices`
+ * is PROVABLY at least 3 distinct values apart from the correct answer for
+ * every value the random ranges can produce, not just the common case.
+ * Where that took real reasoning, a comment explains why the bound holds
+ * across the whole range.
  */
-
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-/**
- * Words grouped by first letter, used for "first letter" and "same starting
- * letter" templates. Every group has at least 2 words, so there is always a
- * second word available that shares the target letter.
- */
-const LETTER_GROUPS: string[][] = [
-  ['BUS', 'BEE', 'BAT', 'BOX', 'BED'],
-  ['CAT', 'COW', 'CUP'],
-  ['DOG', 'DUCK'],
-  ['FOX', 'FISH', 'FROG'],
-  ['HAT', 'HEN'],
-  ['JAM', 'JET'],
-  ['KID', 'KEY'],
-  ['LOG', 'LEG', 'LAMP'],
-  ['MAP', 'MUD', 'MILK'],
-  ['NET', 'NUT', 'NEST'],
-  ['PIG', 'PEN', 'PIN', 'POT'],
-  ['RUG', 'RAT', 'RUN'],
-  ['SUN', 'SHIP', 'SIT'],
-  ['TOP', 'TEN', 'TREE'],
-  ['VAN', 'VET', 'VEST'],
-  ['WEB', 'WIN', 'WOLF'],
-  ['ZOO', 'ZIP'],
-];
-
-/** Every word from every group, flattened, for "first letter"/"count letters". */
-const WORDS: string[] = LETTER_GROUPS.flat();
 
 const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'] as const;
-const SHAPES = ['circle', 'square', 'triangle', 'star'] as const;
+
+/** The 4 shapes used in AB/three-item patterns — kept to exactly 4 so the
+ * "other shapes" distractor pool is always well-defined (see gk-018). */
+const PATTERN_SHAPES = ['circle', 'square', 'triangle', 'star'] as const;
+
+/** Spoken number words for "compare two numbers by ear" (index 0 = "one"). */
+const NUM_WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+
+/** Plural, single-word nouns for "which group has more" — every element is
+ * a short word by itself, so it reads quickly and distinctly by ear. */
+const GROUP_ITEMS = ['pigs', 'ducks', 'frogs', 'bees', 'cats', 'dogs', 'birds', 'fish'] as const;
+
 const ADD_ITEMS = ['apples', 'balloons', 'ducks', 'blocks', 'crayons', 'cookies'] as const;
-const SUB_ITEMS = ['birds', 'balloons', 'fish', 'stars', 'frogs', 'kites'] as const;
+
+/** "What color is X?" — one fact per color, so distractors are always the
+ * other 5 colors and the pairing is unambiguous. */
+const COLOR_FACTS = [
+  { thing: 'the sky', color: 'blue' },
+  { thing: 'grass', color: 'green' },
+  { thing: 'a strawberry', color: 'red' },
+  { thing: 'a banana', color: 'yellow' },
+  { thing: 'an orange', color: 'orange' },
+  { thing: 'grape jelly', color: 'purple' },
+] as const;
+
+/**
+ * Words grouped by ending sound, for rhyme templates. Every word appears in
+ * exactly one group (no word repeats across groups), and every group has at
+ * least 2 words so a same-group correct answer always exists.
+ */
+const RHYME_GROUPS: string[][] = [
+  ['cat', 'hat', 'bat', 'mat'],
+  ['dog', 'log', 'frog'],
+  ['sun', 'fun', 'run', 'bun'],
+  ['pig', 'wig', 'dig'],
+  ['hen', 'pen', 'ten'],
+  ['cup', 'pup'],
+  ['fox', 'box'],
+  ['bed', 'red', 'sled'],
+  ['car', 'star', 'jar'],
+  ['moon', 'spoon'],
+  ['ball', 'tall', 'wall'],
+  ['fish', 'dish'],
+];
+
+/**
+ * Words grouped by starting sound, for first-sound templates. Same
+ * uniqueness guarantee as RHYME_GROUPS: every word is in exactly one group.
+ */
+const FIRST_SOUND_GROUPS: string[][] = [
+  ['ball', 'bat', 'bear', 'bell'],
+  ['cat', 'cow', 'cup'],
+  ['dog', 'duck', 'doll'],
+  ['fish', 'fox', 'frog'],
+  ['hat', 'hen', 'horse'],
+  ['jam', 'jet'],
+  ['kite', 'key'],
+  ['leg', 'log', 'lamp'],
+  ['map', 'mud', 'milk'],
+  ['nut', 'net', 'nest'],
+  ['pig', 'pen', 'pot'],
+  ['rat', 'run', 'rug'],
+  ['sun', 'ship', 'sock'],
+  ['top', 'ten', 'tree'],
+  ['van', 'vet', 'vest'],
+  ['web', 'win', 'wolf'],
+  ['zip', 'zoo'],
+];
 
 /** "* * * *" — n copies of mark, space separated, for things a kid can count on screen. */
 function repeatMark(mark: string, n: number): string {
@@ -75,7 +125,15 @@ function shuffle<T>(rng: Rng, items: readonly T[]): T[] {
   return copy;
 }
 
+/** Rhyme groups with at least 3 words — needed by gk-022, which shows two
+ * example words and asks for a third from the SAME group. */
+const RHYME_GROUPS_3PLUS = RHYME_GROUPS.filter((g) => g.length >= 3);
+
+/** Same idea for first-sound groups, used by gk-024. */
+const FIRST_SOUND_GROUPS_3PLUS = FIRST_SOUND_GROUPS.filter((g) => g.length >= 3);
+
 export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
+  // --- Math: counting, one more/less, adding within 5 ----------------------
   {
     id: 'gk-001',
     subject: 'math',
@@ -83,11 +141,11 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     difficulty: 1,
     topic: 'count small groups',
     generate: (rng) => {
-      const n = randInt(rng, 3, 10);
+      const n = randInt(rng, 3, 6);
       const marks = repeatMark('*', n);
       const correct = num(n);
-      // n-1, n+1, n+2, n-2 are four offsets from n that are pairwise distinct
-      // for every n in [3,10] and never negative (smallest is n-2 >= 1).
+      // n-2, n-1, n+1, n+2 are four offsets from n that are pairwise distinct
+      // for every n in [3,6] and never negative (smallest is n-2 >= 1).
       const { choices, answer } = buildChoices(rng, correct, [
         num(n - 1),
         num(n + 1),
@@ -106,10 +164,10 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     id: 'gk-002',
     subject: 'math',
     kind: 'math_achievement',
-    difficulty: 2,
-    topic: 'count to twenty',
+    difficulty: 1,
+    topic: 'count groups to ten',
     generate: (rng) => {
-      const n = randInt(rng, 11, 20);
+      const n = randInt(rng, 5, 10);
       const marks = repeatMark('o', n);
       const correct = num(n);
       const { choices, answer } = buildChoices(rng, correct, [
@@ -119,7 +177,7 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         num(n + 2),
       ]);
       return {
-        prompt: `Count the circles. How many circles are there? ${marks}`,
+        prompt: `How many circles are there? ${marks}`,
         choices,
         answer,
         explain: `Counting one by one, there are ${n} circles.`,
@@ -131,12 +189,50 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     subject: 'math',
     kind: 'math_achievement',
     difficulty: 1,
-    topic: 'number that comes after',
+    topic: 'one more than',
     generate: (rng) => {
-      const n = randInt(rng, 2, 19);
+      const n = randInt(rng, 1, 9);
+      const correct = num(n + 1);
+      // n is always >= 1 here, so n-1 is always >= 0 -- never a negative choice.
+      const { choices, answer } = buildChoices(rng, correct, [num(n), num(n + 2), num(n - 1)]);
+      return {
+        prompt: `What is 1 more than ${n}?`,
+        choices,
+        answer,
+        explain: `1 more than ${n} is ${n} and 1 more, which is ${n + 1}.`,
+      };
+    },
+  },
+  {
+    id: 'gk-004',
+    subject: 'math',
+    kind: 'math_achievement',
+    difficulty: 1,
+    topic: 'one less than',
+    generate: (rng) => {
+      const n = randInt(rng, 2, 10);
+      const correct = num(n - 1);
+      // n >= 2 here, so n-2 is always >= 0.
+      const { choices, answer } = buildChoices(rng, correct, [num(n), num(n - 2), num(n + 1)]);
+      return {
+        prompt: `What is 1 less than ${n}?`,
+        choices,
+        answer,
+        explain: `1 less than ${n} is ${n} take away 1, which is ${n - 1}.`,
+      };
+    },
+  },
+  {
+    id: 'gk-005',
+    subject: 'math',
+    kind: 'math_achievement',
+    difficulty: 1,
+    topic: 'number that comes right after',
+    generate: (rng) => {
+      const n = randInt(rng, 1, 9);
       const correct = num(n + 1);
       // n, n-1, n+2 are always three different numbers, and none of them can
-      // equal n+1 for any integer n.
+      // equal n+1 for any integer n. n-1 can dip to 0 but never negative.
       const { choices, answer } = buildChoices(rng, correct, [num(n), num(n - 1), num(n + 2)]);
       return {
         prompt: `What number comes right after ${n}?`,
@@ -147,14 +243,15 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     },
   },
   {
-    id: 'gk-004',
+    id: 'gk-006',
     subject: 'math',
     kind: 'math_achievement',
     difficulty: 1,
-    topic: 'number that comes before',
+    topic: 'number that comes right before',
     generate: (rng) => {
-      const n = randInt(rng, 3, 20);
+      const n = randInt(rng, 2, 10);
       const correct = num(n - 1);
+      // n >= 2 here, so n-2 is always >= 0 and always distinct from n-1.
       const { choices, answer } = buildChoices(rng, correct, [num(n), num(n + 1), num(n - 2)]);
       return {
         prompt: `What number comes right before ${n}?`,
@@ -165,56 +262,45 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     },
   },
   {
-    id: 'gk-005',
-    subject: 'math',
-    kind: 'math_achievement',
-    difficulty: 1,
-    topic: 'one more than',
-    generate: (rng) => {
-      const n = randInt(rng, 1, 9);
-      const correct = num(n + 1);
-      // n is always >= 1 here, so n-1 is always >= 0 — never a negative choice.
-      const { choices, answer } = buildChoices(rng, correct, [num(n), num(n + 2), num(n - 1)]);
-      return {
-        prompt: `What is 1 more than ${n}?`,
-        choices,
-        answer,
-        explain: `1 more than ${n} is ${n} + 1 = ${n + 1}.`,
-      };
-    },
-  },
-  {
-    id: 'gk-006',
-    subject: 'math',
-    kind: 'math_achievement',
-    difficulty: 1,
-    topic: 'one less than',
-    generate: (rng) => {
-      const n = randInt(rng, 2, 10);
-      const correct = num(n - 1);
-      const { choices, answer } = buildChoices(rng, correct, [num(n), num(n - 2), num(n + 1)]);
-      return {
-        prompt: `What is 1 less than ${n}?`,
-        choices,
-        answer,
-        explain: `1 less than ${n} is ${n} - 1 = ${n - 1}.`,
-      };
-    },
-  },
-  {
     id: 'gk-007',
     subject: 'math',
     kind: 'math_achievement',
-    difficulty: 1,
-    topic: 'add within ten (word problem)',
+    difficulty: 2,
+    topic: 'missing number in counting order',
     generate: (rng) => {
-      const a = randInt(rng, 1, 7);
-      const b = randInt(rng, 1, 10 - a);
+      const start = randInt(rng, 1, 7);
+      const sequence = [start, start + 1, start + 2, start + 3];
+      const missingIdx = pick(rng, [1, 2] as const);
+      const correctValue = sequence[missingIdx];
+      const displayed = sequence.map((v, i) => (i === missingIdx ? 'blank' : String(v))).join(', ');
+      const correct = num(correctValue);
+      const { choices, answer } = buildChoices(rng, correct, [
+        num(correctValue - 1),
+        num(correctValue + 1),
+        num(correctValue + 2),
+      ]);
+      return {
+        prompt: `Count in order: ${displayed}. What number goes in the blank?`,
+        choices,
+        answer,
+        explain: `Counting in order: ${sequence.join(', ')}. The missing number is ${correctValue}.`,
+      };
+    },
+  },
+  {
+    id: 'gk-008',
+    subject: 'math',
+    kind: 'math_achievement',
+    difficulty: 1,
+    topic: 'add within five (word problem)',
+    generate: (rng) => {
+      const a = randInt(rng, 1, 3);
+      const b = randInt(rng, 1, 5 - a);
       const sum = a + b;
       const item = pick(rng, ADD_ITEMS);
       const correct = num(sum);
       // |a-b| is always strictly less than a+b when a,b > 0, so it can never
-      // equal the sum; sum+1 and sum+2 obviously can't either.
+      // equal the sum; sum+1 and sum-1 obviously can't either.
       const { choices, answer } = buildChoices(rng, correct, [
         num(sum + 1),
         num(sum - 1),
@@ -224,34 +310,7 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         prompt: `There are ${a} ${item}. ${b} more ${item} come. How many ${item} are there now?`,
         choices,
         answer,
-        explain: `Start with ${a}, then count ${b} more: ${a} + ${b} = ${sum}.`,
-      };
-    },
-  },
-  {
-    id: 'gk-008',
-    subject: 'math',
-    kind: 'math_achievement',
-    difficulty: 1,
-    topic: 'subtract within ten (word problem)',
-    generate: (rng) => {
-      const a = randInt(rng, 4, 10);
-      const b = randInt(rng, 1, a - 1);
-      const diff = a - b;
-      const item = pick(rng, SUB_ITEMS);
-      const correct = num(diff);
-      // a+b can only equal diff (=a-b) if b were 0, which it never is here, so
-      // it is always a safe distractor; diff+1/diff-1 are trivially distinct.
-      const { choices, answer } = buildChoices(rng, correct, [
-        num(a + b),
-        num(diff + 1),
-        num(diff - 1),
-      ]);
-      return {
-        prompt: `There are ${a} ${item}. ${b} fly away. How many ${item} are left?`,
-        choices,
-        answer,
-        explain: `Start with ${a}, then take away ${b}: ${a} - ${b} = ${diff}.`,
+        explain: `Start with ${a}, then count ${b} more: ${a} and ${b} make ${sum}.`,
       };
     },
   },
@@ -260,10 +319,10 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     subject: 'math',
     kind: 'math_achievement',
     difficulty: 1,
-    topic: 'add within ten',
+    topic: 'add within five',
     generate: (rng) => {
-      const a = randInt(rng, 1, 8);
-      const b = randInt(rng, 1, 10 - a);
+      const a = randInt(rng, 1, 4);
+      const b = randInt(rng, 1, 5 - a);
       const sum = a + b;
       const correct = num(sum);
       const { choices, answer } = buildChoices(rng, correct, [
@@ -272,10 +331,10 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         num(Math.abs(a - b)),
       ]);
       return {
-        prompt: `What is ${a} + ${b}?`,
+        prompt: `What is ${a} plus ${b}?`,
         choices,
         answer,
-        explain: `Count ${a}, then ${b} more: ${a} + ${b} = ${sum}.`,
+        explain: `Count ${a}, then ${b} more: ${a} plus ${b} is ${sum}.`,
       };
     },
   },
@@ -284,48 +343,56 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     subject: 'math',
     kind: 'math_achievement',
     difficulty: 1,
-    topic: 'subtract within ten',
+    topic: 'add two small groups shown as marks',
     generate: (rng) => {
-      const a = randInt(rng, 2, 10);
-      const b = randInt(rng, 1, a - 1);
-      const diff = a - b;
-      const correct = num(diff);
+      const a = randInt(rng, 1, 3);
+      const b = randInt(rng, 1, 5 - a);
+      const sum = a + b;
+      const item = pick(rng, ADD_ITEMS);
+      const marksA = repeatMark('*', a);
+      const marksB = repeatMark('*', b);
+      const correct = num(sum);
       const { choices, answer } = buildChoices(rng, correct, [
-        num(a + b),
-        num(diff + 1),
-        num(diff - 1),
+        num(sum + 1),
+        num(sum - 1),
+        num(Math.abs(a - b)),
       ]);
       return {
-        prompt: `What is ${a} - ${b}?`,
+        prompt: `Here are ${a} ${item}: ${marksA}. Here are ${b} more ${item}: ${marksB}. How many ${item} are there in all?`,
         choices,
         answer,
-        explain: `${a} take away ${b} is ${a} - ${b} = ${diff}.`,
+        explain: `${a} ${item} and ${b} more ${item} make ${sum} ${item} in all.`,
       };
     },
   },
+
+  // --- Quantitative: more/less/same by ear, shapes, colors, patterns -------
   {
     id: 'gk-011',
     subject: 'quantitative',
     kind: 'quant_reasoning',
     difficulty: 1,
-    topic: 'missing number in counting order',
+    topic: 'which group has more or fewer',
     generate: (rng) => {
-      const start = randInt(rng, 1, 7);
-      const sequence = [start, start + 1, start + 2, start + 3];
-      const missingIdx = pick(rng, [1, 2] as const);
-      const correctValue = sequence[missingIdx];
-      const displayed = sequence.map((v, i) => (i === missingIdx ? '___' : String(v))).join(', ');
-      const correct = num(correctValue);
-      const { choices, answer } = buildChoices(rng, correct, [
-        num(correctValue - 1),
-        num(correctValue + 1),
-        num(correctValue + 2),
-      ]);
+      const [itemA, itemB, extra1, extra2] = shuffle(rng, GROUP_ITEMS);
+      const base = randInt(rng, 2, 7);
+      const delta = randInt(rng, 1, 3);
+      const flip = rng() < 0.5;
+      const countA = flip ? base : base + delta;
+      const countB = flip ? base + delta : base;
+      const askMore = rng() < 0.5;
+      // countA !== countB always, since delta >= 1, so exactly one item wins.
+      const aWins = askMore ? countA > countB : countA < countB;
+      const correct = aWins ? itemA : itemB;
+      const loser = aWins ? itemB : itemA;
+      // itemA, itemB, extra1, extra2 are a 4-element permutation of
+      // GROUP_ITEMS, so all four are pairwise distinct.
+      const { choices, answer } = buildChoices(rng, correct, [loser, extra1, extra2]);
       return {
-        prompt: `Which number is missing? ${displayed}`,
+        prompt: `Here are ${itemA}: ${repeatMark('*', countA)}. Here are ${itemB}: ${repeatMark('*', countB)}. Which has ${askMore ? 'more' : 'fewer'} -- the ${itemA} or the ${itemB}?`,
         choices,
         answer,
-        explain: `Counting in order: ${sequence.join(', ')}. The missing number is ${correctValue}.`,
+        explain: `There are ${countA} ${itemA} and ${countB} ${itemB}, so the ${correct} have ${askMore ? 'more' : 'fewer'}.`,
       };
     },
   },
@@ -334,33 +401,66 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     subject: 'quantitative',
     kind: 'quant_reasoning',
     difficulty: 1,
-    topic: 'compare group sizes',
+    topic: 'same number or different number',
     generate: (rng) => {
-      const base = randInt(rng, 2, 7);
-      const delta = randInt(rng, 1, 3);
-      const flip = rng() < 0.5;
-      const countA = flip ? base : base + delta;
-      const countB = flip ? base + delta : base;
-      const askMore = rng() < 0.5;
-      // countA !== countB always, since delta >= 1, so exactly one group wins.
-      const aWins = askMore ? countA > countB : countA < countB;
-      const correct = aWins ? 'Group A' : 'Group B';
-      const other = aWins ? 'Group B' : 'Group A';
-      const { choices, answer } = buildChoices(rng, correct, [
-        other,
-        'They have the same number of stars',
-        'Not enough information',
-      ]);
+      const countA = randInt(rng, 1, 8);
+      const same = rng() < 0.5;
+      const countB = same ? countA : countA + randInt(rng, 1, 3);
+      const correct = same ? 'same' : 'different';
+      const OPTIONS = ['same', 'different', 'more', 'fewer'];
+      // OPTIONS has exactly 4 fixed, pairwise-distinct words, so removing the
+      // correct one always leaves exactly 3 unique candidates.
+      const { choices, answer } = buildChoices(
+        rng,
+        correct,
+        OPTIONS.filter((o) => o !== correct),
+      );
       return {
-        prompt: `Group A: ${repeatMark('*', countA)}. Group B: ${repeatMark('*', countB)}. Which group has ${askMore ? 'more' : 'fewer'} stars?`,
+        prompt: `Look at these two groups: ${repeatMark('*', countA)} and ${repeatMark('*', countB)}. Is that the same number of stars, or a different number?`,
         choices,
         answer,
-        explain: `Group A has ${countA} stars and Group B has ${countB} stars, so ${correct} has ${askMore ? 'more' : 'fewer'}.`,
+        explain:
+          correct === 'same'
+            ? `Both groups have ${countA} stars, so it is the same number.`
+            : `One group has ${countA} stars and the other has ${countB} stars, so it is a different number.`,
       };
     },
   },
   {
     id: 'gk-013',
+    subject: 'quantitative',
+    kind: 'quant_reasoning',
+    difficulty: 1,
+    topic: 'which number is more or fewer (by ear)',
+    generate: (rng) => {
+      const a = randInt(rng, 1, 9);
+      const b = a + randInt(rng, 1, 10 - a); // always > a, always <= 10
+      const wordA = NUM_WORDS[a - 1];
+      const wordB = NUM_WORDS[b - 1];
+      const askMore = rng() < 0.5;
+      const correct = askMore ? num(b) : num(a);
+      const other = askMore ? num(a) : num(b);
+      // Every number from 1-10 except a and b, so at least 8 values remain --
+      // plenty to pick 2 that are automatically distinct from a, b, and each other.
+      const pool = shuffle(
+        rng,
+        Array.from({ length: 10 }, (_, i) => i + 1).filter((v) => v !== a && v !== b),
+      );
+      const { choices, answer } = buildChoices(rng, correct, [
+        other,
+        num(pool[0]),
+        num(pool[1]),
+      ]);
+      return {
+        prompt: `Which number is ${askMore ? 'more' : 'fewer'} -- ${wordA} or ${wordB}?`,
+        choices,
+        answer,
+        explain: `${wordA} is ${a} and ${wordB} is ${b}. ${wordB} is more than ${wordA}, so the ${askMore ? 'bigger' : 'smaller'} number is ${askMore ? b : a}.`,
+      };
+    },
+  },
+  {
+    id: 'gk-014',
     subject: 'quantitative',
     kind: 'quant_reasoning',
     difficulty: 1,
@@ -387,18 +487,14 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
           answer: 'star',
           explain: 'A star shape has 5 points sticking out.',
         },
-        {
-          desc: 'This shape has 4 sides, but the sides are not all the same length.',
-          answer: 'rectangle',
-          explain: 'A rectangle has 4 sides like a square, but two of the sides are longer.',
-        },
       ] as const;
       const riddle = pick(rng, riddles);
-      const allShapes = ['circle', 'triangle', 'square', 'star', 'rectangle'];
+      // PATTERN_SHAPES has exactly 4 members, so filtering out the correct
+      // one always leaves exactly the 3 needed distractors.
       const { choices, answer } = buildChoices(
         rng,
         riddle.answer,
-        allShapes.filter((s) => s !== riddle.answer),
+        PATTERN_SHAPES.filter((s) => s !== riddle.answer),
       );
       return {
         prompt: `${riddle.desc} Which shape is it?`,
@@ -409,7 +505,7 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     },
   },
   {
-    id: 'gk-014',
+    id: 'gk-015',
     subject: 'quantitative',
     kind: 'quant_reasoning',
     difficulty: 1,
@@ -418,11 +514,12 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
       const shapes = [
         { name: 'triangle', word: 'sides', n: 3 },
         { name: 'square', word: 'sides', n: 4 },
-        { name: 'rectangle', word: 'sides', n: 4 },
         { name: 'star', word: 'points', n: 5 },
       ] as const;
       const shape = pick(rng, shapes);
       const correct = num(shape.n);
+      // [2,3,4,5,6] has 5 members; removing the one that equals shape.n
+      // always leaves at least 3 remaining candidates.
       const { choices, answer } = buildChoices(
         rng,
         correct,
@@ -437,7 +534,25 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     },
   },
   {
-    id: 'gk-015',
+    id: 'gk-016',
+    subject: 'quantitative',
+    kind: 'quant_reasoning',
+    difficulty: 1,
+    topic: 'color of a familiar thing',
+    generate: (rng) => {
+      const fact = pick(rng, COLOR_FACTS);
+      const others = shuffle(rng, COLORS.filter((c) => c !== fact.color));
+      const { choices, answer } = buildChoices(rng, fact.color, others);
+      return {
+        prompt: `What color is ${fact.thing}?`,
+        choices,
+        answer,
+        explain: `${fact.thing[0].toUpperCase()}${fact.thing.slice(1)} is ${fact.color}.`,
+      };
+    },
+  },
+  {
+    id: 'gk-017',
     subject: 'quantitative',
     kind: 'quant_reasoning',
     difficulty: 1,
@@ -452,7 +567,7 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
       const rest = COLORS.filter((c) => c !== c1 && c !== c2);
       const { choices, answer } = buildChoices(rng, next, [other, ...rest]);
       return {
-        prompt: `What comes next in the pattern? ${sequence.join(', ')}, ___`,
+        prompt: `Listen to the pattern: ${sequence.join(', ')}. What color comes next?`,
         choices,
         answer,
         explain: `The pattern repeats ${c1}, ${c2}, so after ${sequence[sequence.length - 1]} comes ${next}.`,
@@ -460,22 +575,25 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     },
   },
   {
-    id: 'gk-016',
+    id: 'gk-018',
     subject: 'quantitative',
     kind: 'quant_reasoning',
     difficulty: 1,
     topic: 'repeating pattern of shapes',
     generate: (rng) => {
-      const s1 = pick(rng, SHAPES);
-      const s2 = pick(rng, SHAPES.filter((s) => s !== s1));
+      const s1 = pick(rng, PATTERN_SHAPES);
+      const s2 = pick(rng, PATTERN_SHAPES.filter((s) => s !== s1));
       const len = pick(rng, [4, 5] as const);
       const sequence = Array.from({ length: len }, (_, i) => (i % 2 === 0 ? s1 : s2));
       const next = len % 2 === 0 ? s1 : s2;
       const other = next === s1 ? s2 : s1;
-      const rest = SHAPES.filter((s) => s !== s1 && s !== s2);
+      // PATTERN_SHAPES has exactly 4 members, so rest has exactly 2 left
+      // after removing s1 and s2 -- plus `other`, that is exactly 3 distinct
+      // candidates (none of the 4 members can equal more than one role here).
+      const rest = PATTERN_SHAPES.filter((s) => s !== s1 && s !== s2);
       const { choices, answer } = buildChoices(rng, next, [other, ...rest]);
       return {
-        prompt: `What comes next in the pattern? ${sequence.join(', ')}, ___`,
+        prompt: `Listen to the pattern: ${sequence.join(', ')}. What shape comes next?`,
         choices,
         answer,
         explain: `The pattern repeats ${s1}, ${s2}, so after ${sequence[sequence.length - 1]} comes ${next}.`,
@@ -483,7 +601,31 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     },
   },
   {
-    id: 'gk-017',
+    id: 'gk-019',
+    subject: 'quantitative',
+    kind: 'quant_reasoning',
+    difficulty: 2,
+    topic: 'repeating AABB pattern of colors',
+    generate: (rng) => {
+      const c1 = pick(rng, COLORS);
+      const c2 = pick(rng, COLORS.filter((c) => c !== c1));
+      const unit = [c1, c1, c2, c2];
+      const len = randInt(rng, 4, 7);
+      const sequence = Array.from({ length: len }, (_, i) => unit[i % 4]);
+      const next = unit[len % 4];
+      const other = next === c1 ? c2 : c1;
+      const rest = COLORS.filter((c) => c !== c1 && c !== c2);
+      const { choices, answer } = buildChoices(rng, next, [other, ...rest]);
+      return {
+        prompt: `Listen to the pattern: ${sequence.join(', ')}. What color comes next?`,
+        choices,
+        answer,
+        explain: `The pattern goes ${c1}, ${c1}, ${c2}, ${c2}, over and over, so the next color is ${next}.`,
+      };
+    },
+  },
+  {
+    id: 'gk-020',
     subject: 'quantitative',
     kind: 'quant_reasoning',
     difficulty: 2,
@@ -496,98 +638,37 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
       const sequence = Array.from({ length: len }, (_, i) => order[i % 3]);
       const next = order[len % 3];
       const others = order.filter((s) => s !== next);
+      // `star` never appears in `order` (order is a permutation of circle,
+      // square, triangle only), so it is always a safe third distractor.
       const { choices, answer } = buildChoices(rng, next, [...others, 'star']);
       return {
-        prompt: `What comes next in the pattern? ${sequence.join(', ')}, ___`,
+        prompt: `Listen to the pattern: ${sequence.join(', ')}. What shape comes next?`,
         choices,
         answer,
         explain: `The pattern repeats ${s1}, ${s2}, ${s3} over and over, so the next shape is ${next}.`,
       };
     },
   },
-  {
-    id: 'gk-018',
-    subject: 'quantitative',
-    kind: 'quant_reasoning',
-    difficulty: 2,
-    topic: 'how many more in one group',
-    generate: (rng) => {
-      const b = randInt(rng, 1, 6);
-      const extra = randInt(rng, 1, 4);
-      const a = b + extra;
-      const correct = num(extra);
-      // a, b, a+b, and 0 are pairwise distinct for any a > b > 0 (a != b since
-      // a = b + extra with extra >= 1; a+b > a since b >= 1; none is 0 since
-      // a,b >= 1). Only b can ever coincide with the correct value `extra`
-      // (when a = 2b) — buildChoices' own de-dup handles that by discarding
-      // b and still finding 3 unique values among {a, a+b, 0}.
-      const { choices, answer } = buildChoices(rng, correct, [num(a), num(b), num(a + b), num(0)]);
-      return {
-        prompt: `Group A: ${repeatMark('*', a)}. Group B: ${repeatMark('*', b)}. How many more stars does Group A have than Group B?`,
-        choices,
-        answer,
-        explain: `Group A has ${a} stars and Group B has ${b} stars. ${a} - ${b} = ${extra}, so Group A has ${extra} more.`,
-      };
-    },
-  },
-  {
-    id: 'gk-019',
-    subject: 'verbal',
-    kind: 'synonym',
-    difficulty: 1,
-    topic: 'letter that comes after',
-    generate: (rng) => {
-      const idx = randInt(rng, 1, 23);
-      const letter = ALPHABET[idx];
-      const next = ALPHABET[idx + 1];
-      const prev = ALPHABET[idx - 1];
-      const plus2 = ALPHABET[idx + 2];
-      const { choices, answer } = buildChoices(rng, next, [letter, prev, plus2]);
-      return {
-        prompt: `Which letter comes right after ${letter}?`,
-        choices,
-        answer,
-        explain: `The alphabet goes in order, so right after ${letter} comes ${next}.`,
-      };
-    },
-  },
-  {
-    id: 'gk-020',
-    subject: 'verbal',
-    kind: 'synonym',
-    difficulty: 1,
-    topic: 'letter that comes before',
-    generate: (rng) => {
-      const idx = randInt(rng, 2, 24);
-      const letter = ALPHABET[idx];
-      const prev = ALPHABET[idx - 1];
-      const prev2 = ALPHABET[idx - 2];
-      const next = ALPHABET[idx + 1];
-      const { choices, answer } = buildChoices(rng, prev, [letter, prev2, next]);
-      return {
-        prompt: `Which letter comes right before ${letter}?`,
-        choices,
-        answer,
-        explain: `The alphabet goes in order, so right before ${letter} comes ${prev}.`,
-      };
-    },
-  },
+
+  // --- Verbal: rhyming by sound, first-sound matching -----------------------
   {
     id: 'gk-021',
     subject: 'verbal',
     kind: 'synonym',
     difficulty: 1,
-    topic: 'first letter of a word',
+    topic: 'rhyming word',
     generate: (rng) => {
-      const word = pick(rng, WORDS);
-      const correct = word[0];
-      const others = shuffle(rng, ALPHABET.split('').filter((c) => c !== correct)).slice(0, 3);
-      const { choices, answer } = buildChoices(rng, correct, others);
+      const group = pick(rng, RHYME_GROUPS);
+      const word0 = pick(rng, group);
+      const correct = pick(rng, group.filter((w) => w !== word0));
+      const otherWords = RHYME_GROUPS.filter((g) => g !== group).flat();
+      const distractors = shuffle(rng, otherWords).slice(0, 3);
+      const { choices, answer } = buildChoices(rng, correct, distractors);
       return {
-        prompt: `What is the first letter in the word ${word}?`,
+        prompt: `Which word rhymes with ${word0}?`,
         choices,
         answer,
-        explain: `${word} starts with the letter ${correct}.`,
+        explain: `${correct} rhymes with ${word0} -- they end with the same sound.`,
       };
     },
   },
@@ -595,21 +676,20 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     id: 'gk-022',
     subject: 'verbal',
     kind: 'synonym',
-    difficulty: 2,
-    topic: 'missing letter in the alphabet',
+    difficulty: 1,
+    topic: 'rhyming word (find the third)',
     generate: (rng) => {
-      const idx = randInt(rng, 1, 22);
-      const letters = [0, 1, 2, 3].map((i) => ALPHABET[idx + i]);
-      const missingIdx = pick(rng, [1, 2] as const);
-      const correct = letters[missingIdx];
-      const displayed = letters.map((c, i) => (i === missingIdx ? '___' : c)).join(', ');
-      const pool = shuffle(rng, ALPHABET.split('').filter((c) => !letters.includes(c))).slice(0, 3);
-      const { choices, answer } = buildChoices(rng, correct, pool);
+      const group = pick(rng, RHYME_GROUPS_3PLUS);
+      const [word0, word1] = shuffle(rng, group);
+      const correct = pick(rng, group.filter((w) => w !== word0 && w !== word1));
+      const otherWords = RHYME_GROUPS.filter((g) => g !== group).flat();
+      const distractors = shuffle(rng, otherWords).slice(0, 3);
+      const { choices, answer } = buildChoices(rng, correct, distractors);
       return {
-        prompt: `Which letter is missing? ${displayed}`,
+        prompt: `${word0} rhymes with ${word1}. Which other word also rhymes with ${word0}?`,
         choices,
         answer,
-        explain: `In order, the alphabet here reads ${letters.join(', ')}. The missing letter is ${correct}.`,
+        explain: `${word0}, ${word1}, and ${correct} all rhyme -- they end with the same sound.`,
       };
     },
   },
@@ -617,21 +697,20 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     id: 'gk-023',
     subject: 'verbal',
     kind: 'synonym',
-    difficulty: 2,
-    topic: 'count the letters in a word',
+    difficulty: 1,
+    topic: 'first sound matching',
     generate: (rng) => {
-      const word = pick(rng, WORDS);
-      const correct = num(word.length);
-      const { choices, answer } = buildChoices(
-        rng,
-        correct,
-        [2, 3, 4, 5, 6].filter((v) => v !== word.length).map(num),
-      );
+      const group = pick(rng, FIRST_SOUND_GROUPS);
+      const word0 = pick(rng, group);
+      const correct = pick(rng, group.filter((w) => w !== word0));
+      const otherWords = FIRST_SOUND_GROUPS.filter((g) => g !== group).flat();
+      const distractors = shuffle(rng, otherWords).slice(0, 3);
+      const { choices, answer } = buildChoices(rng, correct, distractors);
       return {
-        prompt: `How many letters are in the word ${word}?`,
+        prompt: `Which word starts with the same sound as ${word0}?`,
         choices,
         answer,
-        explain: `${word.split('').join('-')} has ${word.length} letters.`,
+        explain: `${word0} and ${correct} both start with the same sound.`,
       };
     },
   },
@@ -640,19 +719,19 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     subject: 'verbal',
     kind: 'synonym',
     difficulty: 2,
-    topic: 'words that start with the same letter',
+    topic: 'first sound matching (find the third)',
     generate: (rng) => {
-      const group = pick(rng, LETTER_GROUPS);
-      const word0 = pick(rng, group);
-      const correct = pick(rng, group.filter((w) => w !== word0));
-      const otherWords = LETTER_GROUPS.filter((g) => g !== group).flat();
+      const group = pick(rng, FIRST_SOUND_GROUPS_3PLUS);
+      const [word0, word1] = shuffle(rng, group);
+      const correct = pick(rng, group.filter((w) => w !== word0 && w !== word1));
+      const otherWords = FIRST_SOUND_GROUPS.filter((g) => g !== group).flat();
       const distractors = shuffle(rng, otherWords).slice(0, 3);
       const { choices, answer } = buildChoices(rng, correct, distractors);
       return {
-        prompt: `Which word starts with the same letter as ${word0}?`,
+        prompt: `${word0} and ${word1} start with the same sound. Which other word also starts like ${word0}?`,
         choices,
         answer,
-        explain: `${word0} and ${correct} both start with the letter ${word0[0]}.`,
+        explain: `${word0}, ${word1}, and ${correct} all start with the same sound.`,
       };
     },
   },
