@@ -197,8 +197,15 @@ export function makeGeom(
 ): Geom {
   const scale = cw / FIELD_W;
   // Screen pixels reserved for thumb controls are removed from the playfield, so
-  // nothing important can ever sit under a hand.
-  const h = Math.max(FIELD_W * 0.35, (ch - controlsInset) / scale);
+  // nothing important can ever sit under a hand. On top of any explicit inset we
+  // hold back a fifth of the height as a thumb band below the paddle: the kids
+  // asked to slide the paddle from underneath, so the paddle - and the ball's
+  // death line, which is derived from the same reduced height - both move up and
+  // leave clear space for a hand. Everything below is derived from `h`, so this
+  // one subtraction keeps every collision invariant intact.
+  const THUMB_BAND = 0.2;
+  const usable = Math.max(0, ch - controlsInset) * (1 - THUMB_BAND);
+  const h = Math.max(FIELD_W * 0.35, usable / scale);
 
   const paddleH = clamp(h * 0.022, 4, 7);
   const paddleY = h - clamp(h * 0.085, 12, 26) - paddleH;

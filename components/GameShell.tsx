@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CelebrationCard from './CelebrationCard';
+import DPad from './DPad';
 import QuestionGate from './QuestionGate';
 import RunJumpBar from './RunJumpBar';
 import TouchOverlay from './TouchOverlay';
@@ -15,7 +16,6 @@ import { pickQuestion } from '@/lib/questions';
 import type { Question, QuestionKind } from '@/lib/questions/types';
 import { playSound, unlockAudio, useMuted } from '@/lib/sound';
 import {
-  BLOCK_SIZE,
   COIN_BONUS_MS,
   COIN_STEP,
   LEVEL_BONUS_MS,
@@ -45,6 +45,13 @@ import {
 const CORRECT_REWARD = 50;
 /** Wrong answers in a row that add one extra question to the block. */
 const WRONG_STREAK_PENALTY = 3;
+/**
+ * Questions added to the block for MISSING the reading passage. The reading
+ * question is not a shortcut and getting it right earns nothing special - the
+ * incentive to actually read is that skimming it and guessing wrong costs two
+ * extra questions, more than any other miss.
+ */
+const READING_MISS_PENALTY = 2;
 
 /**
  * Odds that a freshly drawn question is a reading passage. About one in eight, on
@@ -88,6 +95,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const [best, setBest] = useState(0);
   const [correctStreak, setCorrectStreak] = useState(0);
   const [manualPause, setManualPause] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   /** Level-clear card: Marty's face and a congratulations. */
   const [celebration, setCelebration] = useState<{ headline: string; note: string | null } | null>(
     null,
@@ -122,7 +130,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     if (text) statusTimer.current = setTimeout(() => setStatus(null), ms);
   }, []);
 
-  const celebrate = useCallback((headline: string, note: string | null, ms = 2400) => {
+  const celebrate = useCallback((headline: string, note: string | null, ms = 1000) => {
     setCelebration({ headline, note });
     if (celebrateTimer.current) clearTimeout(celebrateTimer.current);
     celebrateTimer.current = setTimeout(() => setCelebration(null), ms);
@@ -366,9 +374,18 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         wrongStreakRef.current += 1;
 
         let next = b;
-        // Three wrong in a row adds a question. The bar lives on the block so a
-        // restart cannot shake it off.
-        if (wrongStreakRef.current >= WRONG_STREAK_PENALTY) {
+        // Missing the reading passage is the expensive miss: it adds two
+        // questions. This is what makes reading carefully worth it, in place of
+        // the old "get it right and skip the block" shortcut.
+        if (wasReading) {
+          next = { ...next, penalty: next.penalty + READING_MISS_PENALTY };
+          flashStatus(
+            `Missed the reading - ${READING_MISS_PENALTY} more questions added.`,
+            2800,
+          );
+        } else if (wrongStreakRef.current >= WRONG_STREAK_PENALTY) {
+          // Three wrong in a row adds a question. The bar lives on the block so a
+          // restart cannot shake it off.
           wrongStreakRef.current = 0;
           next = { ...next, penalty: next.penalty + 1 };
           flashStatus('Three missed - one extra question added.', 2600);
@@ -398,11 +415,9 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       scoreRef.current += CORRECT_REWARD;
       setScore(scoreRef.current);
 
-      const next: StudyBlock = {
-        ...b,
-        correct: b.correct + 1,
-        readingWon: b.readingWon || wasReading,
-      };
+      // A correct reading answer counts as one question like any other - the
+      // reading incentive is the miss penalty, not a reward here.
+      const next: StudyBlock = { ...b, correct: b.correct + 1 };
       sessionRef.current = { ...sessionRef.current, study: next };
       setBlock(next);
 
@@ -435,9 +450,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       clearPendingGate();
       playSound('pass');
       flashStatus(
-        next.readingWon && wasReading
-          ? `Nailed the reading - ${Math.round(PLAY_WINDOW_MS / 60_000)} minutes of play!`
-          : `Study block done - ${Math.round(PLAY_WINDOW_MS / 60_000)} minutes of play!`,
+        `Study block done - ${Math.round(PLAY_WINDOW_MS / 60_000)} minutes of play!`,
         2800,
       );
     },
@@ -475,7 +488,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const subhead = (() => {
     if (!gate || !block) return '';
     if (gate.question.kind === 'reading') {
-      return `Get this one right and you are straight back in - no other questions. Otherwise it is ${BLOCK_SIZE} short ones.`;
+      return `Read carefully. Miss it and ${READING_MISS_PENALTY} more questions get added to the block.`;
     }
     if (gate.isRetry) return 'Same kind again, since that one was missed.';
     if (left === 1) return 'Last one, then 6 minutes of play.';
@@ -484,9 +497,28 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
   const clockLow = msLeft > 0 && msLeft < 60_000;
 
+  // Controls help lives behind an info button now, not as fixed text under the
+  // canvas. On iPad that text sat right under the jump button and iOS kept
+  // selecting it into a blue bubble on every mis-tap.
+  const controlsHelp = (() => {
+    switch (meta.controls) {
+      case 'run-jump':
+        return 'Tap the right half of the screen to jump, or use the Run and Jump buttons below. Keyboard: arrows or A / D to move, Space to jump.';
+      case 'lanes':
+        return 'Tap the left or right side to move. Swipe up anywhere to jump. Keyboard: arrows to move, Space or Up to jump.';
+      case 'paddle':
+        return 'Drag anywhere to slide the paddle. Keyboard: left / right arrows.';
+      case 'grid':
+        return 'Tap and drag on the board. Keyboard: arrows or W A S D.';
+      default:
+        return 'Swipe up, down, left, or right anywhere on the board, or press the arrow pad below. Keyboard: arrows or W A S D.';
+    }
+  })();
+
   return (
     <div
-      className="flex h-dvh w-full flex-col overflow-hidden"
+      className="relative flex h-dvh w-full flex-col overflow-hidden select-none"
+      style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none', userSelect: 'none' }}
       onPointerDown={unlockAudio}
     >
       {/* HUD. Sizes step up on iPad, where the phone-sized bar looked lost. */}
@@ -551,6 +583,15 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
         <button
           type="button"
+          onClick={() => setInfoOpen((v) => !v)}
+          aria-label="How to play"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm font-bold text-white/75 transition active:scale-95 sm:h-11 sm:w-11 sm:text-base"
+        >
+          ⓘ
+        </button>
+
+        <button
+          type="button"
           onClick={() => setMuted(!muted)}
           aria-label={muted ? 'Unmute' : 'Mute'}
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-11 sm:w-11 sm:text-base"
@@ -591,12 +632,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             controlsInset={controlsInset}
           />
 
-          <TouchOverlay
-            scheme={meta.controls}
-            input={input}
-            accent={meta.accent}
-            disabled={paused}
-          />
+          <TouchOverlay scheme={meta.controls} input={input} disabled={paused} />
 
           {manualPause && !gate && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm">
@@ -654,22 +690,50 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             <RunJumpBar input={input} accent={meta.accent} disabled={paused} />
           </div>
         )}
-      </div>
 
-      <p className="hidden flex-shrink-0 pb-1 text-center text-xs text-white/25 md:block">
-        {meta.controls === 'run-jump'
-          ? 'Arrow keys or A / D to move · Space to jump'
-          : meta.controls === 'grid'
-            ? 'Tap and drag on the board'
-            : 'Arrow keys or W A S D to move'}
-        {' · 1–4 to answer'}
-      </p>
+        {meta.controls === 'dpad' && (
+          <div className="pt-2 sm:pt-3">
+            <DPad input={input} accent={meta.accent} disabled={paused} />
+          </div>
+        )}
+      </div>
 
       {progress.totalSeen > 0 && (
         <p className="flex-shrink-0 pb-[max(0.2rem,env(safe-area-inset-bottom))] text-center text-[11px] text-white/20 sm:text-sm">
           {progress.totalSeen} answered all time
           {sessionAccuracy !== null && ` · ${sessionAccuracy}% this run`}
         </p>
+      )}
+
+      {infoOpen && (
+        <div
+          className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+          onClick={() => setInfoOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border-2 bg-[#12121e] px-6 py-6 text-center shadow-2xl"
+            style={{ borderColor: meta.accent }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-lg font-extrabold text-white sm:text-2xl">How to play</div>
+            <div className="mt-1 text-sm font-semibold" style={{ color: meta.accent }}>
+              {meta.name}
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-white/70 sm:text-base">{controlsHelp}</p>
+            <p className="mt-3 text-xs text-white/40">
+              Answer a short study block to earn play time. Dying is free until the clock runs out.
+              Tap 1–4 to answer a question.
+            </p>
+            <button
+              type="button"
+              onClick={() => setInfoOpen(false)}
+              className="mt-5 rounded-2xl px-8 py-3 text-base font-bold text-[#101020]"
+              style={{ background: meta.accent }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

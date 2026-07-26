@@ -27,7 +27,7 @@
  */
 
 /** Questions in one study block. */
-export const BLOCK_SIZE = 10;
+export const BLOCK_SIZE = 8;
 
 /**
  * Play granted by finishing a study block. Six minutes is long enough to reach a
@@ -46,26 +46,27 @@ export const MAX_BONUS_MS = 5 * 60_000;
 /**
  * A study block in progress.
  *
- * The reading question is served FIRST and only once per block, and getting it
- * right ends the block immediately. That is deliberate: a passage is the most
- * valuable thing on the ISEE and the most tempting to guess through, so the
- * reward for actually reading it is skipping the other nine questions. Getting
- * it wrong does not re-ask another passage - the remaining questions are short
- * ones, because making a kid grind through three long passages in a row is how
- * you teach them to hate reading.
+ * One reading passage turns up per block (about one draw in eight, never twice).
+ * It counts as a single question like any other - there is no shortcut for
+ * getting it right. The incentive to actually read is a penalty instead of a
+ * reward: MISSING the reading question adds two more questions to the block (see
+ * READING_MISS_PENALTY in GameShell). A wrong guess on a passage therefore costs
+ * more than a wrong guess on a synonym, which is the whole point - it makes
+ * skimming the passage the expensive move. The added questions do not have to be
+ * reading; grinding three passages in a row is how you teach a kid to hate
+ * reading.
  */
 export type StudyBlock = {
   /** Correct answers so far in this block. */
   correct: number;
   /**
-   * Extra answers added by wrong streaks. Kept on the block rather than in a ref
-   * so a force quit cannot shrug the raised bar off.
+   * Extra answers added to this block - two per missed reading question, one per
+   * three-wrong streak. Kept on the block rather than in a ref so a force quit
+   * cannot shrug the raised bar off.
    */
   penalty: number;
   /** The one reading question has been served. */
   readingServed: boolean;
-  /** They got it right, so the block is satisfied. */
-  readingWon: boolean;
 };
 
 export type PlaySession = {
@@ -82,7 +83,7 @@ export type PlaySession = {
 };
 
 export function newBlock(): StudyBlock {
-  return { correct: 0, penalty: 0, readingServed: false, readingWon: false };
+  return { correct: 0, penalty: 0, readingServed: false };
 }
 
 /**
@@ -101,14 +102,11 @@ export function emptySession(): PlaySession {
 
 /** True once the block has been satisfied. */
 export function blockComplete(b: StudyBlock): boolean {
-  // The reading shortcut ignores the penalty on purpose: reading the passage
-  // properly is exactly the behaviour being bought, so it always pays out.
-  return b.readingWon || b.correct >= BLOCK_SIZE + b.penalty;
+  return b.correct >= BLOCK_SIZE + b.penalty;
 }
 
 /** Questions still to answer, for the "3 to go" line. */
 export function questionsLeft(b: StudyBlock): number {
-  if (b.readingWon) return 0;
   return Math.max(0, BLOCK_SIZE + b.penalty - b.correct);
 }
 
@@ -128,9 +126,16 @@ export function loadSession(): PlaySession {
       bonusMs: Math.max(0, Math.min(s.bonusMs ?? 0, MAX_BONUS_MS)),
       bonusAtScore: Math.max(0, s.bonusAtScore ?? 0),
       blocksDone: Math.max(0, s.blocksDone ?? 0),
+      // Rebuilt field by field rather than spread, so a stored block from an
+      // older build (which carried a now-removed readingWon flag) is normalised
+      // to the current shape instead of dragging a stray field along.
       study:
         s.study && typeof s.study.correct === 'number'
-          ? { ...s.study, penalty: Math.max(0, s.study.penalty ?? 0) }
+          ? {
+              correct: Math.max(0, s.study.correct),
+              penalty: Math.max(0, s.study.penalty ?? 0),
+              readingServed: s.study.readingServed === true,
+            }
           : null,
     };
   } catch {

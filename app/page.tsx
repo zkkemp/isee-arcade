@@ -78,16 +78,17 @@ export default function Home() {
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <h3 className="mb-2 text-sm font-bold text-white">How it works</h3>
         <ul className="space-y-1.5 text-sm text-white/60">
-          <li>· Play uninterrupted. Questions never break up a run.</li>
-          <li>· A question comes when you die, or when you clear a level.</li>
-          <li>· <strong className="text-white/80">Two right answers</strong> get you back in — they do not have to be in a row.</li>
-          <li>· Get it wrong and you get another of the same kind, until you get one right.</li>
           <li>
-            · <strong className="text-white/80">Reading questions pay double</strong> — get one
-            right and you earn 2 free passes, so you can die twice without answering.
+            · Answer a study block of <strong className="text-white/80">8 questions</strong> to earn{' '}
+            <strong className="text-white/80">6 minutes</strong> of play.
           </li>
-          <li>· 3 right in a row earns another free pass.</li>
-          <li>· 3 wrong in a row and the bar goes up to 3 right.</li>
+          <li>· Inside your play time, dying is free — questions never break up a run.</li>
+          <li>· Score points and clear levels to add bonus minutes to the clock.</li>
+          <li>
+            · About one question in eight is a <strong className="text-white/80">reading passage</strong>.
+            Read it carefully — missing it adds 2 more questions to the block.
+          </li>
+          <li>· 3 wrong in a row adds one more question, so it pays to slow down.</li>
           <li>· Questions rotate between sections — never two long passages back to back.</li>
           <li>· Math builds new numbers every time, so there is nothing to memorize.</li>
         </ul>

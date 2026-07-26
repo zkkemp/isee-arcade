@@ -1,60 +1,46 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ControlScheme } from '@/lib/games';
 import type { Direction, InputController } from '@/lib/input';
 
 /**
- * Touch controls layered directly over the canvas instead of a small d-pad
- * underneath it.
+ * Touch controls layered over the canvas.
  *
- * - run-jump: two hold-to-move buttons in the bottom-left, and the entire right
- *   side of the screen is the jump button. You never have to aim for a target.
- * - dpad: the four edges of the play area are tap zones, so a hop is a tap in
- *   the direction you want to go.
+ * - dpad: the whole play area is a swipe surface - flick up/down/left/right to
+ *   move. There is ALSO a real button pad below the canvas (see DPad), so you
+ *   can flick the board or press the pad, whichever feels natural. The old
+ *   invisible tap-zones were replaced after repeated "controls not working" /
+ *   "too hard to move" feedback: a swipe is unambiguous and a labelled pad gives
+ *   the thumb something to aim at.
+ * - lanes: tap a half to change lane; flick up ANYWHERE to jump, on a very
+ *   forgiving threshold ("make it way easier to swipe up anywhere").
+ * - paddle: drag anywhere and the paddle follows.
+ * - grid: tap and drag on a puzzle board, both axes reported.
+ * - run-jump: the right half is the jump button; run buttons live in a strip
+ *   below the canvas.
  *
  * Pointer events (not click) so holding reads as held, and touch-action:none so
  * dragging a thumb never scrolls the page.
  */
+
+/** A flick this many CSS px in the dominant axis counts as a swipe. Low, so a
+ *  small nudge already moves - the whole complaint was that moving was hard. */
+const SWIPE_MIN = 22;
+/** A shorter upward flick jumps, because the runner jump had to get much easier. */
+const JUMP_MIN = 18;
+
 export default function TouchOverlay({
   scheme,
   input,
-  accent,
   disabled,
 }: {
   scheme: ControlScheme;
   input: InputController;
-  accent: string;
   disabled: boolean;
 }) {
   // The hint is for the first run only; it gets in the way after that.
   const [showHint, setShowHint] = useState(true);
-
-  // Zone geometry is measured rather than expressed in percentages, because the
-  // up/down zones deliberately straddle two different boxes: they cover the
-  // board's top/bottom third AND the frame band beyond it, while left/right stay
-  // on the board. That cannot be written as one set of CSS percentages.
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const apply = () => setBox({ w: el.clientWidth, h: el.clientHeight });
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    // Belt and braces: a ResizeObserver alone was observed not refreshing after a
-    // viewport change, which would leave the zones positioned for the previous
-    // orientation after an iPad rotate.
-    window.addEventListener('resize', apply);
-    window.addEventListener('orientationchange', apply);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', apply);
-      window.removeEventListener('orientationchange', apply);
-    };
-  }, []);
 
   useEffect(() => {
     if (!showHint) return;
@@ -68,15 +54,6 @@ export default function TouchOverlay({
   }, [disabled, input]);
 
   if (disabled) return null;
-
-  const tap = (dir: Direction) => ({
-    onPointerDown: (e: React.PointerEvent) => {
-      e.preventDefault();
-      setShowHint(false);
-      input.tap(dir);
-    },
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
-  });
 
   if (scheme === 'grid') {
     // Puzzle boards need both axes and press/release edges, reported normalised
@@ -151,22 +128,26 @@ export default function TouchOverlay({
   }
 
   if (scheme === 'lanes') {
-    // Tap a half to move that way; flick upward anywhere to jump. No buttons on
+    // Tap a half to change lane; flick upward ANYWHERE to jump. No buttons on
     // screen, because a runner needs the whole view unobstructed.
+    let downX = 0;
     let downY = 0;
-    let downT = 0;
     const onDown = (e: React.PointerEvent) => {
+      downX = e.clientX;
       downY = e.clientY;
-      downT = e.timeStamp;
     };
     const onUp = (dir: Direction) => (e: React.PointerEvent) => {
       e.preventDefault();
       setShowHint(false);
       const dy = downY - e.clientY;
-      const dt = e.timeStamp - downT;
-      // A quick upward flick is a jump; anything else is a lane change.
-      if (dy > 28 && dt < 500) input.pressJump();
-      else input.tap(dir);
+      const dx = e.clientX - downX;
+      // Any real upward movement is a jump - deliberately generous. Only fall
+      // back to a lane change when the gesture was not an upward flick.
+      if (dy > JUMP_MIN && dy > Math.abs(dx)) {
+        input.pressJump();
+      } else {
+        input.tap(dir);
+      }
       // Jump is edge-triggered and consumed by the game, so release immediately.
       input.releaseJump();
     };
@@ -185,7 +166,7 @@ export default function TouchOverlay({
         ))}
         {showHint && (
           <span className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-widest text-white/80">
-            Tap a side to move · flick up to jump
+            Tap a side to move · swipe up to jump
           </span>
         )}
       </div>
@@ -193,8 +174,8 @@ export default function TouchOverlay({
   }
 
   if (scheme === 'run-jump') {
-    // Only the jump zone lives over the canvas now. The run buttons moved to a
-    // strip below it, because when they sat on the canvas the playfield had to be
+    // Only the jump zone lives over the canvas. The run buttons moved to a strip
+    // below it, because when they sat on the canvas the playfield had to be
     // squeezed down to thumb level to stay clear of them.
     return (
       <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
@@ -224,116 +205,44 @@ export default function TouchOverlay({
     );
   }
 
-  // dpad zones.
-  //
-  // Left and right stay on the board. Up and down cover the board's top and
-  // bottom thirds AND continue out into the frame bands above and below it,
-  // because that is where a thumb naturally lands - the player reported reaching
-  // up into the banner and nothing happening.
-  const side = Math.min(box.w, box.h);
-  const boardLeft = (box.w - side) / 2;
-  const boardTop = (box.h - side) / 2;
-  const sideInset = side * 0.24;
-  const band = side * 0.34;
-
+  // dpad: the entire play area is a 4-way swipe surface. A flick past SWIPE_MIN
+  // in its dominant axis fires one move in that direction; the DPad below the
+  // canvas covers precise single presses.
+  let sx = 0;
+  let sy = 0;
+  const onSwipeDown = (e: React.PointerEvent) => {
+    sx = e.clientX;
+    sy = e.clientY;
+  };
+  const onSwipeUp = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const dx = e.clientX - sx;
+    const dy = e.clientY - sy;
+    if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) return;
+    setShowHint(false);
+    if (Math.abs(dx) > Math.abs(dy)) {
+      input.tap(dx > 0 ? 'right' : 'left');
+    } else {
+      input.tap(dy > 0 ? 'down' : 'up');
+    }
+  };
   return (
-    <div
-      ref={wrapRef}
-      className="absolute inset-0 z-10 select-none"
-      style={{ touchAction: 'none' }}
-    >
-      {side > 0 && (
-        <>
-          <button
-            type="button"
-            aria-label="Move up"
-            className="absolute"
-            style={{
-              left: boardLeft + sideInset,
-              width: side - sideInset * 2,
-              top: 0,
-              height: boardTop + band,
-            }}
-            {...tap('up')}
-          >
-            {showHint && (
-              <Chevron glyph="▲" accent={accent} style={{ bottom: 6 }} />
-            )}
-          </button>
-
-          <button
-            type="button"
-            aria-label="Move down"
-            className="absolute"
-            style={{
-              left: boardLeft + sideInset,
-              width: side - sideInset * 2,
-              top: boardTop + side - band,
-              height: box.h - (boardTop + side - band),
-            }}
-            {...tap('down')}
-          >
-            {showHint && <Chevron glyph="▼" accent={accent} style={{ top: 6 }} />}
-          </button>
-
-          <button
-            type="button"
-            aria-label="Move left"
-            className="absolute"
-            style={{ left: boardLeft, width: sideInset, top: boardTop, height: side }}
-            {...tap('left')}
-          >
-            {showHint && (
-              <Chevron glyph="◀" accent={accent} style={{ top: '50%', marginTop: -12 }} />
-            )}
-          </button>
-
-          <button
-            type="button"
-            aria-label="Move right"
-            className="absolute"
-            style={{
-              left: boardLeft + side - sideInset,
-              width: sideInset,
-              top: boardTop,
-              height: side,
-            }}
-            {...tap('right')}
-          >
-            {showHint && (
-              <Chevron glyph="▶" accent={accent} style={{ top: '50%', marginTop: -12 }} />
-            )}
-          </button>
-
-          {showHint && (
-            <span
-              className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/80"
-              style={{ top: boardTop + side / 2 - 12 }}
-            >
-              Tap a side to move
-            </span>
-          )}
-        </>
-      )}
+    <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
+      <button
+        type="button"
+        aria-label="Swipe to move"
+        className="absolute inset-0 h-full w-full"
+        onPointerDown={onSwipeDown}
+        onPointerUp={onSwipeUp}
+        onPointerCancel={onSwipeUp}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {showHint && (
+          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/55 px-4 py-1.5 text-center text-[11px] font-bold uppercase tracking-widest text-white/80">
+            Swipe to move · or use the pad below
+          </span>
+        )}
+      </button>
     </div>
-  );
-}
-
-function Chevron({
-  glyph,
-  accent,
-  style,
-}: {
-  glyph: string;
-  accent: string;
-  style: React.CSSProperties;
-}) {
-  return (
-    <span
-      className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-xl opacity-70"
-      style={{ color: accent, ...style }}
-    >
-      {glyph}
-    </span>
   );
 }

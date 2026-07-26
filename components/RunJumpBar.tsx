@@ -47,7 +47,7 @@ export default function RunJumpBar({
       <button
         type="button"
         aria-label="Move left"
-        className={`${btn} h-[76px] w-[84px] text-2xl`}
+        className={`${btn} h-[104px] w-[100px] text-3xl`}
         style={{ borderColor: 'rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.07)', color: '#fff' }}
         {...hold('left')}
       >
@@ -56,7 +56,7 @@ export default function RunJumpBar({
       <button
         type="button"
         aria-label="Move right"
-        className={`${btn} h-[76px] w-[84px] text-2xl`}
+        className={`${btn} h-[104px] w-[100px] text-3xl`}
         style={{ borderColor: 'rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.07)', color: '#fff' }}
         {...hold('right')}
       >
@@ -67,7 +67,7 @@ export default function RunJumpBar({
       <button
         type="button"
         aria-label="Jump"
-        className={`${btn} h-[76px] flex-1 text-sm uppercase tracking-[0.2em]`}
+        className={`${btn} h-[104px] flex-1 text-base uppercase tracking-[0.2em]`}
         style={{ borderColor: `${accent}99`, background: `${accent}26`, color: accent }}
         onPointerDown={(e) => {
           e.preventDefault();

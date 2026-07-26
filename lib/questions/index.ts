@@ -11,7 +11,11 @@ import { VOCAB_IM } from './vocab/im';
 import { VOCAB_NR } from './vocab/nr';
 import { VOCAB_SZ } from './vocab/sz';
 import { MATH_TEMPLATES } from './mathTemplates';
+import { MATH_TEMPLATES_2 } from './mathTemplates2';
+import { MATH_TEMPLATES_3 } from './mathTemplates3';
 import { QUANT_TEMPLATES } from './quantTemplates';
+import { QUANT_TEMPLATES_2 } from './quantTemplates2';
+import { QUANT_TEMPLATES_3 } from './quantTemplates3';
 
 export * from './types';
 
@@ -33,7 +37,14 @@ export const STATIC_QUESTIONS: Question[] = [
   ...VOCAB_SZ,
 ];
 
-export const ALL_TEMPLATES: QuestionTemplate[] = [...MATH_TEMPLATES, ...QUANT_TEMPLATES];
+export const ALL_TEMPLATES: QuestionTemplate[] = [
+  ...MATH_TEMPLATES,
+  ...MATH_TEMPLATES_2,
+  ...MATH_TEMPLATES_3,
+  ...QUANT_TEMPLATES,
+  ...QUANT_TEMPLATES_2,
+  ...QUANT_TEMPLATES_3,
+];
 
 /**
  * Anything the picker can serve. `materialize` either returns the fixed question
