@@ -23,6 +23,8 @@
  */
 import {
   applyMove,
+  CPU_BLUNDER,
+  CPU_DEPTH,
   cpuMove,
   evaluate,
   inCheck,
@@ -327,6 +329,22 @@ console.log(
   '\nPerft, checkmate/stalemate detection, pin safety, castling legality, en passant transience, ' +
     'check-scan cross-validation, and AI capture preference all verified.',
 );
+
+// 11) Per-difficulty CPU tuning (the in-canvas Easy/Normal/Hard chooser reads
+// these tables directly): Easy must search shallower AND blunder more often
+// than Normal, which in turn must search shallower AND blunder more often
+// (or equal) than Hard, and Hard must never blunder. A regression that
+// flattened or inverted the difficulty ladder would trip this immediately.
+{
+  assert(CPU_DEPTH.easy < CPU_DEPTH.normal, `Easy depth (${CPU_DEPTH.easy}) should be less than Normal depth (${CPU_DEPTH.normal})`);
+  assert(CPU_DEPTH.normal < CPU_DEPTH.hard, `Normal depth (${CPU_DEPTH.normal}) should be less than Hard depth (${CPU_DEPTH.hard})`);
+  assert(CPU_BLUNDER.easy > CPU_BLUNDER.normal, `Easy blunder rate (${CPU_BLUNDER.easy}) should exceed Normal (${CPU_BLUNDER.normal})`);
+  assert(CPU_BLUNDER.normal > CPU_BLUNDER.hard, `Normal blunder rate (${CPU_BLUNDER.normal}) should exceed Hard (${CPU_BLUNDER.hard})`);
+  assert(CPU_BLUNDER.hard === 0, `Hard should never blunder, got ${CPU_BLUNDER.hard}`);
+  assert(CPU_DEPTH.easy === 1, `Easy should look only at the immediate position (depth 1), got ${CPU_DEPTH.easy}`);
+  assert(CPU_BLUNDER.easy >= 0.4, `Easy's blunder rate (${CPU_BLUNDER.easy}) should be high enough for a young kid to win`);
+  assert(CPU_BLUNDER.easy < 1, `Easy should still occasionally play its real best move, not blunder every single turn`);
+}
 
 // --- self-tests: each sabotages a check and confirms it would fail ----------
 let selfFails = 0;

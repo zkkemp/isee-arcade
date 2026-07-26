@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { Difficulty } from '@/lib/difficulty';
+import { DIFFICULTY_LABELS, type Difficulty } from '@/lib/difficulty';
 import type { GameCanvasProps } from '@/lib/games';
 import { playSound, unlockAudio } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
@@ -12,7 +12,11 @@ import { useCanvasGame } from '@/lib/useCanvasGame';
  * canvas/React in it, and a canvas component below that attaches its own
  * onPointerDown and runs its own turn logic. Two modes from an in-canvas
  * menu - two-player pass-and-play, or vs the computer (human is always White
- * in cpu mode - simplification, stated here and in the report).
+ * in cpu mode - simplification, stated here and in the report). Choosing
+ * "vs Computer" opens a second in-canvas screen (phase 'diff') to pick the
+ * computer's strength for that match - Easy / Normal / Hard - which
+ * defaults to (but can override) the app's global difficulty setting, all
+ * without leaving the game.
  *
  * Board representation: a flat 64-cell row-major array, index = rank*8+file
  * (square 0 = a1, square 7 = h1, square 56 = a8, square 63 = h8 - the usual
@@ -622,12 +626,19 @@ export function searchBestMove(state: ChessState, depth: number): Move | null {
   return pick;
 }
 
-/** Search depth per difficulty. Depth 3 (hard) is 3 plies of full alpha-beta
- * search with capture-first move ordering - fast (well under a second) on a
- * mid iPad from any midgame position. */
+/** Search depth per difficulty - this is also the in-game "Easy/Normal/Hard"
+ * chooser's strength dial (see UIState.cpuLevel). Easy looks only at the
+ * immediate position (depth 1, no opponent-reply lookahead at all); Normal
+ * adds one ply of reply-awareness (depth 2); Hard is the full 3-ply
+ * alpha-beta search with capture-first move ordering - fast (well under a
+ * second) on a mid iPad from any midgame position, and deliberately not
+ * deepened further. */
 export const CPU_DEPTH: Record<Difficulty, number> = { easy: 1, normal: 2, hard: 3 };
-/** Chance the computer plays an arbitrary legal move instead of the best one. */
-export const CPU_BLUNDER: Record<Difficulty, number> = { easy: 0.35, normal: 0.12, hard: 0 };
+/** Chance the computer plays an arbitrary legal move instead of the best one.
+ * Easy is tuned high on purpose (a young kid should win most games) but not
+ * 1.0 - depth-1 search still means roughly half its moves are its actual
+ * best immediate move, so it does not hang its queen literally every turn. */
+export const CPU_BLUNDER: Record<Difficulty, number> = { easy: 0.5, normal: 0.15, hard: 0 };
 
 /** Seeded LCG - nothing in the pure core ever touches Math.random. */
 export function lcg(seed: number): () => number {
@@ -649,7 +660,9 @@ export function cpuMove(state: ChessState, depth: number, randomness: number, rn
 // --- layout ------------------------------------------------------------------
 
 type Mode = 'cpu' | '2p';
-type Phase = 'menu' | 'play' | 'over';
+/** 'diff' is the in-canvas "vs Computer" strength picker, shown between the
+ * mode menu and play so the level is chosen inside the game itself. */
+type Phase = 'menu' | 'diff' | 'play' | 'over';
 
 const TOP = 52;
 
@@ -686,6 +699,11 @@ type UIState = {
   chess: ChessState;
   /** The human's colour in cpu mode. Always White (simplification, stated in the report). */
   human: Side;
+  /** The computer's strength for the CURRENT/NEXT cpu match, chosen in-canvas
+   * on the 'diff' screen. Independent of (but defaults from) the app's
+   * global `difficulty` prop - this is the "in-game" override the parent
+   * asked for, and it persists across a same-mode rematch. */
+  cpuLevel: Difficulty;
   selected: number;
   legalTargets: Move[];
   resultText: string;
@@ -714,6 +732,7 @@ function initialUIState(): UIState {
     phase: 'menu',
     chess: initialState(),
     human: 1,
+    cpuLevel: 'normal',
     selected: -1,
     legalTargets: [],
     resultText: '',
@@ -839,8 +858,29 @@ export default function Chess({ paused, api, restartToken, difficulty, controlsI
     unlockAudio();
 
     if (s.phase === 'menu') {
-      if (sx < cw / 2) startMatch(s, '2p');
-      else startMatch(s, 'cpu');
+      if (sx < cw / 2) {
+        startMatch(s, '2p');
+        playSound('powerup');
+      } else {
+        // "vs Computer" doesn't start the match yet - it opens the in-canvas
+        // strength picker below, defaulted from the global difficulty prop
+        // (the in-game choice made there overrides it for this match).
+        s.phase = 'diff';
+        s.cpuLevel = difficulty;
+        playSound('click');
+      }
+      return;
+    }
+
+    if (s.phase === 'diff') {
+      if (sx < 96 && sy < TOP) {
+        s.phase = 'menu';
+        playSound('click');
+        return;
+      }
+      const third = cw / 3;
+      s.cpuLevel = sx < third ? 'easy' : sx < third * 2 ? 'normal' : 'hard';
+      startMatch(s, 'cpu');
       playSound('powerup');
       return;
     }
@@ -882,7 +922,7 @@ export default function Chess({ paused, api, restartToken, difficulty, controlsI
         if (s.phase === 'play' && s.mode === 'cpu' && s.chess.side !== s.human && s.cpuWait > 0) {
           s.cpuWait -= dt;
           if (s.cpuWait <= 0) {
-            const move = cpuMove(s.chess, CPU_DEPTH[difficulty], CPU_BLUNDER[difficulty], rngRef.current);
+            const move = cpuMove(s.chess, CPU_DEPTH[s.cpuLevel], CPU_BLUNDER[s.cpuLevel], rngRef.current);
             if (move) makeMove(s, move, api);
           }
         }
@@ -954,6 +994,12 @@ function draw(ctx: CanvasRenderingContext2D, s: UIState, l: Layout, cw: number, 
     return;
   }
 
+  if (s.phase === 'diff') {
+    drawDiffMenu(ctx, s, cw, ch);
+    if (paused) dim(ctx, cw, ch);
+    return;
+  }
+
   drawTopBar(ctx, s, cw);
   drawBoard(ctx, s, l);
   drawPieces(ctx, s, l);
@@ -990,12 +1036,13 @@ function drawMenuButton(
   title: string,
   sub: string,
   color: string,
+  recommended = false,
 ): void {
   roundRect(ctx, x, y, w, h, 22);
-  ctx.fillStyle = `${color}22`;
+  ctx.fillStyle = recommended ? `${color}3a` : `${color}22`;
   ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = `${color}aa`;
+  ctx.lineWidth = recommended ? 4 : 3;
+  ctx.strokeStyle = recommended ? color : `${color}aa`;
   ctx.stroke();
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
@@ -1004,6 +1051,62 @@ function drawMenuButton(
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.font = `600 ${Math.min(15, w * 0.09)}px system-ui, sans-serif`;
   ctx.fillText(sub, x + w / 2, y + h / 2 + 28);
+  if (recommended) {
+    ctx.fillStyle = color;
+    ctx.font = `700 ${Math.min(12, w * 0.075)}px system-ui, sans-serif`;
+    ctx.fillText('SUGGESTED', x + w / 2, y + h / 2 + 48);
+  }
+}
+
+/** Each of the three "vs Computer" strength buttons, one per horizontal
+ * third of the canvas so the drawn buttons line up with onTap's cw/3 hit
+ * test above. */
+function diffButtonLayout(cw: number, ch: number): Array<{ level: Difficulty; x: number; y: number; w: number; h: number }> {
+  const col = cw / 3;
+  const bw = Math.min(col - 16, 170);
+  const bh = Math.min(ch * 0.32, 220);
+  const by = ch * 0.5 - bh / 2;
+  const levels: Difficulty[] = ['easy', 'normal', 'hard'];
+  return levels.map((level, i) => ({ level, x: i * col + (col - bw) / 2, y: by, w: bw, h: bh }));
+}
+
+const DIFF_SUB: Record<Difficulty, string> = {
+  easy: 'Great for beginners',
+  normal: 'A fair fight',
+  hard: 'Full strength',
+};
+const DIFF_COLOR: Record<Difficulty, string> = {
+  easy: '#7cfc9a',
+  normal: '#5ec8ff',
+  hard: '#ff7e7e',
+};
+
+function drawDiffMenu(ctx: CanvasRenderingContext2D, s: UIState, cw: number, ch: number): void {
+  // Small back chip, top-left - matches the "Menu" chip used during play/over.
+  roundRect(ctx, 12, 10, 72, TOP - 20, 12);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = '600 15px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Menu', 48, TOP / 2 + 1);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.min(34, cw * 0.085)}px system-ui, sans-serif`;
+  ctx.fillText('vs Computer', cw / 2, ch * 0.18);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = `600 ${Math.min(18, cw * 0.045)}px system-ui, sans-serif`;
+  ctx.fillText('Choose a difficulty', cw / 2, ch * 0.18 + 34);
+
+  const buttons = diffButtonLayout(cw, ch);
+  for (const b of buttons) {
+    drawMenuButton(ctx, b.x, b.y, b.w, b.h, DIFFICULTY_LABELS[b.level], DIFF_SUB[b.level], DIFF_COLOR[b.level], b.level === s.cpuLevel);
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = `600 ${Math.min(15, cw * 0.038)}px system-ui, sans-serif`;
+  ctx.fillText('Tap a level to start', cw / 2, buttons[0].y + buttons[0].h + 40);
 }
 
 function drawTopBar(ctx: CanvasRenderingContext2D, s: UIState, cw: number): void {
@@ -1014,6 +1117,13 @@ function drawTopBar(ctx: CanvasRenderingContext2D, s: UIState, cw: number): void
   ctx.font = '600 15px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('Menu', 48, TOP / 2 + 1);
+
+  if (s.phase === 'play' && s.mode === 'cpu') {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = DIFF_COLOR[s.cpuLevel];
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.fillText(`vs Computer - ${DIFFICULTY_LABELS[s.cpuLevel]}`, 96, TOP / 2 + 1);
+  }
 
   ctx.textAlign = 'right';
   if (s.phase === 'play') {
