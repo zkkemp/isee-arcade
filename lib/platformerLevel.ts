@@ -69,8 +69,16 @@ export const ACCEL_START = 900;
 export const ACCEL_RUN = 260;
 /** Braking when the held direction opposes current motion. This is the skid. */
 export const SKID_DECEL = 1250;
-/** Ground drag with nothing held. Below SKID_DECEL, so stopping is not instant. */
-export const FRICTION = 720;
+/**
+ * Ground drag with nothing held. Below SKID_DECEL, so stopping is not instant.
+ * Tuned 720 -> 1080 (Coin Runner parent feedback): at full RUN_SPEED the old
+ * value coasted ~19.6px (about 1.2 tiles) over ~0.23s after letting go, which
+ * read as sliding past where a young player meant to stop. 1080 cuts that to
+ * ~13px over ~0.16s - noticeably tighter without being an instant stop (still
+ * well under SKID_DECEL, so turning around still has its skid, and a running
+ * jump still keeps its speed since this only decays vx with no input held).
+ */
+export const FRICTION = 1080;
 /** Air control. Weaker than the ground burst, so a jump commits you somewhat. */
 export const AIR_ACCEL = 430;
 /** Jump impulse from a standstill. */
@@ -1644,7 +1652,13 @@ function chainFrom(g: Gen, startTx: number, limit: number): number {
     // the reason the rows just under the spring corridors are never blank.
     coinCluster(g, cx, row - 4, 2, 3);
     g.secrets.push({ tx: cx, ty: row - 4, w: 2, h: 3, kind: 'sky' });
-    if (g.k.flyers && g.rand() < 0.5) addEnemy(g, cx + 2, row, 'flyer', 2);
+    // The chain only checked ground continuity at its own anchor column; by the
+    // last deck `cx` has walked several columns further and may now sit over a
+    // pit carved by an unrelated structure. Flyers do not fly free of the "never
+    // over a pit" rule, so require real ground here too rather than assuming it.
+    if (g.k.flyers && g.rand() < 0.5 && solidAt(g.tiles, cx + 2, GROUND_TOP)) {
+      addEnemy(g, cx + 2, row, 'flyer', 2);
+    }
   }
   return storeys;
 }
@@ -1773,6 +1787,13 @@ function topUpEnemies(g: Gen) {
     const tx = irand(g, START_PAD + 3, COLS - END_PAD - 2);
     const surface = surfaceRowAt(g, tx);
     if (surface < 2) continue;
+    // surfaceRowAt reports the TOPMOST solid tile in the column, which can be a
+    // floating cloud deck (sky chains put those several columns past the ground
+    // check they were anchored on). Standing an enemy on that deck would read as
+    // "on solid ground" while a pit sits underneath at GROUND_TOP - exactly what
+    // enemies must never do. Require the real ground row itself to be solid, not
+    // merely whatever this column's highest surface happens to be.
+    if (!solidAt(g.tiles, tx, GROUND_TOP)) continue;
     if (g.tiles[surface - 1][tx] === 'X' || g.tiles[surface - 1][tx] === 'S') continue;
     if (overlapsSolid(g.tiles, tx * TILE + (TILE - PW) / 2, surface * TILE - PH, PW, PH)) continue;
     if (g.enemies.some((e) => Math.abs(e.x / TILE - tx) < 3)) continue;
