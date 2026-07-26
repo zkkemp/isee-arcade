@@ -23,6 +23,8 @@ import TapAttack from './games/TapAttack';
 import Sudoku from './games/Sudoku';
 import DotsBoxes from './games/DotsBoxes';
 import CardMatch from './games/CardMatch';
+import WordHunt from './games/WordHunt';
+import SpellingZap from './games/SpellingZap';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -52,6 +54,8 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   sudoku: Sudoku,
   dots: DotsBoxes,
   cards: CardMatch,
+  wordhunt: WordHunt,
+  spelling: SpellingZap,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

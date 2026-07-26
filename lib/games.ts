@@ -25,7 +25,9 @@ export type GameId =
   | 'tapattack'
   | 'sudoku'
   | 'dots'
-  | 'cards';
+  | 'cards'
+  | 'wordhunt'
+  | 'spelling';
 
 /**
  * How a game is driven on touch.
@@ -310,6 +312,26 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'board',
     aspect: 3 / 4,
   },
+  wordhunt: {
+    id: 'wordhunt',
+    name: 'Word Hunt',
+    tagline: 'Track down every hidden word before the grid grows.',
+    gateNote: 'Study time buys play time.',
+    icon: '🔎',
+    accent: '#e8590c',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
+  spelling: {
+    id: 'spelling',
+    name: 'Spelling Zap',
+    tagline: 'Tap the letters in order and zap each word into place.',
+    gateNote: 'Study time buys play time.',
+    icon: '⚡',
+    accent: '#20c997',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -335,6 +357,8 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.fruit,
   GAMES.tapattack,
   GAMES.cards,
+  GAMES.wordhunt,
+  GAMES.spelling,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));
