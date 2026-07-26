@@ -17,6 +17,11 @@ import NumberMerge from './games/NumberMerge';
 import BubblePop from './games/BubblePop';
 import Checkers from './games/Checkers';
 import Echo from './games/Echo';
+import FruitCatch from './games/FruitCatch';
+import Chess from './games/Chess';
+import TapAttack from './games/TapAttack';
+import Sudoku from './games/Sudoku';
+import DotsBoxes from './games/DotsBoxes';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -40,6 +45,11 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   bubble: BubblePop,
   checkers: Checkers,
   echo: Echo,
+  fruit: FruitCatch,
+  chess: Chess,
+  tapattack: TapAttack,
+  sudoku: Sudoku,
+  dots: DotsBoxes,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

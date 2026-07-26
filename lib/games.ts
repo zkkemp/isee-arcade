@@ -19,7 +19,12 @@ export type GameId =
   | 'merge'
   | 'bubble'
   | 'checkers'
-  | 'echo';
+  | 'echo'
+  | 'fruit'
+  | 'chess'
+  | 'tapattack'
+  | 'sudoku'
+  | 'dots';
 
 /**
  * How a game is driven on touch.
@@ -244,6 +249,56 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'grid',
     aspect: 1,
   },
+  fruit: {
+    id: 'fruit',
+    name: 'Fruit Catch',
+    tagline: 'Slide the basket, catch the fruit, let the yucky ones go.',
+    gateNote: 'Study time buys play time.',
+    icon: '🍓',
+    accent: '#ff8fa3',
+    controls: 'paddle',
+    aspect: 3 / 4,
+  },
+  chess: {
+    id: 'chess',
+    name: 'Chess',
+    tagline: 'The royal game. Checkmate the king to win.',
+    gateNote: 'Study time buys play time.',
+    icon: '♟️',
+    accent: '#c8a06a',
+    controls: 'board',
+    aspect: 1,
+  },
+  tapattack: {
+    id: 'tapattack',
+    name: 'Tap Attack',
+    tagline: 'Pop up, tap fast - watch out for grumps!',
+    gateNote: 'Study time buys play time.',
+    icon: '🔨',
+    accent: '#f2542d',
+    controls: 'grid',
+    aspect: 1,
+  },
+  sudoku: {
+    id: 'sudoku',
+    name: 'Kid Sudoku',
+    tagline: 'Fill the grid so every row, column, and box has each number once.',
+    gateNote: 'Study time buys play time.',
+    icon: '🔢',
+    accent: '#7dd490',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
+  dots: {
+    id: 'dots',
+    name: 'Dots & Boxes',
+    tagline: 'Draw the lines, close the boxes, out-square your opponent.',
+    gateNote: 'Study time buys play time.',
+    icon: '✏️',
+    accent: '#cbd5e1',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -262,7 +317,12 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.merge,
   GAMES.bubble,
   GAMES.checkers,
+  GAMES.chess,
+  GAMES.dots,
+  GAMES.sudoku,
   GAMES.echo,
+  GAMES.fruit,
+  GAMES.tapattack,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));
