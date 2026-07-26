@@ -16,6 +16,7 @@ import MemoryMatch from './games/MemoryMatch';
 import NumberMerge from './games/NumberMerge';
 import BubblePop from './games/BubblePop';
 import Checkers from './games/Checkers';
+import Echo from './games/Echo';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -38,6 +39,7 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   merge: NumberMerge,
   bubble: BubblePop,
   checkers: Checkers,
+  echo: Echo,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

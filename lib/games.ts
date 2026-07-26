@@ -18,7 +18,8 @@ export type GameId =
   | 'memory'
   | 'merge'
   | 'bubble'
-  | 'checkers';
+  | 'checkers'
+  | 'echo';
 
 /**
  * How a game is driven on touch.
@@ -233,6 +234,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'board',
     aspect: 3 / 4,
   },
+  echo: {
+    id: 'echo',
+    name: 'Echo',
+    tagline: 'Watch the pattern glow and chime, then echo it back.',
+    gateNote: 'Study time buys play time.',
+    icon: '🔔',
+    accent: '#7a4fd1',
+    controls: 'grid',
+    aspect: 1,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -251,6 +262,7 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.merge,
   GAMES.bubble,
   GAMES.checkers,
+  GAMES.echo,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));
