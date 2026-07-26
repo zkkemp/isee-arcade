@@ -14,13 +14,15 @@
  *    (`probeJump`) rather than written down, so retuning gravity or the impulse
  *    moves every limit with it and the proof still means something.
  *
- * 2. THE PROOF ASSUMES JUMP-ONLY PLAY. The game is registered with the `lanes`
- *    control scheme, whose touch overlay offers exactly two verbs: flick up to
- *    jump, tap a side to nudge. There is no down input on touch, so NO hazard
- *    may ever require ducking - ducking exists on the keyboard for style and for
- *    low coins. A flick also fires press+release in one gesture, so `jumpHeld`
- *    is always false on touch: the TAP arc, not the held arc, is what everything
- *    is sized from. Holding only ever buys extra height.
+ * 2. THE PROOF ASSUMES JUMP-ONLY PLAY. The game uses the `tapjump` control
+ *    scheme: the whole screen is a jump button (tap to jump, tap again in the
+ *    air to double-jump), and there is no lateral or down input on touch - so NO
+ *    hazard may ever require ducking, and the small keyboard speed-nudge is not
+ *    something the reachability proof is allowed to depend on. A tap fires
+ *    press+release in one gesture, so `jumpHeld` is effectively false on touch:
+ *    the TAP arc, not the held arc, is what everything is sized from. Holding a
+ *    key only ever buys extra height. (This replaced the old `lanes` swipe-up
+ *    jump, which was unreliable on the iPad - "the swipe is still not working".)
  *
  * 3. HAZARDS COME IN TWO FLAVOURS, ON PURPOSE. "Jump this" (gaps, spikes,
  *    crates, saws) and "do not jump here" (overhead beams and bobbing flies,

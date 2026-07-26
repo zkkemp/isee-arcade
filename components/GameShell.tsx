@@ -506,6 +506,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         return 'Tap the right half of the screen to jump, or use the Run and Jump buttons below. Keyboard: arrows or A / D to move, Space to jump.';
       case 'lanes':
         return 'Tap the left or right side to move. Swipe up anywhere to jump. Keyboard: arrows to move, Space or Up to jump.';
+      case 'tapjump':
+        return 'Tap anywhere on the screen to jump. Tap again in the air for a double jump. Keyboard: Space or Up.';
       case 'paddle':
         return 'Drag anywhere to slide the paddle. Keyboard: left / right arrows.';
       case 'grid':

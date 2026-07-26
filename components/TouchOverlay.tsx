@@ -193,6 +193,38 @@ export default function TouchOverlay({
     );
   }
 
+  if (scheme === 'tapjump') {
+    // The whole screen is a jump button. Each press fires a jump, so a second
+    // tap in the air is a double jump (the game caps it). No swipe - the flick-up
+    // jump was unreliable, and "tap anywhere" is the simplest verb a kid can do.
+    return (
+      <div className="absolute inset-0 z-10 select-none" style={{ touchAction: 'none' }}>
+        <button
+          type="button"
+          aria-label="Jump"
+          className="absolute inset-0 h-full w-full"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            setShowHint(false);
+            input.pressJump();
+          }}
+          onPointerUp={(e) => {
+            e.preventDefault();
+            input.releaseJump();
+          }}
+          onPointerCancel={() => input.releaseJump()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {showHint && (
+            <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/55 px-4 py-1.5 text-center text-[11px] font-bold uppercase tracking-widest text-white/80">
+              Tap anywhere to jump · tap again to double-jump
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
+
   if (scheme === 'run-jump') {
     // Only the jump zone lives over the canvas. The run buttons moved to a strip
     // below it, because when they sat on the canvas the playfield had to be

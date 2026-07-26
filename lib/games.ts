@@ -34,13 +34,14 @@ export type GameId =
  *  dpad      - tap the edges of the play area
  *  run-jump  - hold arrows in a strip below, tap the right half to jump
  *  lanes     - tap left/right halves to change lane, swipe up to jump
+ *  tapjump   - tap ANYWHERE to jump; tap again in the air to double-jump
  *  paddle    - drag anywhere to move a paddle
  *  grid      - tap and drag on a board; both pointer axes plus press/release edges
  *  board     - turn-based board games (tic-tac-toe, checkers, chess, crazy eights).
  *              No overlay and no dpad: the game attaches its own pointer handling
  *              directly to its canvas and runs its own turn logic.
  */
-export type ControlScheme = 'dpad' | 'run-jump' | 'lanes' | 'paddle' | 'grid' | 'board';
+export type ControlScheme = 'dpad' | 'run-jump' | 'lanes' | 'tapjump' | 'paddle' | 'grid' | 'board';
 
 export type GameMeta = {
   id: GameId;
@@ -145,11 +146,11 @@ export const GAMES: Record<GameId, GameMeta> = {
   runner: {
     id: 'runner',
     name: 'Dash Run',
-    tagline: 'Run, jump, and do not stop. The road never ends.',
+    tagline: 'Run and jump. Tap anywhere to leap, tap again to double-jump.',
     gateNote: 'Study time buys play time.',
     icon: '🏃',
     accent: '#ff8f5d',
-    controls: 'lanes',
+    controls: 'tapjump',
     aspect: 3 / 4,
   },
   breakout: {
