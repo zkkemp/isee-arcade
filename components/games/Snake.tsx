@@ -261,12 +261,7 @@ function drawBoard(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet | null
   ctx.arc(hx + ox * 1.3 - px, hy + oy * 1.3 - py, 1.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // --- HUD ---
-  ctx.fillStyle = 'rgba(0,0,0,0.32)';
-  ctx.fillRect(0, H - 18, W, 18);
-  ctx.fillStyle = 'rgba(255,255,255,0.88)';
-  ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillText(`${s.eaten} eaten`, W - 6, H - 6);
-  ctx.textAlign = 'left';
+  // No in-canvas HUD: the shell header already shows the live score (which is
+  // exactly eaten x 10), and the old semi-opaque strip along the bottom row was
+  // dimming food that spawned there, making it hard to see.
 }
