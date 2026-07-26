@@ -16,8 +16,34 @@ import { MATH_TEMPLATES_3 } from './mathTemplates3';
 import { QUANT_TEMPLATES } from './quantTemplates';
 import { QUANT_TEMPLATES_2 } from './quantTemplates2';
 import { QUANT_TEMPLATES_3 } from './quantTemplates3';
+import { GRADE_K_TEMPLATES } from './gradeK';
+import { GRADE_1_TEMPLATES } from './grade1';
+import { GRADE_3_TEMPLATES } from './grade3';
 
 export * from './types';
+
+/**
+ * Which learner a bank is for. Each family profile picks one. 'isee' is the
+ * original ISEE Lower Level bank (entering grades 5-6); the others are the
+ * younger grade bands so a kindergartner is never handed a 5th-grade question.
+ */
+export type GradeBand = 'k' | 'grade1' | 'grade3' | 'isee';
+
+export const GRADE_BAND_LABELS: Record<GradeBand, string> = {
+  k: 'Kindergarten',
+  grade1: '1st Grade',
+  grade3: '3rd Grade',
+  isee: 'ISEE Lower Level',
+};
+
+export const GRADE_BAND_BLURBS: Record<GradeBand, string> = {
+  k: 'Counting, shapes, letters, patterns.',
+  grade1: 'Add & subtract to 20, place value, time, money.',
+  grade3: 'Times tables, fractions, multi-digit, elapsed time.',
+  isee: 'Entering 5th-6th grade. Full ISEE Lower Level prep.',
+};
+
+export const GRADE_BANDS: GradeBand[] = ['k', 'grade1', 'grade3', 'isee'];
 
 /**
  * Verbal and reading are fixed text — a synonym cannot be parameterized.
@@ -60,7 +86,19 @@ type Candidate = {
   materialize: () => Question;
 };
 
-const CANDIDATES: Candidate[] = [
+function templatesToCandidates(ts: QuestionTemplate[]): Candidate[] {
+  return ts.map((t) => ({
+    id: t.id,
+    subject: t.subject,
+    kind: t.kind,
+    difficulty: t.difficulty,
+    topic: t.topic,
+    materialize: () => instantiate(t),
+  }));
+}
+
+/** The ISEE Lower Level bank: fixed verbal/reading/vocab plus the math+quant templates. */
+const ISEE_CANDIDATES: Candidate[] = [
   ...STATIC_QUESTIONS.map((q) => ({
     id: q.id,
     subject: q.subject,
@@ -70,24 +108,31 @@ const CANDIDATES: Candidate[] = [
     passageId: q.passageId,
     materialize: () => q,
   })),
-  ...ALL_TEMPLATES.map((t) => ({
-    id: t.id,
-    subject: t.subject,
-    kind: t.kind,
-    difficulty: t.difficulty,
-    topic: t.topic,
-    materialize: () => instantiate(t),
-  })),
+  ...templatesToCandidates(ALL_TEMPLATES),
 ];
 
-const BY_ID = new Map(CANDIDATES.map((c) => [c.id, c]));
+/**
+ * One candidate pool per grade band. A profile's band decides which pool the
+ * study block draws from, so a kindergartner never sees a 5th-grade question and
+ * vice versa. The younger banks are entirely templated (fresh numbers each time).
+ */
+const BANDS: Record<GradeBand, Candidate[]> = {
+  isee: ISEE_CANDIDATES,
+  k: templatesToCandidates(GRADE_K_TEMPLATES),
+  grade1: templatesToCandidates(GRADE_1_TEMPLATES),
+  grade3: templatesToCandidates(GRADE_3_TEMPLATES),
+};
+
+/** Every candidate across all bands, so questionById can restore any owed question. */
+const ALL_CANDIDATES: Candidate[] = Object.values(BANDS).flat();
+const BY_ID = new Map(ALL_CANDIDATES.map((c) => [c.id, c]));
 
 export const ALL_SUBJECTS: Subject[] = ['verbal', 'quantitative', 'reading', 'math'];
 
-/** Distinct question families available, counting each template once. */
+/** Distinct ISEE question families available, counting each template once. */
 export function countBySubject(): Record<Subject, number> {
   const out: Record<Subject, number> = { verbal: 0, quantitative: 0, reading: 0, math: 0 };
-  for (const c of CANDIDATES) out[c.subject] += 1;
+  for (const c of ISEE_CANDIDATES) out[c.subject] += 1;
   return out;
 }
 
@@ -95,14 +140,21 @@ export function questionById(id: string): Question | null {
   return BY_ID.get(id)?.materialize() ?? null;
 }
 
-export const TOTAL_FAMILIES = CANDIDATES.length;
+export const TOTAL_FAMILIES = ISEE_CANDIDATES.length;
 export const TEMPLATE_COUNT = ALL_TEMPLATES.length;
+
+/** Family count for a specific band, for the profile picker. */
+export function familyCountForBand(band: GradeBand): number {
+  return (BANDS[band] ?? ISEE_CANDIDATES).length;
+}
 
 function pickRandom<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
 export type PickArgs = {
+  /** Which learner's bank to draw from. Defaults to the ISEE Lower Level bank. */
+  band?: GradeBand;
   /** Subjects the player enabled. Empty or undefined means all. */
   subjects?: Subject[];
   /** Question ids seen recently this session, freshest last. Avoided when possible. */
@@ -141,6 +193,7 @@ export type PickArgs = {
 
 export function pickQuestion(args: PickArgs = {}): Question {
   const {
+    band = 'isee',
     subjects,
     recentIds = [],
     recentPassageIds = [],
@@ -150,6 +203,9 @@ export function pickQuestion(args: PickArgs = {}): Question {
     avoidKind = null,
     forceKind = null,
   } = args;
+
+  // The band's pool is the whole universe this call draws from.
+  const CANDIDATES = BANDS[band] ?? ISEE_CANDIDATES;
 
   // --- retry path: stay on the thing they just missed ---
   if (sameKindAs) {

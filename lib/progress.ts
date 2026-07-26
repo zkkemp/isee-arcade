@@ -1,9 +1,15 @@
 'use client';
 
 import type { Subject } from './questions/types';
+import { profileStorageSuffix } from './profiles';
 
-const STORAGE_KEY = 'isee-arcade:v1';
+const BASE_STORAGE_KEY = 'isee-arcade:v1';
 const HISTORY_CAP = 500;
+
+// Progress is per learner, so a kindergartner's stats never mix with a sibling's.
+function storageKey(): string {
+  return `${BASE_STORAGE_KEY}${profileStorageSuffix()}`;
+}
 
 export type SubjectStat = { seen: number; correct: number };
 
@@ -70,7 +76,7 @@ function hydrate(raw: unknown): Progress {
 export function loadProgress(): Progress {
   if (typeof window === 'undefined') return emptyProgress();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey());
     return hydrate(raw ? JSON.parse(raw) : null);
   } catch {
     return emptyProgress();
@@ -80,7 +86,7 @@ export function loadProgress(): Progress {
 export function saveProgress(p: Progress): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+    window.localStorage.setItem(storageKey(), JSON.stringify(p));
   } catch {
     // Quota or private-browsing failure. Progress is a nice-to-have, never block play.
   }
@@ -89,7 +95,7 @@ export function saveProgress(p: Progress): void {
 export function resetProgress(): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(storageKey());
   } catch {
     // ignore
   }

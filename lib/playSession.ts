@@ -26,6 +26,8 @@
  * quitting the app must not refill the clock or shake off an owed study block.
  */
 
+import { profileStorageSuffix } from './profiles';
+
 /** Questions in one study block. */
 export const BLOCK_SIZE = 8;
 
@@ -110,12 +112,17 @@ export function questionsLeft(b: StudyBlock): number {
   return Math.max(0, BLOCK_SIZE + b.penalty - b.correct);
 }
 
-const KEY = 'isee-arcade:play-session';
+const BASE_KEY = 'isee-arcade:play-session';
+
+// The play clock is per learner, so each kid earns and spends their own time.
+function key(): string {
+  return `${BASE_KEY}${profileStorageSuffix()}`;
+}
 
 export function loadSession(): PlaySession {
   if (typeof window === 'undefined') return emptySession();
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(key());
     if (!raw) return emptySession();
     const s = JSON.parse(raw) as PlaySession;
     if (!s || typeof s !== 'object' || typeof s.msLeft !== 'number') return emptySession();
@@ -146,7 +153,7 @@ export function loadSession(): PlaySession {
 export function saveSession(s: PlaySession): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(s));
+    window.localStorage.setItem(key(), JSON.stringify(s));
   } catch {
     // Private browsing or quota. The clock then only lasts the session.
   }

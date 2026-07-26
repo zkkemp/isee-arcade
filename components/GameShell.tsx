@@ -14,6 +14,7 @@ import { clearPendingGate, loadPendingGate, savePendingGate } from '@/lib/pendin
 import { InputController, bindKeyboard } from '@/lib/input';
 import { pickQuestion } from '@/lib/questions';
 import type { Question, QuestionKind } from '@/lib/questions/types';
+import { useActiveProfile } from '@/lib/profiles';
 import { playSound, unlockAudio, useMuted } from '@/lib/sound';
 import {
   COIN_BONUS_MS,
@@ -84,6 +85,10 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const [difficulty] = useDifficulty();
   const [character] = useCharacter();
   const [muted, setMuted] = useMuted();
+  // Which learner is signed in decides which question bank the study block draws
+  // from, so a kindergartner never gets a 5th-grade ISEE question.
+  const activeProfile = useActiveProfile();
+  const band = activeProfile?.band ?? 'isee';
 
   const [score, setScore] = useState(0);
   const [gate, setGate] = useState<Gate | null>(null);
@@ -149,19 +154,22 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
    * question in the block avoids reading (one passage per block) and rotates away
    * from whatever was just answered.
    */
-  const drawFor = useCallback((b: StudyBlock, retryOf: Question | null): Question => {
+  const drawFor = useCallback(
+    (b: StudyBlock, retryOf: Question | null): Question => {
     const p = progressRef.current;
     // Reading turns up about one draw in eight, at most once per block, and never
-    // on a retry. Everything else rotates away from reading and from the last
-    // kind answered, so passages stay rare and sections keep changing.
-    const wantReading = !retryOf && !b.readingServed && Math.random() < READING_CHANCE;
+    // on a retry. Only the ISEE bank has reading passages - the younger grade
+    // banks are all short templated questions, so skip the reading logic there.
+    const wantReading =
+      band === 'isee' && !retryOf && !b.readingServed && Math.random() < READING_CHANCE;
     const avoid: QuestionKind[] = [];
     if (!wantReading && !retryOf) {
-      avoid.push('reading');
+      if (band === 'isee') avoid.push('reading');
       if (lastKindRef.current) avoid.push(lastKindRef.current);
     }
 
     const question = pickQuestion({
+      band,
       recentIds: seenIdsRef.current,
       recentPassageIds: seenPassagesRef.current,
       missed: p.missed,
@@ -176,7 +184,9 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       seenPassagesRef.current = [...seenPassagesRef.current, question.passageId].slice(-14);
     }
     return question;
-  }, []);
+    },
+    [band],
+  );
 
   /** Opens the study block. Idempotent, so a tick and a death cannot double-fire it. */
   const openStudy = useCallback(

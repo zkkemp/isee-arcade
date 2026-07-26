@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import CharacterPicker from '@/components/CharacterPicker';
+import ProfileGate from '@/components/ProfileGate';
 import DifficultyPicker from '@/components/DifficultyPicker';
 import ProgressStrip from '@/components/ProgressStrip';
 import { GAME_LIST } from '@/lib/games';
@@ -27,7 +27,7 @@ export default function Home() {
       </div>
 
       <div className="mb-6">
-        <CharacterPicker />
+        <ProfileGate />
 
         <DifficultyPicker />
       </div>

@@ -798,6 +798,20 @@ function subscribeCharacter(cb: () => void): () => void {
   };
 }
 
+/**
+ * Set the chosen character from outside the hook (e.g. when a learner profile is
+ * activated, so the games render that kid's avatar). Writes the store and
+ * notifies every mounted useCharacter.
+ */
+export function setCharacterId(next: CharacterId): void {
+  try {
+    window.localStorage.setItem(KEY, next);
+  } catch {
+    // Private browsing: the notify still refreshes the in-memory view this session.
+  }
+  listeners.forEach((l) => l());
+}
+
 /** The chosen character, persisted so it survives a reload. */
 export function useCharacter(): [Character, (id: CharacterId) => void] {
   const id = useSyncExternalStore(subscribeCharacter, readCharacterId, () => DEFAULT_CHARACTER_ID);
