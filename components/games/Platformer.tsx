@@ -62,6 +62,10 @@ type Chunk = { x: number; y: number; vx: number; vy: number; life: number; spin:
 type Pickup = { x: number; y: number; vx: number; vy: number; onGround: boolean; rise: number };
 /** Floating score text, so a stomp or a hoard reads as a reward. */
 type Blip = { x: number; y: number; life: number; text: string };
+/** A piece of level-clear confetti. Pure celebration, no gameplay. */
+type Confetti = { x: number; y: number; vx: number; vy: number; spin: number; life: number; color: string };
+/** An expanding dust ring, for landings and stomps. */
+type Puff = { x: number; y: number; r: number; life: number };
 
 type State = {
   level: number;
@@ -97,6 +101,21 @@ type State = {
   chunks: Chunk[];
   pickups: Pickup[];
   blips: Blip[];
+  confetti: Confetti[];
+  puffs: Puff[];
+  /** Coins grabbed in quick succession. Resets when comboT runs out. */
+  combo: number;
+  comboT: number;
+  /** Happy-hop scale pop on pickups, 0 = neutral. */
+  pulse: number;
+  /** Screen shake amplitude, decays fast. Set by stomps and heavy landings. */
+  shake: number;
+  /** Countdown of the world-name banner shown when a level starts. */
+  intro: number;
+  /** Door tile the player is currently standing on, for the on-canvas prompt. */
+  onDoor: { tx: number; ty: number } | null;
+  /** Index into data.coins of this level's one rainbow coin, or -1. */
+  rainbowIdx: number;
 };
 
 function freshState(level: number, difficulty: GameCanvasProps['difficulty'], coinsTotal = 0): State {
@@ -127,6 +146,17 @@ function freshState(level: number, difficulty: GameCanvasProps['difficulty'], co
     chunks: [],
     pickups: [],
     blips: [],
+    confetti: [],
+    puffs: [],
+    combo: 0,
+    comboT: 0,
+    pulse: 0,
+    shake: 0,
+    intro: 2.2,
+    onDoor: null,
+    // One magic rainbow coin per level, picked deterministically so replays of
+    // a level hide it in the same place. Worth extra and worth hunting for.
+    rainbowIdx: data.coins.length > 0 ? (level * 31 + 7) % data.coins.length : -1,
   };
 }
 
@@ -150,6 +180,42 @@ function blip(s: State, x: number, y: number, text: string) {
   if (s.blips.length > 12) s.blips.shift();
 }
 
+function puffAt(s: State, x: number, y: number) {
+  s.puffs.push({ x, y, r: 3, life: 0.35 });
+  if (s.puffs.length > 20) s.puffs.shift();
+}
+
+const CONFETTI_COLORS = ['#ff5a5a', '#ffb54a', '#ffe95a', '#6ee76e', '#5ab8ff', '#c98aff'];
+
+function confettiBurst(s: State, x: number, y: number, count: number) {
+  for (let i = 0; i < count; i += 1) {
+    s.confetti.push({
+      x: x + (Math.random() - 0.5) * 24,
+      y,
+      vx: (Math.random() - 0.5) * 170,
+      vy: -70 - Math.random() * 160,
+      spin: Math.random() * 6,
+      life: 1.5 + Math.random() * 0.9,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    });
+  }
+  if (s.confetti.length > 90) s.confetti.splice(0, s.confetti.length - 90);
+}
+
+/**
+ * One coin collected: the streak counter climbs, the pickup jingle climbs a
+ * semitone with it, and milestone streaks announce themselves. The streak is
+ * what turns a row of coins from a checklist into a little rhythm game.
+ */
+function comboUp(s: State, x: number, y: number) {
+  s.combo += 1;
+  s.comboT = 2;
+  playSound('coin', s.combo);
+  if (s.combo === 3 || s.combo === 6 || s.combo === 10 || s.combo === 15) {
+    blip(s, x, y - 8, `COMBO x${s.combo}!`);
+  }
+}
+
 function bodyTop(s: State): number {
   return s.big ? PH_BIG : PH;
 }
@@ -165,8 +231,12 @@ function grow(s: State) {
   b.h = PH_BIG;
   s.big = true;
   s.squash = 1;
+  s.shake = Math.max(s.shake, 0.14);
+  s.pulse = 0.35;
   playSound('powerup');
   burst(s, b.x + PW / 2, b.y + PH_BIG / 2, 12, 70, '#ffe08a');
+  burst(s, b.x + PW / 2, b.y + PH_BIG / 2, 8, 40, '#fff6d0');
+  blip(s, b.x, b.y - 10, 'POWER UP!');
 }
 
 function shrink(s: State) {
@@ -195,6 +265,9 @@ function respawn(s: State) {
 function takeHit(s: State, api: GameCanvasProps['api'], why: string) {
   if (s.hurt > 0 || s.finish > 0) return;
   const b = s.body;
+  s.shake = Math.max(s.shake, 0.2);
+  s.combo = 0;
+  s.comboT = 0;
   if (s.big) {
     shrink(s);
     s.hurt = 1.6;
@@ -288,6 +361,7 @@ export default function Platformer({
       if (s.hurt > 0) s.hurt -= dt;
       if (s.squash > 0) s.squash = Math.max(0, s.squash - dt * 4);
       if (s.doorCd > 0) s.doorCd -= dt;
+      if (s.intro > 0) s.intro -= dt;
       for (const sp of s.data.springs) if (sp.fired > 0) sp.fired -= dt;
       for (const blk of s.data.blocks) if (blk.bump > 0) blk.bump -= dt;
 
@@ -297,11 +371,15 @@ export default function Platformer({
       if (s.finish > 0) {
         s.finish -= dt;
         b.vx = 0;
-        // Slide down the pole, then stand at its foot.
+        // Slide down the pole, then stand at its foot for the victory hops.
         const foot = GROUND_TOP * TILE - bodyTop(s);
         b.y = Math.min(foot, b.y + 90 * dt);
         if (Math.random() < 0.4) {
           burst(s, s.data.flagX + TILE / 2, (GROUND_TOP - FLAG_H) * TILE, 4, 60, '#ffe9a8');
+        }
+        // A steady drizzle of confetti for the whole celebration, not one pop.
+        if (Math.random() < 0.3) {
+          confettiBurst(s, s.data.flagX + TILE / 2, (GROUND_TOP - FLAG_H) * TILE + 6, 3);
         }
         stepEffects(s, dt);
         if (s.finish <= 0) {
@@ -369,6 +447,8 @@ export default function Platformer({
         s.squash = 1;
         playSound('land');
         burst(s, b.x + PW / 2, b.y + bodyTop(s), 5, 30);
+        puffAt(s, b.x + PW / 2, b.y + bodyTop(s));
+        if (res.landedAt > 400) s.shake = Math.max(s.shake, 0.12);
       }
       if (res.sprung) {
         const sp = s.data.springs.find((v) => v.tx === res.sprung!.tx && v.ty === res.sprung!.ty);
@@ -378,12 +458,44 @@ export default function Platformer({
         burst(s, b.x + PW / 2, b.y + bodyTop(s), 8, 70, '#cfe9ff');
       }
 
+      // --- sparkle trails: spring flights, and the golden run while grown ---
+      // Visual only, so Math.random is fine here; caps keep an iPad smooth.
+      if (s.sparks.length < 80) {
+        if (!b.onGround && b.vy < -420 && Math.random() < 0.4) {
+          s.sparks.push({
+            x: b.x + PW / 2 + (Math.random() - 0.5) * 6,
+            y: b.y + bodyTop(s),
+            vx: (Math.random() - 0.5) * 24,
+            vy: 40,
+            life: 0.35,
+            hue: '#cfe9ff',
+          });
+        }
+        if (s.big && b.onGround && Math.abs(b.vx) > 120 && Math.random() < 0.25) {
+          const hues = ['#ffd54a', '#7ee7ff', '#ff9ad5'];
+          s.sparks.push({
+            x: b.x + (b.vx > 0 ? 0 : PW),
+            y: b.y + bodyTop(s) - 2,
+            vx: -b.vx * 0.1,
+            vy: -10 - Math.random() * 25,
+            life: 0.4,
+            hue: hues[Math.floor(Math.random() * hues.length)],
+          });
+        }
+      }
+
       // --- doors: stand still in one to use it ---
-      if (res.door && Math.abs(b.vx) < 24 && b.onGround && s.doorCd <= 0) {
+      // The prompt state is tracked whether or not the player is still enough to
+      // warp, so a kid running through a doorway still gets told the trick.
+      const doorUsable = res.door !== null && b.onGround && s.doorCd <= 0;
+      s.onDoor = doorUsable ? { tx: res.door!.tx, ty: res.door!.ty } : null;
+      if (doorUsable && Math.abs(b.vx) < 24) {
         s.dwell += dt;
         if (s.dwell > 0.3) {
           const door = s.data.doors.find((d) => d.tx === res.door!.tx && d.ty === res.door!.ty);
           if (door) {
+            // A flash at the door being left, so the warp reads as travel...
+            burst(s, b.x + PW / 2, b.y + PH, 10, 55, '#d7bcff');
             const exit = doorExit(door);
             b.x = exit.x;
             b.y = exit.y - (bodyTop(s) - PH);
@@ -392,9 +504,14 @@ export default function Platformer({
             s.dwell = 0;
             s.doorCd = 1;
             s.riding = -1;
+            s.onDoor = null;
+            s.pulse = 0.35;
+            // ...and a fanfare at the arrival, so it lands as a reward.
             playSound('powerup');
-            burst(s, b.x + PW / 2, b.y + PH, 12, 60, '#d7bcff');
-            blip(s, b.x, b.y - 10, 'shortcut');
+            playSound('pass');
+            burst(s, b.x + PW / 2, b.y + PH, 14, 70, '#d7bcff');
+            burst(s, b.x + PW / 2, b.y + PH / 2, 8, 45, '#fff0ff');
+            blip(s, b.x, b.y - 10, 'WHOOSH!');
           }
         }
       } else {
@@ -416,7 +533,7 @@ export default function Platformer({
             s.coinsHere += 1;
             s.pops.push({ x: cx, y: cy, vy: -90, life: 0.5 });
             burst(s, cx, cy, 5, 45);
-            playSound('coin', s.coinsHere);
+            comboUp(s, cx - PW / 2, cy);
             api.addScore(10);
           } else if (hit.kind === 'power' && !hit.used) {
             hit.used = true;
@@ -446,6 +563,7 @@ export default function Platformer({
                 spin: Math.random() * 6,
               });
             }
+            s.shake = Math.max(s.shake, 0.1);
             playSound('brick', 2);
             api.addScore(5);
             // Only rebuilt when a brick actually goes, rather than every frame.
@@ -532,6 +650,8 @@ export default function Platformer({
           b.cut = false;
           s.squash = 0.9;
           s.riding = -1;
+          s.shake = Math.max(s.shake, 0.18);
+          puffAt(s, e.x + PW / 2, e.y + PH);
           playSound('stomp');
         } else {
           takeHit(s, api, 'An enemy got you');
@@ -539,15 +659,29 @@ export default function Platformer({
       }
 
       // --- coins ---
-      for (const c of s.data.coins) {
+      for (let ci = 0; ci < s.data.coins.length; ci += 1) {
+        const c = s.data.coins[ci];
         if (c.taken) continue;
         if (!coinTouched(b, c)) continue;
         c.taken = true;
         s.coinsTotal += 1;
         s.coinsHere += 1;
-        burst(s, c.x, c.y, 6, 50);
-        playSound('coin', s.coinsHere);
-        api.addScore(10);
+        if (ci === s.rainbowIdx) {
+          // The level's one magic coin: a triple-color burst and a fanfare, so
+          // spotting it in the wild feels like finding treasure.
+          burst(s, c.x, c.y, 8, 70, '#ff9ad5');
+          burst(s, c.x, c.y, 8, 55, '#7ee7ff');
+          burst(s, c.x, c.y, 6, 40, '#ffe95a');
+          blip(s, c.x - PW / 2, c.y - 10, 'RAINBOW! +50');
+          playSound('powerup');
+          s.pulse = 0.4;
+          api.addScore(50);
+        } else {
+          burst(s, c.x, c.y, 6, 50);
+          comboUp(s, c.x - PW / 2, c.y);
+          s.pulse = Math.max(s.pulse, 0.18);
+          api.addScore(10);
+        }
       }
 
       stepEffects(s, dt);
@@ -566,13 +700,13 @@ export default function Platformer({
         s.checkpointHit = true;
         s.respawnX = s.data.checkpointX;
         playSound('pass');
-        blip(s, b.x, b.y - 12, 'checkpoint');
-        burst(s, b.x + PW / 2, b.y, 8, 55, '#a8e6ff');
+        blip(s, b.x, b.y - 12, 'CHECKPOINT!');
+        burst(s, b.x + PW / 2, b.y, 10, 60, '#a8e6ff');
       }
 
       // --- flag ---
       if (flagTouched(b, s.data.flagX)) {
-        s.finish = 1.5;
+        s.finish = 2.4;
         b.x = s.data.flagX - PW / 2;
         b.vx = 0;
         b.vy = 0;
@@ -582,6 +716,7 @@ export default function Platformer({
         playSound('levelClear');
         api.setStatus(`Level ${s.level} clear`);
         burst(s, b.x + PW / 2, b.y, 20, 90, '#ffe9a8');
+        confettiBurst(s, b.x + PW / 2, (GROUND_TOP - FLAG_H) * TILE, 42);
         draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
         return;
       }
@@ -631,6 +766,26 @@ function stepEffects(s: State, dt: number) {
     t.y -= 22 * dt;
   }
   s.blips = s.blips.filter((t) => t.life > 0);
+  for (const p of s.puffs) {
+    p.life -= dt;
+    p.r += 28 * dt;
+  }
+  s.puffs = s.puffs.filter((p) => p.life > 0);
+  for (const f of s.confetti) {
+    f.life -= dt;
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.vy += 240 * dt;
+    f.vx *= 1 - 0.8 * dt;
+    f.spin += dt * 5;
+  }
+  s.confetti = s.confetti.filter((f) => f.life > 0 && f.y < WORLD_H + 40);
+  if (s.comboT > 0) {
+    s.comboT -= dt;
+    if (s.comboT <= 0) s.combo = 0;
+  }
+  if (s.pulse > 0) s.pulse = Math.max(0, s.pulse - dt * 2.5);
+  if (s.shake > 0) s.shake = Math.max(0, s.shake - dt * 0.9);
 }
 
 // --- sprite tables --------------------------------------------------------
@@ -751,14 +906,19 @@ const BACKDROP_LAYERS: Record<Backdrop, { far: string; near: string }> = {
   mushrooms: { far: 'background_fade_mushrooms', near: 'background_color_mushrooms' },
 };
 
-/** Sky gradient per biome, drawn under the parallax so the tone is never flat. */
+/**
+ * Sky gradient per biome, drawn under the parallax AND multiplied over it, so
+ * each world gets its own light: bright noon in the meadow, baked orange in the
+ * desert, icy blue on the peaks, misty grey-green on the ridge, warm dusk in
+ * the hollow, and a real starlit evening in the purple kingdom.
+ */
 const SKY: Record<Biome, [string, string]> = {
   grass: ['#8fd3ff', '#d8f1ff'],
-  sand: ['#ffd79a', '#fff0d2'],
-  snow: ['#bfe4ff', '#f2fbff'],
-  stone: ['#9fb6cf', '#dfe9f2'],
-  dirt: ['#f0c79a', '#ffeedd'],
-  purple: ['#b79cf0', '#e9dcff'],
+  sand: ['#ffc97d', '#ffedcb'],
+  snow: ['#a9d6f7', '#eef9ff'],
+  stone: ['#8fa9c2', '#dbe7ee'],
+  dirt: ['#eab088', '#ffe6c9'],
+  purple: ['#6f5ac2', '#dcc4ef'],
 };
 
 /** The strip behind the thumb buttons, so the world does not just stop. */
@@ -771,37 +931,379 @@ const BAND: Record<Biome, string> = {
   purple: 'background_solid_dirt',
 };
 
-/**
- * Ambient motes drifting in screen space, tinted and paced per biome: snow
- * falls fast and straight, sand drifts sideways, everything else gets a slow
- * lazy pollen-like float. Purely decorative canvas primitives - no sprite, no
- * new asset, no gameplay effect - drawn once behind the world each frame.
- */
-const AMBIENT: Record<Biome, { color: string; count: number; fall: number; drift: number; size: number }> = {
-  grass: { color: 'rgba(255,255,255,0.5)', count: 10, fall: 6, drift: 8, size: 1.5 },
-  sand: { color: 'rgba(255,224,150,0.55)', count: 14, fall: 3, drift: 22, size: 1.4 },
-  snow: { color: 'rgba(255,255,255,0.85)', count: 22, fall: 26, drift: 10, size: 1.8 },
-  stone: { color: 'rgba(210,220,230,0.35)', count: 8, fall: 4, drift: 5, size: 1.3 },
-  dirt: { color: 'rgba(255,214,150,0.4)', count: 10, fall: 5, drift: 9, size: 1.4 },
-  purple: { color: 'rgba(230,210,255,0.55)', count: 14, fall: 8, drift: 14, size: 1.6 },
+// --- world personality ------------------------------------------------------
+// Everything in this section is screen-space set dressing: procedural canvas
+// shapes seeded from index math (deterministic frame to frame, no stored
+// state), drawn behind the world. None of it touches gameplay or the seeded
+// generator the checkers replay.
+
+/** Kid-facing identity for each biome: a name, silhouette inks, banner accent. */
+const WORLD: Record<Biome, { name: string; far: string; near: string; accent: string }> = {
+  grass: { name: 'SUNNY MEADOW', far: 'rgba(120,185,125,0.30)', near: 'rgba(75,145,95,0.40)', accent: '#4caf50' },
+  sand: { name: 'BLAZING DESERT', far: 'rgba(235,168,90,0.30)', near: 'rgba(198,128,62,0.38)', accent: '#e8963c' },
+  snow: { name: 'FROSTY PEAKS', far: 'rgba(148,178,214,0.38)', near: 'rgba(116,148,190,0.42)', accent: '#64a8e8' },
+  stone: { name: 'PINE RIDGE', far: 'rgba(72,102,96,0.35)', near: 'rgba(46,76,70,0.45)', accent: '#3f7f6f' },
+  dirt: { name: 'MUSHROOM HOLLOW', far: 'rgba(152,82,72,0.30)', near: 'rgba(120,60,56,0.40)', accent: '#c05a4a' },
+  purple: { name: 'STARLIGHT KINGDOM', far: 'rgba(94,66,148,0.42)', near: 'rgba(62,42,108,0.52)', accent: '#8a5ce8' },
 };
 
-function drawAmbient(ctx: CanvasRenderingContext2D, biome: Biome, t: number, cw: number, playH: number) {
-  const a = AMBIENT[biome];
-  ctx.fillStyle = a.color;
-  for (let i = 0; i < a.count; i += 1) {
-    // Deterministic per-index scatter computed from the index alone (no RNG,
-    // no stored state), so a mote's start position is stable across frames
-    // and this stays a pure function of the clock rather than something with
-    // its own state to manage.
-    const seedX = (i * 97 + 31) % 233;
-    const seedY = (i * 53 + 17) % 199;
-    const speedMul = 0.6 + ((i * 7) % 5) * 0.15;
-    const x = (((seedX / 233) * cw + t * a.drift * speedMul) % (cw + 20)) - 10;
-    const y = (((seedY / 199) * playH + t * a.fall * speedMul) % (playH + 20)) - 10;
+/** Cheap deterministic 0..1 hash, so scenery stays put without stored state. */
+function hash01(n: number): number {
+  const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/** Sun, moon and stars: the one thing that instantly sets a world's hour. */
+function drawCelestial(ctx: CanvasRenderingContext2D, biome: Biome, t: number, cw: number, playH: number) {
+  const sun = (x: number, y: number, r: number, core: string, glow: string, rays: boolean) => {
+    const g = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2.6);
+    g.addColorStop(0, glow);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r * 2.6, y - r * 2.6, r * 5.2, r * 5.2);
+    if (rays) {
+      ctx.strokeStyle = 'rgba(255,220,140,0.5)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i / 8) * Math.PI * 2 + t * 0.15;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(a) * (r + 4), y + Math.sin(a) * (r + 4));
+        ctx.lineTo(x + Math.cos(a) * (r + 10), y + Math.sin(a) * (r + 10));
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = core;
     ctx.beginPath();
-    ctx.arc(x, y, a.size, 0, Math.PI * 2);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
+  };
+
+  if (biome === 'grass') sun(cw * 0.8, playH * 0.15, 16, '#fff3b8', 'rgba(255,240,170,0.55)', false);
+  else if (biome === 'sand') sun(cw * 0.78, playH * 0.14, 20, '#ffe27a', 'rgba(255,200,110,0.6)', true);
+  else if (biome === 'snow') sun(cw * 0.8, playH * 0.13, 13, '#f6fbff', 'rgba(230,245,255,0.5)', false);
+  else if (biome === 'stone') sun(cw * 0.76, playH * 0.16, 14, 'rgba(245,250,250,0.7)', 'rgba(230,240,240,0.35)', false);
+  else if (biome === 'purple') {
+    // A starfield, a crescent moon, and (from drawCritter) shooting stars.
+    for (let i = 0; i < 26; i += 1) {
+      const x = hash01(i * 3 + 1) * cw;
+      const y = hash01(i * 7 + 2) * playH * 0.55;
+      const tw = 0.45 + 0.55 * Math.max(0, Math.sin(t * 1.8 + i * 1.9));
+      ctx.fillStyle = `rgba(255,248,220,${(0.35 + 0.5 * tw).toFixed(2)})`;
+      const r = 0.8 + hash01(i * 11) * 1.1;
+      ctx.fillRect(x, y, r, r);
+    }
+    const mx = cw * 0.8;
+    const my = playH * 0.14;
+    const g = ctx.createRadialGradient(mx, my, 4, mx, my, 34);
+    g.addColorStop(0, 'rgba(240,232,255,0.4)');
+    g.addColorStop(1, 'rgba(240,232,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(mx - 34, my - 34, 68, 68);
+    ctx.fillStyle = '#f2ecff';
+    ctx.beginPath();
+    ctx.arc(mx, my, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#6f5ac2';
+    ctx.beginPath();
+    ctx.arc(mx + 5, my - 3, 9.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * Two parallax bands of themed silhouettes between the backdrop art and the
+ * world: rolling hills, dunes, jagged snow-capped mountains, a pine ridge,
+ * giant spotted mushrooms, or crystal spires. This - not the palette - is what
+ * makes "now I'm in the mushroom world" land at a glance.
+ */
+function drawSilhouettes(
+  ctx: CanvasRenderingContext2D,
+  biome: Biome,
+  camX: number,
+  zoom: number,
+  cw: number,
+  playH: number,
+  horizonY: number,
+) {
+  const w = WORLD[biome];
+  const layer = (factor: number, period: number, color: string, near: boolean) => {
+    const off = camX * factor * zoom;
+    const first = Math.floor(off / period) - 1;
+    const count = Math.ceil(cw / period) + 3;
+    ctx.fillStyle = color;
+    // The band continues below the horizon so pits show distant ground, not sky.
+    ctx.fillRect(0, horizonY, cw, Math.max(0, playH - horizonY));
+    for (let k = first; k < first + count; k += 1) {
+      const x = k * period - off;
+      const r1 = hash01(k * 7.3 + (near ? 5 : 0));
+      const r2 = hash01(k * 13.7 + (near ? 9 : 2));
+      const h = (near ? 46 : 30) * (0.7 + r1 * 0.6);
+      if (biome === 'grass' || biome === 'sand') {
+        // Soft humps: meadow hills, or wind-piled dunes (sand runs sharper).
+        const peak = biome === 'sand' ? 1.9 : 1.6;
+        ctx.beginPath();
+        ctx.moveTo(x - 4, horizonY + 1);
+        ctx.quadraticCurveTo(x + period * (0.35 + r2 * 0.3), horizonY - h * peak, x + period + 4, horizonY + 1);
+        ctx.fill();
+      } else if (biome === 'snow') {
+        const px = x + period * (0.3 + r2 * 0.4);
+        const py = horizonY - h * 2;
+        ctx.beginPath();
+        ctx.moveTo(x - 6, horizonY + 1);
+        ctx.lineTo(px, py);
+        ctx.lineTo(x + period + 6, horizonY + 1);
+        ctx.closePath();
+        ctx.fill();
+        // Snow cap.
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - h * 0.3, py + h * 0.55);
+        ctx.lineTo(px + h * 0.3, py + h * 0.55);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = color;
+      } else if (biome === 'stone') {
+        // A pine: three stacked triangles on a stubby trunk.
+        const px = x + period * (0.25 + r2 * 0.5);
+        const th = h * 1.5;
+        ctx.fillRect(px - 1.5, horizonY - th * 0.2, 3, th * 0.22);
+        for (let tier = 0; tier < 3; tier += 1) {
+          const ty = horizonY - th * (0.16 + tier * 0.28);
+          const tw = th * (0.42 - tier * 0.1);
+          ctx.beginPath();
+          ctx.moveTo(px, ty - th * 0.36);
+          ctx.lineTo(px - tw, ty);
+          ctx.lineTo(px + tw, ty);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else if (biome === 'dirt') {
+        // A giant mushroom: stem, domed cap, pale spots.
+        const px = x + period * (0.3 + r2 * 0.4);
+        const mh = h * 1.4;
+        const capR = mh * 0.55;
+        ctx.fillRect(px - mh * 0.14, horizonY - mh * 0.7, mh * 0.28, mh * 0.72);
+        ctx.beginPath();
+        ctx.arc(px, horizonY - mh * 0.66, capR, Math.PI, 0);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,235,215,0.4)';
+        for (let d = 0; d < 3; d += 1) {
+          const dx = px + (hash01(k * 17 + d) - 0.5) * capR * 1.3;
+          ctx.beginPath();
+          ctx.arc(dx, horizonY - mh * 0.72 - hash01(k * 23 + d) * capR * 0.35, capR * 0.14, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = color;
+      } else {
+        // Purple: an angular crystal cluster with a bright glint edge.
+        const px = x + period * (0.3 + r2 * 0.4);
+        const chh = h * 1.7;
+        for (let spike = -1; spike <= 1; spike += 1) {
+          const sh = chh * (spike === 0 ? 1 : 0.55 + hash01(k * 29 + spike) * 0.2);
+          const sx = px + spike * chh * 0.28;
+          ctx.beginPath();
+          ctx.moveTo(sx, horizonY - sh);
+          ctx.lineTo(sx - chh * 0.16, horizonY + 1);
+          ctx.lineTo(sx + chh * 0.16, horizonY + 1);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(230,210,255,0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px, horizonY - chh);
+        ctx.lineTo(px - chh * 0.05, horizonY + 1);
+        ctx.stroke();
+      }
+    }
+  };
+  layer(0.18, 170, w.far, false);
+  layer(0.3, 230, w.near, true);
+}
+
+/**
+ * Weather and ambient life, per world: pollen in the meadow, wind-blown sand,
+ * swaying snowflakes, drifting mist banks, pulsing glow-spores, and blinking
+ * fireflies. Deterministic per-index scatter - a pure function of the clock.
+ */
+function drawAmbient(ctx: CanvasRenderingContext2D, biome: Biome, t: number, cw: number, playH: number) {
+  if (biome === 'stone') {
+    // Mist banks first, then a few slow motes.
+    for (let i = 0; i < 4; i += 1) {
+      const y = playH * (0.25 + i * 0.16) + Math.sin(t * 0.3 + i * 2) * 6;
+      const x = ((hash01(i * 5 + 1) * cw + t * (5 + i * 2.5)) % (cw + 260)) - 130;
+      ctx.fillStyle = 'rgba(235,242,244,0.08)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 120, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const count = biome === 'snow' ? 24 : biome === 'stone' ? 6 : biome === 'purple' ? 12 : 12;
+  for (let i = 0; i < count; i += 1) {
+    const seedX = hash01(i * 3.1 + 7);
+    const seedY = hash01(i * 5.7 + 3);
+    const mul = 0.6 + (i % 5) * 0.15;
+    if (biome === 'snow') {
+      const x = ((seedX * cw + t * 9 * mul + Math.sin(t * 1.1 + i) * 9) % (cw + 20) + cw + 20) % (cw + 20) - 10;
+      const y = ((seedY * playH + t * (22 + mul * 14)) % (playH + 20)) - 10;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(x, y, 1.1 + seedX * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (biome === 'sand') {
+      const x = ((seedX * cw + t * (55 + mul * 40)) % (cw + 30)) - 15;
+      const y = ((seedY * playH + t * 4) % (playH + 10)) - 5;
+      ctx.fillStyle = 'rgba(255,224,150,0.5)';
+      ctx.fillRect(x, y, 6 + mul * 4, 1.2);
+    } else if (biome === 'dirt') {
+      // Glow-spores: drift upward, pulse softly.
+      const x = ((seedX * cw + Math.sin(t * 0.6 + i * 2.2) * 24) % (cw + 20)) - 10;
+      const y = (((seedY * playH - t * (7 + mul * 5)) % (playH + 20)) + playH + 20) % (playH + 20) - 10;
+      const pulse = 0.4 + 0.6 * Math.max(0, Math.sin(t * 1.6 + i * 1.3));
+      ctx.fillStyle = `rgba(200,255,160,${(0.1 * pulse).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(220,255,180,${(0.5 * pulse).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (biome === 'purple') {
+      // Fireflies: wander lazily, blink on and off.
+      const x = ((seedX * cw + Math.sin(t * 0.5 + i * 1.7) * 34) % (cw + 20)) - 10;
+      const y = playH * (0.25 + seedY * 0.6) + Math.cos(t * 0.4 + i * 2.6) * 16;
+      const blink = Math.max(0, Math.sin(t * 1.9 + i * 2.4));
+      const a = blink * blink * 0.85;
+      if (a > 0.05) {
+        ctx.fillStyle = `rgba(255,233,150,${(a * 0.25).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,240,170,${a.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // Meadow pollen and ridge motes.
+      const drift = biome === 'grass' ? 8 : 5;
+      const x = ((seedX * cw + t * drift * mul) % (cw + 20)) - 10;
+      const y = ((seedY * playH + t * 6 * mul) % (playH + 20)) - 10;
+      ctx.fillStyle = biome === 'grass' ? 'rgba(255,255,255,0.5)' : 'rgba(210,220,230,0.35)';
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/**
+ * The occasional friendly passer-by: butterflies over the meadow and hollow, a
+ * tumbleweed bouncing through the desert, birds over the peaks and the ridge,
+ * shooting stars across the kingdom. One at a time, on a long cycle, so it
+ * stays a surprise rather than clutter.
+ */
+function drawCritter(
+  ctx: CanvasRenderingContext2D,
+  biome: Biome,
+  t: number,
+  cw: number,
+  playH: number,
+  horizonY: number,
+) {
+  if (biome === 'purple') {
+    const cycleLen = 9;
+    const phase = t % cycleLen;
+    if (phase < 0.7) {
+      const p = phase / 0.7;
+      const cycle = Math.floor(t / cycleLen);
+      const sx = cw * (0.1 + 0.6 * hash01(cycle * 3 + 1));
+      const sy = 14 + 30 * hash01(cycle * 5 + 2);
+      const x = sx + p * 150;
+      const y = sy + p * 70;
+      const grad = ctx.createLinearGradient(x - 34, y - 16, x, y);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(1, `rgba(255,250,220,${(0.9 * (1 - p)).toFixed(2)})`);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x - 34, y - 16);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,240,${(1 - p).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return;
+  }
+  if (biome === 'sand') {
+    const cycleLen = 14;
+    const phase = t % cycleLen;
+    if (phase < 6) {
+      const p = phase / 6;
+      const x = -20 + p * (cw + 40);
+      const y = horizonY - 7 - Math.abs(Math.sin(p * 22)) * 8;
+      ctx.strokeStyle = 'rgba(150,108,58,0.55)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      for (let sp = 0; sp < 3; sp += 1) {
+        const a = t * 6 + (sp / 3) * Math.PI;
+        ctx.moveTo(x - Math.cos(a) * 6, y - Math.sin(a) * 6);
+        ctx.lineTo(x + Math.cos(a) * 6, y + Math.sin(a) * 6);
+      }
+      ctx.stroke();
+    }
+    return;
+  }
+  if (biome === 'snow' || biome === 'stone') {
+    const cycleLen = 17;
+    const phase = t % cycleLen;
+    if (phase < 8) {
+      const p = phase / 8;
+      ctx.strokeStyle = 'rgba(45,55,65,0.5)';
+      ctx.lineWidth = 1.4;
+      for (let bi = 0; bi < 2; bi += 1) {
+        const x = -20 + p * (cw + 40) - bi * 16;
+        const y = playH * (0.18 + bi * 0.05) + Math.sin(p * 9 + bi) * 8;
+        const flap = Math.sin(t * 9 + bi * 1.4) * 3;
+        ctx.beginPath();
+        ctx.moveTo(x - 5, y - 2 - flap);
+        ctx.quadraticCurveTo(x - 2, y + 1, x, y - 1);
+        ctx.quadraticCurveTo(x + 2, y + 1, x + 5, y - 2 - flap);
+        ctx.stroke();
+      }
+    }
+    return;
+  }
+  // Meadow and hollow: a butterfly bobbing along on a wandering line.
+  const cycleLen = 15;
+  const phase = t % cycleLen;
+  if (phase < 8) {
+    const p = phase / 8;
+    const x = -16 + p * (cw + 32);
+    const y = playH * 0.3 + Math.sin(p * 13) * 22;
+    const flap = Math.abs(Math.sin(t * 11));
+    const wing = 2.2 + flap * 2.6;
+    ctx.fillStyle = biome === 'dirt' ? 'rgba(190,255,170,0.8)' : 'rgba(255,170,200,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(x - wing / 2 - 0.6, y, wing, 3, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(x + wing / 2 + 0.6, y, wing, 3, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(70,50,60,0.7)';
+    ctx.fillRect(x - 0.6, y - 2.4, 1.2, 4.8);
   }
 }
 
@@ -867,8 +1369,16 @@ function draw(
   ch: number,
   playH: number,
 ) {
-  const camX = Math.round(s.camX);
-  const camY = Math.round(s.camY);
+  // The backdrop uses the unshaken camera so only the WORLD kicks on impact -
+  // shaking the horizon too reads as the screen glitching rather than a thump.
+  const baseCamX = Math.round(s.camX);
+  const baseCamY = Math.round(s.camY);
+  let camX = baseCamX;
+  let camY = baseCamY;
+  if (s.shake > 0) {
+    camX += Math.round(Math.sin(s.animTime * 67) * s.shake * 14);
+    camY += Math.round(Math.cos(s.animTime * 81) * s.shake * 10);
+  }
   const biome = s.data.biome;
 
   const [skyTop, skyBottom] = SKY[biome];
@@ -920,7 +1430,7 @@ function draw(
     // Whole pixels. A fractional tile width accumulates a sub-pixel gap between
     // repeats, which shows as a hairline vertical seam on the half-alpha layers.
     const w = Math.ceil(drawH * (f[2] / f[3]));
-    const off = -Math.round(((camX * factor * zoom) % w) + w);
+    const off = -Math.round(((baseCamX * factor * zoom) % w) + w);
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, bandTop, cw, bandH);
@@ -952,12 +1462,17 @@ function draw(
   ctx.fillRect(0, 0, cw, playH);
   ctx.globalCompositeOperation = 'source-over';
 
-  // Ambient atmosphere, screen-space and biome-tinted: snow drifts down, sand
-  // grains blow sideways, everything else gets soft floating motes. Pure
-  // canvas primitives - no new art, no new state, just a function of the
-  // clock the frame already carries - so it costs a couple dozen arcs and
-  // never touches gameplay or the seeded generator the checkers replay.
+  // World personality, back to front: the sun/moon/stars set the hour, two
+  // bands of themed silhouettes set the place, then weather and the occasional
+  // passing critter set it in motion. All screen-space canvas primitives - no
+  // new art, no new state, just functions of the clock the frame already
+  // carries - so none of it touches gameplay or the seeded generator the
+  // checkers replay.
+  const horizonY = (GROUND_TOP * TILE + skyPad - baseCamY) * zoom;
+  drawCelestial(ctx, biome, s.animTime, cw, playH);
+  drawSilhouettes(ctx, biome, baseCamX, zoom, cw, playH, horizonY);
   drawAmbient(ctx, biome, s.animTime, cw, playH);
+  drawCritter(ctx, biome, s.animTime, cw, playH, horizonY);
 
   // World drawing happens in world units. `skyPad` is the surplus when the view
   // is taller than the world; `camY` is the scroll when it is shorter. Only one
@@ -1029,6 +1544,61 @@ function draw(
     }
   }
 
+  // --- door magic: the hidden treat, made discoverable ---
+  // Entry doors pulse with light, shed rising sparkles, and hang a bobbing star
+  // overhead; the exits get a fainter echo of the same glow. Standing in one
+  // pops an on-canvas prompt with a fill bar, so the "hold still" trick teaches
+  // itself the first time a kid walks into the light.
+  for (const d of s.data.doors) {
+    const spots: Array<[number, number, number]> = [
+      [d.tx, d.ty, 1],
+      [d.exitTx, d.exitTy, 0.45],
+    ];
+    for (const [dtx, dty, strength] of spots) {
+      if (dtx * TILE < camX - 40 || dtx * TILE > camX + viewW + 40) continue;
+      const cx = dtx * TILE + TILE / 2;
+      const cy = dty * TILE + TILE / 2;
+      const pulse = 0.6 + 0.4 * Math.sin(s.animTime * 3 + dtx);
+      const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, 20);
+      glow.addColorStop(0, `rgba(205,155,255,${(0.38 * pulse * strength).toFixed(3)})`);
+      glow.addColorStop(1, 'rgba(205,155,255,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - 20, cy - 22, 40, 44);
+      for (let k = 0; k < 3; k += 1) {
+        const p = (s.animTime * 0.45 + k / 3 + hash01(dtx + k)) % 1;
+        const sx = cx - 5 + Math.sin((p * 5 + k) * 4) * 5 + k * 3;
+        const sy = dty * TILE + 14 - p * 30;
+        ctx.fillStyle = `rgba(232,205,255,${((1 - p) * 0.85 * strength).toFixed(3)})`;
+        ctx.fillRect(sx, sy, 1.6, 1.6);
+      }
+      if (strength === 1) {
+        const bobY = dty * TILE - 24 + Math.sin(s.animTime * 2.2 + dtx) * 2.5;
+        drawFrame(ctx, sp.tiles, 'star', dtx * TILE + 3.5, bobY, 9, 9);
+      }
+    }
+  }
+  if (s.onDoor) {
+    const bx = s.onDoor.tx * TILE + TILE / 2;
+    const by = s.onDoor.ty * TILE - 36;
+    const bw = 74;
+    ctx.fillStyle = 'rgba(24,12,44,0.78)';
+    roundRectPath(ctx, bx - bw / 2, by, bw, 17, 4);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(220,190,255,0.9)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.fillStyle = '#fdf6ff';
+    ctx.font = 'bold 6.5px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Hold still to warp!', bx, by + 7.5);
+    ctx.textAlign = 'left';
+    const frac = Math.min(1, s.dwell / 0.3);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(bx - bw / 2 + 5, by + 11, bw - 10, 3);
+    ctx.fillStyle = '#ffd54a';
+    ctx.fillRect(bx - bw / 2 + 5, by + 11, (bw - 10) * frac, 3);
+  }
+
   // --- the flag pole and its goal ---
   {
     const poleX = s.data.flagX + TILE / 2 - 1.5;
@@ -1056,10 +1626,28 @@ function draw(
     s.animTime,
     6,
   );
-  for (const c of s.data.coins) {
+  for (let ci = 0; ci < s.data.coins.length; ci += 1) {
+    const c = s.data.coins[ci];
     if (c.taken) continue;
     if (c.x < camX - 20 || c.x > camX + viewW + 20) continue;
     const bob = Math.sin(s.animTime * 3 + c.x * 0.05) * 1.5;
+    if (ci === s.rainbowIdx) {
+      // The magic coin: a slowly cycling rainbow halo with two orbiting sparks.
+      const hue = (s.animTime * 140) % 360;
+      const r = 10 + Math.sin(s.animTime * 5) * 1.5;
+      const halo = ctx.createRadialGradient(c.x, c.y + bob, 2, c.x, c.y + bob, r + 4);
+      halo.addColorStop(0, `hsla(${hue.toFixed(0)},90%,65%,0.55)`);
+      halo.addColorStop(1, `hsla(${hue.toFixed(0)},90%,65%,0)`);
+      ctx.fillStyle = halo;
+      ctx.fillRect(c.x - r - 4, c.y + bob - r - 4, (r + 4) * 2, (r + 4) * 2);
+      drawFrame(ctx, sp.tiles, coinName, c.x - 7.5, c.y - 7.5 + bob, 15, 15);
+      for (let k = 0; k < 2; k += 1) {
+        const a = s.animTime * 4 + k * Math.PI;
+        ctx.fillStyle = `hsla(${((hue + 120 * (k + 1)) % 360).toFixed(0)},90%,70%,0.9)`;
+        ctx.fillRect(c.x + Math.cos(a) * 9 - 1, c.y + bob + Math.sin(a) * 9 - 1, 2, 2);
+      }
+      continue;
+    }
     drawFrame(ctx, sp.tiles, coinName, c.x - 6, c.y - 6 + bob, 12, 12);
     // A travelling glint, phase-shifted per coin so a row of them sparkles.
     const twinkle = Math.sin(s.animTime * 4 + c.x * 0.3);
@@ -1112,13 +1700,25 @@ function draw(
     drawFrame(ctx, sp.enemies, frame, e.x - 2, e.y - 2, 16, 16, e.vx > 0);
   }
 
+  // --- dust puffs, behind the player so a landing kicks up around the feet ---
+  for (const p of s.puffs) {
+    ctx.strokeStyle = `rgba(255,255,255,${(Math.max(0, p.life / 0.35) * 0.6).toFixed(3)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   // --- player ---
   const b = s.body;
   const h = s.big ? PH_BIG : PH;
   const blink = s.hurt > 0 && Math.floor(s.animTime * 20) % 2 === 0;
   if (!blink) {
+    const foot = GROUND_TOP * TILE - h;
+    const cheering = s.finish > 0 && b.y >= foot - 1;
     let frame = 'character_green_idle';
-    if (s.finish > 0) frame = 'character_green_climb_a';
+    if (cheering) frame = 'character_green_front';
+    else if (s.finish > 0) frame = 'character_green_climb_a';
     else if (!b.onGround) frame = 'character_green_jump';
     else if (Math.abs(b.vx) > 20)
       frame = animFrame(['character_green_walk_a', 'character_green_walk_b'], s.animTime, 10);
@@ -1129,12 +1729,50 @@ function draw(
       ((b.vx > 0 && s.facing < 0) || (b.vx < 0 && s.facing > 0));
     if (skidding) frame = 'character_green_duck';
 
-    // Squash on landing, stretch on takeoff. Cheap, and it makes jumps feel good.
+    // A soft golden aura while grown, so the power-up state reads at a glance.
+    if (s.big) {
+      const ax = b.x + PW / 2;
+      const ay = b.y + h / 2;
+      const aura = ctx.createRadialGradient(ax, ay, 3, ax, ay, 17);
+      aura.addColorStop(0, `rgba(255,214,90,${(0.2 + 0.08 * Math.sin(s.animTime * 4)).toFixed(3)})`);
+      aura.addColorStop(1, 'rgba(255,214,90,0)');
+      ctx.fillStyle = aura;
+      ctx.fillRect(ax - 17, ay - 17, 34, 34);
+    }
+
+    // Squash on landing, stretch on takeoff; a slow breathing bob while idle; a
+    // happy pop on pickups; little victory hops at the flag. Cheap, and it is
+    // most of what makes the character feel alive.
+    const idle = b.onGround && Math.abs(b.vx) < 10 && s.finish <= 0;
+    const bobScale = idle ? 1 + Math.sin(s.animTime * 2.6) * 0.03 : 1;
+    const pop = 1 + s.pulse * 0.22;
+    const hop = cheering ? Math.abs(Math.sin(s.animTime * 7)) * 4 : 0;
     const sq = s.squash;
-    const dw = (s.big ? 20 : 16) * (1 + sq * 0.18);
-    const dh = (s.big ? 26 : 20) * (1 - sq * 0.18);
-    drawFrame(ctx, sp.characters, frame, b.x + PW / 2 - dw / 2, b.y + h - dh, dw, dh, s.facing < 0);
+    const dw = (s.big ? 20 : 16) * (1 + sq * 0.18) * pop;
+    const dh = (s.big ? 26 : 20) * (1 - sq * 0.18) * bobScale * pop;
+    drawFrame(
+      ctx,
+      sp.characters,
+      frame,
+      b.x + PW / 2 - dw / 2,
+      b.y + h - dh - hop,
+      dw,
+      dh,
+      s.facing < 0,
+    );
   }
+
+  // --- confetti ---
+  for (const f of s.confetti) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, f.life));
+    ctx.translate(f.x, f.y);
+    ctx.rotate(f.spin);
+    ctx.fillStyle = f.color;
+    ctx.fillRect(-2, -1.2, 4, 2.4);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
 
   // --- sparks ---
   for (const p of s.sparks) {
@@ -1179,9 +1817,100 @@ function draw(
   ctx.fillStyle = 'rgba(255,255,255,0.95)';
   ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
   ctx.fillText(`LEVEL ${s.level}`, 10, 17);
-  drawFrame(ctx, sp.tiles, s.big ? 'hud_heart' : 'hud_heart_empty', 82, 6, 13, 13);
+  const heartPulse = s.big ? Math.sin(s.animTime * 5) * 1.5 : 0;
+  drawFrame(
+    ctx,
+    sp.tiles,
+    s.big ? 'hud_heart' : 'hud_heart_empty',
+    82 - heartPulse / 2,
+    6 - heartPulse / 2,
+    13 + heartPulse,
+    13 + heartPulse,
+  );
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText(WORLD[biome].name, cw / 2, 16);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
   drawFrame(ctx, sp.tiles, 'hud_coin', cw - 74, 6, 13, 13);
   ctx.textAlign = 'right';
   ctx.fillText(`${s.coinsTotal}`, cw - 10, 17);
   ctx.textAlign = 'left';
+
+  // --- coin combo chip, growing with the streak ---
+  if (s.combo >= 3 && s.comboT > 0) {
+    const size = 11 + Math.min(s.combo, 10) * 0.6;
+    ctx.font = `bold ${size.toFixed(1)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillText(`COMBO x${s.combo}`, cw - 9, 40 + size / 3);
+    ctx.fillStyle = '#ffd54a';
+    ctx.fillText(`COMBO x${s.combo}`, cw - 10, 39 + size / 3);
+    ctx.textAlign = 'left';
+  }
+
+  // --- world intro banner: "you have arrived somewhere new" ---
+  if (s.intro > 0) {
+    const a = Math.min(1, s.intro / 0.45);
+    const popIn = Math.min(1, (2.2 - s.intro) / 0.3);
+    const scale = 0.8 + 0.2 * popIn;
+    const bw = Math.min(cw - 40, 290);
+    const bx = cw / 2;
+    const by = playH * 0.3;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(bx, by);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = 'rgba(22,12,46,0.8)';
+    roundRectPath(ctx, -bw / 2, -30, bw, 60, 12);
+    ctx.fill();
+    ctx.strokeStyle = WORLD[biome].accent;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = WORLD[biome].accent;
+    ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(`LEVEL ${s.level}`, 0, -9);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 19px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(WORLD[biome].name, 0, 14);
+    drawFrame(ctx, sp.tiles, 'star', -bw / 2 + 10, -8, 15, 15);
+    drawFrame(ctx, sp.tiles, 'star', bw / 2 - 25, -8, 15, 15);
+    ctx.textAlign = 'left';
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // --- level clear banner, over the confetti ---
+  if (s.finish > 0) {
+    const bt = 2.4 - s.finish;
+    const scale = Math.min(1, bt * 4);
+    const bx = cw / 2;
+    const by = playH * 0.32;
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.scale(scale, scale);
+    const bw = Math.min(cw - 40, 300);
+    ctx.fillStyle = 'rgba(22,12,46,0.82)';
+    roundRectPath(ctx, -bw / 2, -34, bw, 72, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#ffd54a';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(`LEVEL ${s.level} CLEAR!`, 0, -6);
+    ctx.fillStyle = '#ffe9a8';
+    ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(`You found ${s.coinsHere} coin${s.coinsHere === 1 ? '' : 's'}!`, 0, 14);
+    const starBob = Math.sin(s.animTime * 6) * 2;
+    for (let k = -1; k <= 1; k += 1) {
+      drawFrame(ctx, sp.tiles, 'star', k * 26 - 8, 20 + (k === 0 ? -starBob : starBob), 16, 16);
+    }
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
 }
