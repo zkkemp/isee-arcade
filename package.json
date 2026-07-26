@@ -18,7 +18,8 @@
     "check:climber": "tsx scripts/check-climber.ts",
     "check:match3": "tsx scripts/check-match3.ts",
     "check:runner": "tsx scripts/check-runner.ts",
-    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner",
+    "check:tetra": "tsx scripts/check-tetra.ts",
+    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra",
     "icons": "node scripts/make-icons.mjs",
     "passcode": "node scripts/passcode-hash.mjs"
   },

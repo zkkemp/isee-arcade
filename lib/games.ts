@@ -6,6 +6,7 @@ import type { Character } from './characters';
 export type GameId =
   | 'match3'
   | 'blocks'
+  | 'tetris'
   | 'frogger'
   | 'snake'
   | 'platformer'
@@ -114,6 +115,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'grid',
     aspect: 3 / 4,
   },
+  tetris: {
+    id: 'tetris',
+    name: 'Tetra Stack',
+    tagline: 'Slot the falling shapes, complete the rows, keep the stack down.',
+    gateNote: 'Study time buys play time.',
+    icon: '🟪',
+    accent: '#8b7cf6',
+    controls: 'dpad',
+    aspect: 1 / 2,
+  },
   runner: {
     id: 'runner',
     name: 'Dash Run',
@@ -169,6 +180,7 @@ export const GAMES: Record<GameId, GameMeta> = {
 export const GAME_LIST: GameMeta[] = [
   GAMES.match3,
   GAMES.blocks,
+  GAMES.tetris,
   GAMES.platformer,
   GAMES.runner,
   GAMES.breakout,
