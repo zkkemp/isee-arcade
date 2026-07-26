@@ -270,10 +270,14 @@ function explore(L: Level, opts: ExploreOpts = {}): Reach {
         const idx = blockAt.get(`${res.headHit.tx},${res.headHit.ty}`);
         if (idx !== undefined) r.blocks[idx] = true;
       }
-      // Doors warp only when you stop in the doorway, so a run straight past one
-      // does not teleport - which is what keeps the stretch between a pair
-      // walkable and its coins collectable.
-      if (res.door && Math.abs(b.vx) < 24) {
+      // Doors warp only when you stand in the doorway with no direction held
+      // (the game accumulates a short dwell over exactly that condition), so a
+      // run straight past one does not teleport - which is what keeps the
+      // stretch between a pair walkable and its coins collectable. Modelled
+      // here as the same trigger: grounded on the door, no left/right input.
+      // The 0.3s dwell is omitted deliberately: standing still with vx snapped
+      // to zero changes nothing in 0.3s, so the edge is the same either way.
+      if (res.door && b.onGround && dir === 0) {
         const di = doorAt.get(`${res.door.tx},${res.door.ty}`);
         if (di !== undefined) {
           const exit = doorExit(L.doors[di]);

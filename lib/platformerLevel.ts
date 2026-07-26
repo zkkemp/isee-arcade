@@ -79,6 +79,14 @@ export const SKID_DECEL = 1250;
  * jump still keeps its speed since this only decays vx with no input held).
  */
 export const FRICTION = 1080;
+/**
+ * Below this speed with no direction held, vx snaps straight to zero. Ground
+ * friction already snaps (the `<= drop` branch below), but airborne bodies kept
+ * whatever residue they had, and ANY residual vx feeds the camera lookahead and
+ * kept the old door-dwell speed gate from ever passing - a standing hero has to
+ * mean vx === 0 exactly, or the hero and the camera jitter around it.
+ */
+export const VX_EPSILON = 6;
 /** Air control. Weaker than the ground burst, so a jump commits you somewhat. */
 export const AIR_ACCEL = 430;
 /** Jump impulse from a standstill. */
@@ -518,6 +526,9 @@ export function stepBody(tiles: TileCode[][], b: Body, c: Controls, dt: number):
     const drop = FRICTION * dt;
     b.vx = Math.abs(b.vx) <= drop ? 0 : b.vx - Math.sign(b.vx) * drop;
   }
+  // Nothing held: tiny residual speeds settle to exactly zero (air included),
+  // so an idle body is truly stationary rather than oscillating around rest.
+  if (dir === 0 && Math.abs(b.vx) < VX_EPSILON) b.vx = 0;
 
   if (c.jump) {
     // Running raises the jump. This is the run threshold: speed buys height and

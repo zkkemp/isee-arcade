@@ -49,6 +49,7 @@ import {
   type Level,
   type TileCode,
 } from '@/lib/platformerLevel';
+import { drawCharacterSprite, type Character } from '@/lib/characters';
 import { animFrame, drawFrame, useSprites, type SpriteSet } from '@/lib/sprites';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
@@ -321,6 +322,7 @@ export default function Platformer({
   api,
   restartToken,
   difficulty,
+  character,
   controlsInset,
 }: GameCanvasProps) {
   const stateRef = useRef<State>(freshState(1, difficulty));
@@ -387,10 +389,10 @@ export default function Platformer({
           const next = freshState(cleared + 1, difficulty, s.coinsTotal);
           stateRef.current = next;
           api.requestGate(`Level ${cleared} cleared`);
-          draw(ctx, next, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+          draw(ctx, next, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
           return;
         }
-        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+        draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
         return;
       }
 
@@ -489,7 +491,15 @@ export default function Platformer({
       // warp, so a kid running through a doorway still gets told the trick.
       const doorUsable = res.door !== null && b.onGround && s.doorCd <= 0;
       s.onDoor = doorUsable ? { tx: res.door!.tx, ty: res.door!.ty } : null;
-      if (doorUsable && Math.abs(b.vx) < 24) {
+      // The trigger is INPUT, not speed: the old `|vx| < 24` gate kept resetting
+      // off residual velocity, so "hold still" never fired for a kid whose thumb
+      // was still brushing the pad. Now letting go of left/right is the whole
+      // gesture - the dwell accumulates whenever no direction is held, and vx is
+      // snapped to zero so the body visibly settles into the doorway. A kid who
+      // walks onto a door and releases the buttons ALWAYS warps in ~0.3s.
+      const steering = input.held.left || input.held.right;
+      if (doorUsable && !steering) {
+        b.vx = 0;
         s.dwell += dt;
         if (s.dwell > 0.3) {
           const door = s.data.doors.find((d) => d.tx === res.door!.tx && d.ty === res.door!.ty);
@@ -717,7 +727,7 @@ export default function Platformer({
         api.setStatus(`Level ${s.level} clear`);
         burst(s, b.x + PW / 2, b.y, 20, 90, '#ffe9a8');
         confettiBurst(s, b.x + PW / 2, (GROUND_TOP - FLAG_H) * TILE, 42);
-        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+        draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
         return;
       }
 
@@ -731,7 +741,7 @@ export default function Platformer({
       // Vertical follow is slower than horizontal: a jump should not yank the view.
       s.camY += (cameraY(b.y, bodyTop(s), viewH) - s.camY) * Math.min(1, dt * CAMERA_LERP * 0.7);
 
-      draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+      draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
     },
   });
 
@@ -909,15 +919,15 @@ const BACKDROP_LAYERS: Record<Backdrop, { far: string; near: string }> = {
 /**
  * Sky gradient per biome, drawn under the parallax AND multiplied over it, so
  * each world gets its own light: bright noon in the meadow, baked orange in the
- * desert, icy blue on the peaks, misty grey-green on the ridge, warm dusk in
- * the hollow, and a real starlit evening in the purple kingdom.
+ * desert, aurora twilight on the peaks, a moonlit night over the graveyard,
+ * glowing dusk in the hollow, and a real starlit evening in the crystal kingdom.
  */
 const SKY: Record<Biome, [string, string]> = {
   grass: ['#8fd3ff', '#d8f1ff'],
   sand: ['#ffc97d', '#ffedcb'],
-  snow: ['#a9d6f7', '#eef9ff'],
-  stone: ['#8fa9c2', '#dbe7ee'],
-  dirt: ['#eab088', '#ffe6c9'],
+  snow: ['#8fbce8', '#eaf7ff'],
+  stone: ['#2b3152', '#6b729a'],
+  dirt: ['#d89468', '#f7ddba'],
   purple: ['#6f5ac2', '#dcc4ef'],
 };
 
@@ -937,12 +947,18 @@ const BAND: Record<Biome, string> = {
 // state), drawn behind the world. None of it touches gameplay or the seeded
 // generator the checkers replay.
 
-/** Kid-facing identity for each biome: a name, silhouette inks, banner accent. */
+/**
+ * Kid-facing identity for each biome: a name, silhouette inks, banner accent.
+ * Each world is a PLACE, not a palette swap: a meadow with a distant castle, a
+ * pyramid desert under a blazing sun, aurora peaks over a pine ridge, a moonlit
+ * graveyard with bats, a glowing giant-mushroom hollow, and a starlit crystal
+ * kingdom with floating islands.
+ */
 const WORLD: Record<Biome, { name: string; far: string; near: string; accent: string }> = {
   grass: { name: 'SUNNY MEADOW', far: 'rgba(120,185,125,0.30)', near: 'rgba(75,145,95,0.40)', accent: '#4caf50' },
   sand: { name: 'BLAZING DESERT', far: 'rgba(235,168,90,0.30)', near: 'rgba(198,128,62,0.38)', accent: '#e8963c' },
-  snow: { name: 'FROSTY PEAKS', far: 'rgba(148,178,214,0.38)', near: 'rgba(116,148,190,0.42)', accent: '#64a8e8' },
-  stone: { name: 'PINE RIDGE', far: 'rgba(72,102,96,0.35)', near: 'rgba(46,76,70,0.45)', accent: '#3f7f6f' },
+  snow: { name: 'AURORA PEAKS', far: 'rgba(148,178,214,0.38)', near: 'rgba(96,130,178,0.45)', accent: '#64a8e8' },
+  stone: { name: 'MOONLIT GRAVEYARD', far: 'rgba(64,72,110,0.50)', near: 'rgba(34,40,68,0.62)', accent: '#8fa3e8' },
   dirt: { name: 'MUSHROOM HOLLOW', far: 'rgba(152,82,72,0.30)', near: 'rgba(120,60,56,0.40)', accent: '#c05a4a' },
   purple: { name: 'STARLIGHT KINGDOM', far: 'rgba(94,66,148,0.42)', near: 'rgba(62,42,108,0.52)', accent: '#8a5ce8' },
 };
@@ -990,9 +1006,63 @@ function drawCelestial(ctx: CanvasRenderingContext2D, biome: Biome, t: number, c
 
   if (biome === 'grass') sun(cw * 0.8, playH * 0.15, 16, '#fff3b8', 'rgba(255,240,170,0.55)', false);
   else if (biome === 'sand') sun(cw * 0.78, playH * 0.14, 20, '#ffe27a', 'rgba(255,200,110,0.6)', true);
-  else if (biome === 'snow') sun(cw * 0.8, playH * 0.13, 13, '#f6fbff', 'rgba(230,245,255,0.5)', false);
-  else if (biome === 'stone') sun(cw * 0.76, playH * 0.16, 14, 'rgba(245,250,250,0.7)', 'rgba(230,240,240,0.35)', false);
-  else if (biome === 'purple') {
+  else if (biome === 'snow') {
+    // Aurora: three slow translucent ribbons waving across the upper sky, then
+    // a small pale sun low on the horizon - a polar twilight, not noon.
+    const ribbons: Array<[string, number, number]> = [
+      ['rgba(110,240,180,', 0.16, 0], // teal-green
+      ['rgba(140,190,255,', 0.24, 2.1], // ice blue
+      ['rgba(220,150,255,', 0.32, 4.2], // violet edge
+    ];
+    for (const [tint, yFrac, phase] of ribbons) {
+      ctx.beginPath();
+      const baseY = playH * (0.08 + yFrac);
+      ctx.moveTo(-10, baseY);
+      for (let x = -10; x <= cw + 10; x += 24) {
+        ctx.lineTo(x, baseY + Math.sin(x * 0.012 + t * 0.5 + phase) * playH * 0.045);
+      }
+      for (let x = cw + 10; x >= -10; x -= 24) {
+        ctx.lineTo(x, baseY + Math.sin(x * 0.012 + t * 0.5 + phase + 0.9) * playH * 0.045 - playH * 0.075);
+      }
+      ctx.closePath();
+      const wave = 0.5 + 0.5 * Math.sin(t * 0.7 + phase);
+      ctx.fillStyle = `${tint}${(0.10 + 0.08 * wave).toFixed(3)})`;
+      ctx.fill();
+    }
+    sun(cw * 0.82, playH * 0.2, 11, '#f6fbff', 'rgba(230,245,255,0.45)', false);
+  } else if (biome === 'stone') {
+    // The graveyard's big low moon: a wide halo, a bright disc, three craters,
+    // and a scatter of dim stars. This is what flips the world to night.
+    const mx = cw * 0.74;
+    const my = playH * 0.2;
+    const mr = 26;
+    for (let i = 0; i < 14; i += 1) {
+      const x = hash01(i * 5 + 3) * cw;
+      const y = hash01(i * 9 + 4) * playH * 0.45;
+      const tw = 0.4 + 0.6 * Math.max(0, Math.sin(t * 1.4 + i * 2.3));
+      ctx.fillStyle = `rgba(226,232,255,${(0.25 + 0.35 * tw).toFixed(2)})`;
+      ctx.fillRect(x, y, 1.4, 1.4);
+    }
+    const halo = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 3);
+    halo.addColorStop(0, 'rgba(226,232,255,0.35)');
+    halo.addColorStop(1, 'rgba(226,232,255,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(mx - mr * 3, my - mr * 3, mr * 6, mr * 6);
+    ctx.fillStyle = '#e8ecf8';
+    ctx.beginPath();
+    ctx.arc(mx, my, mr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(168,178,214,0.6)';
+    for (const [dx, dy, cr] of [
+      [-0.35, -0.15, 0.2],
+      [0.25, 0.25, 0.14],
+      [0.1, -0.4, 0.1],
+    ]) {
+      ctx.beginPath();
+      ctx.arc(mx + dx * mr, my + dy * mr, cr * mr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (biome === 'purple') {
     // A starfield, a crescent moon, and (from drawCritter) shooting stars.
     for (let i = 0; i < 26; i += 1) {
       const x = hash01(i * 3 + 1) * cw;
@@ -1022,9 +1092,11 @@ function drawCelestial(ctx: CanvasRenderingContext2D, biome: Biome, t: number, c
 
 /**
  * Two parallax bands of themed silhouettes between the backdrop art and the
- * world: rolling hills, dunes, jagged snow-capped mountains, a pine ridge,
- * giant spotted mushrooms, or crystal spires. This - not the palette - is what
- * makes "now I'm in the mushroom world" land at a glance.
+ * world, each with its own LANDMARK set-pieces: meadow hills with a distant
+ * castle, dunes with sunlit pyramids, snow peaks over a pine ridge, a graveyard
+ * of dead trees, headstones and iron fence, glowing giant mushrooms, and crystal
+ * spires with floating islands. This - not the palette - is what makes "now I'm
+ * somewhere new" land at a glance.
  */
 function drawSilhouettes(
   ctx: CanvasRenderingContext2D,
@@ -1048,14 +1120,73 @@ function drawSilhouettes(
       const r1 = hash01(k * 7.3 + (near ? 5 : 0));
       const r2 = hash01(k * 13.7 + (near ? 9 : 2));
       const h = (near ? 46 : 30) * (0.7 + r1 * 0.6);
-      if (biome === 'grass' || biome === 'sand') {
-        // Soft humps: meadow hills, or wind-piled dunes (sand runs sharper).
-        const peak = biome === 'sand' ? 1.9 : 1.6;
+      if (biome === 'grass') {
+        // Rolling meadow hills, with a distant castle rising off one far hill
+        // every few screens - the meadow's landmark, not just another hump.
         ctx.beginPath();
         ctx.moveTo(x - 4, horizonY + 1);
-        ctx.quadraticCurveTo(x + period * (0.35 + r2 * 0.3), horizonY - h * peak, x + period + 4, horizonY + 1);
+        ctx.quadraticCurveTo(x + period * (0.35 + r2 * 0.3), horizonY - h * 1.6, x + period + 4, horizonY + 1);
         ctx.fill();
+        if (!near && k % 7 === 3) {
+          const cxp = x + period * (0.35 + r2 * 0.3);
+          const kw = h * 1.1;
+          const kh = h * 1.35;
+          const top = horizonY - h * 0.9 - kh;
+          // Keep, two side towers with pointed roofs, and pennant flags.
+          ctx.fillRect(cxp - kw / 2, top, kw, kh + h * 0.9);
+          for (const sdir of [-1, 1]) {
+            const txp = cxp + sdir * kw * 0.62;
+            ctx.fillRect(txp - kw * 0.16, top - kh * 0.28, kw * 0.32, kh + h);
+            ctx.beginPath();
+            ctx.moveTo(txp - kw * 0.22, top - kh * 0.28);
+            ctx.lineTo(txp, top - kh * 0.62);
+            ctx.lineTo(txp + kw * 0.22, top - kh * 0.28);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillRect(txp, top - kh * 0.78, 1, kh * 0.17);
+            ctx.beginPath();
+            ctx.moveTo(txp + 1, top - kh * 0.78);
+            ctx.lineTo(txp + 6, top - kh * 0.72);
+            ctx.lineTo(txp + 1, top - kh * 0.67);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = color;
+          }
+          // Battlements along the keep.
+          for (let m = -2; m <= 2; m += 1) {
+            ctx.fillRect(cxp + m * kw * 0.2 - kw * 0.06, top - kh * 0.1, kw * 0.12, kh * 0.1);
+          }
+        }
+      } else if (biome === 'sand') {
+        // Wind-piled dunes, and great pyramids shimmering on the far horizon.
+        ctx.beginPath();
+        ctx.moveTo(x - 4, horizonY + 1);
+        ctx.quadraticCurveTo(x + period * (0.35 + r2 * 0.3), horizonY - h * 1.9, x + period + 4, horizonY + 1);
+        ctx.fill();
+        if (!near && k % 5 === 2) {
+          const px = x + period * 0.5;
+          const pw2 = period * 0.42;
+          const ph2 = h * 2.3;
+          ctx.beginPath();
+          ctx.moveTo(px - pw2, horizonY + 1);
+          ctx.lineTo(px, horizonY - ph2);
+          ctx.lineTo(px + pw2, horizonY + 1);
+          ctx.closePath();
+          ctx.fill();
+          // The sun-struck face, so it reads as stone and not a dune.
+          ctx.fillStyle = 'rgba(255,214,150,0.30)';
+          ctx.beginPath();
+          ctx.moveTo(px, horizonY - ph2);
+          ctx.lineTo(px + pw2, horizonY + 1);
+          ctx.lineTo(px + pw2 * 0.28, horizonY + 1);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = color;
+        }
       } else if (biome === 'snow') {
+        // Far: jagged snow-capped mountains. Near: a ridge of pines under them,
+        // so the world reads as alpine forest below the peaks, not bare ice.
         const px = x + period * (0.3 + r2 * 0.4);
         const py = horizonY - h * 2;
         ctx.beginPath();
@@ -1073,23 +1204,72 @@ function drawSilhouettes(
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = color;
+        if (near) {
+          for (let p = 0; p < 3; p += 1) {
+            const tx2 = x + period * (0.15 + p * 0.32 + hash01(k * 31 + p) * 0.12);
+            const th2 = h * (0.5 + hash01(k * 37 + p) * 0.35);
+            for (let tier = 0; tier < 2; tier += 1) {
+              const ty2 = horizonY - th2 * (0.1 + tier * 0.4);
+              const tw2 = th2 * (0.5 - tier * 0.14);
+              ctx.beginPath();
+              ctx.moveTo(tx2, ty2 - th2 * 0.55);
+              ctx.lineTo(tx2 - tw2, ty2);
+              ctx.lineTo(tx2 + tw2, ty2);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+        }
       } else if (biome === 'stone') {
-        // A pine: three stacked triangles on a stubby trunk.
-        const px = x + period * (0.25 + r2 * 0.5);
-        const th = h * 1.5;
-        ctx.fillRect(px - 1.5, horizonY - th * 0.2, 3, th * 0.22);
-        for (let tier = 0; tier < 3; tier += 1) {
-          const ty = horizonY - th * (0.16 + tier * 0.28);
-          const tw = th * (0.42 - tier * 0.1);
+        // The graveyard. Far: bare dead trees clawing at the moon on low
+        // mounds. Near: headstones and stretches of iron fence.
+        if (!near) {
+          const px = x + period * (0.25 + r2 * 0.5);
+          const th = h * 1.7;
           ctx.beginPath();
-          ctx.moveTo(px, ty - th * 0.36);
-          ctx.lineTo(px - tw, ty);
-          ctx.lineTo(px + tw, ty);
-          ctx.closePath();
+          ctx.moveTo(x - 4, horizonY + 1);
+          ctx.quadraticCurveTo(px, horizonY - h * 0.7, x + period + 4, horizonY + 1);
           ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(px, horizonY - h * 0.3);
+          ctx.lineTo(px + th * 0.06, horizonY - h * 0.3 - th * 0.55);
+          ctx.stroke();
+          ctx.lineWidth = 1.4;
+          for (let br = 0; br < 3; br += 1) {
+            const by = horizonY - h * 0.3 - th * (0.25 + br * 0.15);
+            const bd = (br % 2 === 0 ? -1 : 1) * (0.5 + hash01(k * 41 + br) * 0.4);
+            ctx.beginPath();
+            ctx.moveTo(px + th * 0.04, by);
+            ctx.quadraticCurveTo(px + bd * th * 0.2, by - th * 0.1, px + bd * th * 0.34, by - th * 0.22);
+            ctx.stroke();
+          }
+        } else {
+          // Two or three headstones - round-topped slabs and little crosses -
+          // plus fence posts strung between them.
+          for (let gvi = 0; gvi < 3; gvi += 1) {
+            const gx = x + period * (0.12 + gvi * 0.3 + hash01(k * 43 + gvi) * 0.1);
+            const gh = h * (0.45 + hash01(k * 47 + gvi) * 0.3);
+            if (hash01(k * 53 + gvi) < 0.55) {
+              ctx.beginPath();
+              ctx.arc(gx, horizonY - gh, gh * 0.35, Math.PI, 0);
+              ctx.fill();
+              ctx.fillRect(gx - gh * 0.35, horizonY - gh, gh * 0.7, gh);
+            } else {
+              ctx.fillRect(gx - gh * 0.08, horizonY - gh * 1.15, gh * 0.16, gh * 1.15);
+              ctx.fillRect(gx - gh * 0.32, horizonY - gh * 0.85, gh * 0.64, gh * 0.16);
+            }
+          }
+          for (let fp = 0; fp < 5; fp += 1) {
+            const fx = x + period * (0.05 + fp * 0.22);
+            ctx.fillRect(fx, horizonY - h * 0.28, 1.6, h * 0.28);
+          }
+          ctx.fillRect(x, horizonY - h * 0.2, period * 0.95, 1.4);
         }
       } else if (biome === 'dirt') {
-        // A giant mushroom: stem, domed cap, pale spots.
+        // A giant mushroom: stem, domed cap, pale spots - and a soft bioluminescent
+        // rim under the cap, so the whole hollow reads as lit from its own forest.
         const px = x + period * (0.3 + r2 * 0.4);
         const mh = h * 1.4;
         const capR = mh * 0.55;
@@ -1097,6 +1277,11 @@ function drawSilhouettes(
         ctx.beginPath();
         ctx.arc(px, horizonY - mh * 0.66, capR, Math.PI, 0);
         ctx.fill();
+        const rim = ctx.createRadialGradient(px, horizonY - mh * 0.6, capR * 0.2, px, horizonY - mh * 0.6, capR * 1.15);
+        rim.addColorStop(0, 'rgba(160,255,190,0.20)');
+        rim.addColorStop(1, 'rgba(160,255,190,0)');
+        ctx.fillStyle = rim;
+        ctx.fillRect(px - capR * 1.15, horizonY - mh * 0.6 - capR * 0.4, capR * 2.3, capR * 1.2);
         ctx.fillStyle = 'rgba(255,235,215,0.4)';
         for (let d = 0; d < 3; d += 1) {
           const dx = px + (hash01(k * 17 + d) - 0.5) * capR * 1.3;
@@ -1106,7 +1291,8 @@ function drawSilhouettes(
         }
         ctx.fillStyle = color;
       } else {
-        // Purple: an angular crystal cluster with a bright glint edge.
+        // Purple: angular crystal spires on the ground, and - on the near band -
+        // little floating islands drifting in the starlight above them.
         const px = x + period * (0.3 + r2 * 0.4);
         const chh = h * 1.7;
         for (let spike = -1; spike <= 1; spike += 1) {
@@ -1125,6 +1311,32 @@ function drawSilhouettes(
         ctx.moveTo(px, horizonY - chh);
         ctx.lineTo(px - chh * 0.05, horizonY + 1);
         ctx.stroke();
+        if (near && k % 4 === 1) {
+          const ix = x + period * (0.4 + r2 * 0.2);
+          const iy = horizonY - chh * 1.7 - hash01(k * 59) * 26;
+          const iw = period * 0.3;
+          // Grassy top, rocky underside tapering to a point, one crystal on deck.
+          ctx.beginPath();
+          ctx.ellipse(ix, iy, iw, iw * 0.22, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(ix - iw * 0.75, iy + iw * 0.08);
+          ctx.lineTo(ix, iy + iw * 0.72);
+          ctx.lineTo(ix + iw * 0.75, iy + iw * 0.08);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(ix + iw * 0.2, iy - iw * 0.5);
+          ctx.lineTo(ix + iw * 0.08, iy - iw * 0.05);
+          ctx.lineTo(ix + iw * 0.34, iy - iw * 0.05);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = 'rgba(230,210,255,0.35)';
+          ctx.beginPath();
+          ctx.ellipse(ix, iy - iw * 0.02, iw * 0.7, iw * 0.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = color;
+        }
       }
     }
   };
@@ -1210,9 +1422,9 @@ function drawAmbient(ctx: CanvasRenderingContext2D, biome: Biome, t: number, cw:
 
 /**
  * The occasional friendly passer-by: butterflies over the meadow and hollow, a
- * tumbleweed bouncing through the desert, birds over the peaks and the ridge,
- * shooting stars across the kingdom. One at a time, on a long cycle, so it
- * stays a surprise rather than clutter.
+ * tumbleweed bouncing through the desert, birds over the peaks, a flit of bats
+ * across the graveyard moon, shooting stars across the kingdom. One at a time,
+ * on a long cycle, so it stays a surprise rather than clutter.
  */
 function drawCritter(
   ctx: CanvasRenderingContext2D,
@@ -1268,7 +1480,30 @@ function drawCritter(
     }
     return;
   }
-  if (biome === 'snow' || biome === 'stone') {
+  if (biome === 'stone') {
+    // Bats: a small flit of three, wheeling erratically across the moonlight
+    // with a fast wingbeat. Nothing says "graveyard at night" faster.
+    const cycleLen = 11;
+    const phase = t % cycleLen;
+    if (phase < 5) {
+      const p = phase / 5;
+      ctx.fillStyle = 'rgba(18,14,36,0.85)';
+      for (let bi = 0; bi < 3; bi += 1) {
+        const x = -24 + p * (cw + 48) - bi * 22 + Math.sin(t * 2.4 + bi * 2) * 10;
+        const y = playH * (0.14 + bi * 0.07) + Math.sin(p * 14 + bi * 2.7) * 14;
+        const flap = Math.abs(Math.sin(t * 14 + bi * 1.8)) * 4;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x - 4, y - 3 - flap, x - 8, y - flap);
+        ctx.quadraticCurveTo(x - 4, y + 1, x, y + 1.5);
+        ctx.quadraticCurveTo(x + 4, y + 1, x + 8, y - flap);
+        ctx.quadraticCurveTo(x + 4, y - 3 - flap, x, y);
+        ctx.fill();
+      }
+    }
+    return;
+  }
+  if (biome === 'snow') {
     const cycleLen = 17;
     const phase = t % cycleLen;
     if (phase < 8) {
@@ -1361,6 +1596,7 @@ function draw(
   ctx: CanvasRenderingContext2D,
   s: State,
   sp: SpriteSet | null,
+  character: Character,
   viewW: number,
   viewH: number,
   zoom: number,
@@ -1371,8 +1607,12 @@ function draw(
 ) {
   // The backdrop uses the unshaken camera so only the WORLD kicks on impact -
   // shaking the horizon too reads as the screen glitching rather than a thump.
-  const baseCamX = Math.round(s.camX);
-  const baseCamY = Math.round(s.camY);
+  // The camera itself stays a float here; the world transform below snaps the
+  // TRANSLATION to whole device pixels, which is what actually keeps a resting
+  // frame pixel-identical to the last one. Rounding camX in world units (the
+  // old approach) still landed on fractional device pixels once zoom applied.
+  const baseCamX = s.camX;
+  const baseCamY = s.camY;
   let camX = baseCamX;
   let camY = baseCamY;
   if (s.shake > 0) {
@@ -1380,6 +1620,11 @@ function draw(
     camY += Math.round(Math.cos(s.animTime * 81) * s.shake * 10);
   }
   const biome = s.data.biome;
+  // The context arrives pre-scaled by devicePixelRatio (useCanvasGame), so one
+  // CSS unit is `dpr` device pixels; snapping through that factor lands the
+  // world grid on the physical pixel grid.
+  const dpr = ctx.getTransform().a || 1;
+  const snapPx = (v: number) => Math.round(v * dpr) / dpr;
 
   const [skyTop, skyBottom] = SKY[biome];
   const sky = ctx.createLinearGradient(0, 0, 0, playH);
@@ -1481,10 +1726,12 @@ function draw(
   ctx.beginPath();
   ctx.rect(0, 0, cw, playH);
   ctx.clip();
+  // Translate FIRST, in CSS units snapped to device pixels, then scale. This is
+  // the jitter fix: the whole world moves in whole physical pixels, so a steady
+  // camera produces byte-identical frames instead of sub-pixel resampling.
+  ctx.translate(snapPx(-camX * zoom), snapPx((skyPad - camY) * zoom));
   ctx.scale(zoom, zoom);
-  ctx.translate(0, skyPad - camY);
   ctx.save();
-  ctx.translate(-camX, 0);
 
   const terrain = TERRAIN[biome];
   const cloud = CLOUD[biome];
@@ -1709,25 +1956,16 @@ function draw(
     ctx.stroke();
   }
 
-  // --- player ---
+  // --- player: the kid's own chosen family avatar, not a stock alien ---
+  // drawCharacterSprite is the same hand-drawn art the menus and celebration
+  // cards use, so the hero in the level IS the character they picked. Only the
+  // drawing changed: the hitbox (PW x PH / PH_BIG) is exactly what it was.
   const b = s.body;
   const h = s.big ? PH_BIG : PH;
   const blink = s.hurt > 0 && Math.floor(s.animTime * 20) % 2 === 0;
   if (!blink) {
     const foot = GROUND_TOP * TILE - h;
     const cheering = s.finish > 0 && b.y >= foot - 1;
-    let frame = 'character_green_idle';
-    if (cheering) frame = 'character_green_front';
-    else if (s.finish > 0) frame = 'character_green_climb_a';
-    else if (!b.onGround) frame = 'character_green_jump';
-    else if (Math.abs(b.vx) > 20)
-      frame = animFrame(['character_green_walk_a', 'character_green_walk_b'], s.animTime, 10);
-    // Skidding shows the hit pose flipped against travel: it reads as leaning back.
-    const skidding =
-      b.onGround &&
-      Math.abs(b.vx) > 45 &&
-      ((b.vx > 0 && s.facing < 0) || (b.vx < 0 && s.facing > 0));
-    if (skidding) frame = 'character_green_duck';
 
     // A soft golden aura while grown, so the power-up state reads at a glance.
     if (s.big) {
@@ -1740,26 +1978,33 @@ function draw(
       ctx.fillRect(ax - 17, ay - 17, 34, 34);
     }
 
-    // Squash on landing, stretch on takeoff; a slow breathing bob while idle; a
-    // happy pop on pickups; little victory hops at the flag. Cheap, and it is
-    // most of what makes the character feel alive.
-    const idle = b.onGround && Math.abs(b.vx) < 10 && s.finish <= 0;
-    const bobScale = idle ? 1 + Math.sin(s.animTime * 2.6) * 0.03 : 1;
+    // Squash on landing, stretch on takeoff, a happy pop on pickups, victory
+    // hops at the flag. The old continuous idle "breathing" scale is GONE on
+    // purpose: it resized the sprite by a fraction of a pixel every frame,
+    // which is exactly the standing-still vibration the kids noticed. An idle
+    // hero now renders pixel-identical frames until something really moves.
+    const moving = b.onGround && Math.abs(b.vx) > 20;
+    const skidding =
+      b.onGround &&
+      Math.abs(b.vx) > 45 &&
+      ((b.vx > 0 && s.facing < 0) || (b.vx < 0 && s.facing > 0));
     const pop = 1 + s.pulse * 0.22;
     const hop = cheering ? Math.abs(Math.sin(s.animTime * 7)) * 4 : 0;
-    const sq = s.squash;
-    const dw = (s.big ? 20 : 16) * (1 + sq * 0.18) * pop;
-    const dh = (s.big ? 26 : 20) * (1 - sq * 0.18) * bobScale * pop;
-    drawFrame(
-      ctx,
-      sp.characters,
-      frame,
-      b.x + PW / 2 - dw / 2,
-      b.y + h - dh - hop,
-      dw,
-      dh,
-      s.facing < 0,
-    );
+    const dw = (s.big ? 20 : 16) * pop;
+    const dh = (s.big ? 26 : 20) * pop;
+    // drawCharacterSprite reads squash as a scale: >1 stretches (takeoff),
+    // <1 squashes (landing). s.squash is the 0..1 impulse the game tracks.
+    let squash = b.onGround ? 1 - s.squash * 0.16 : 1 + s.squash * 0.12;
+    if (skidding) squash *= 0.9; // lean into the brake
+    // `frame` advances the two-step run cycle (and the dog's tail wag): steady
+    // rate while running, a quick cycle for the victory dance, frozen at rest.
+    const runFrame = moving ? s.animTime * 9 : cheering ? s.animTime * 6 : 0;
+    drawCharacterSprite(ctx, character, b.x + PW / 2 - dw / 2, b.y + h - dh - hop, dw, dh, {
+      frame: runFrame,
+      facing: s.facing,
+      squash,
+      airborne: !b.onGround && s.finish <= 0,
+    });
   }
 
   // --- confetti ---
