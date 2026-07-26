@@ -336,7 +336,8 @@ function sameSet(a: Set<number>, b: Set<number>): boolean {
   const straightRight = computeAimDir(1000, 0);
   const straightLeft = computeAimDir(-1000, 0);
   const straightUp = computeAimDir(0, -1000);
-  const cases = [straightDown, straightRight, straightLeft, straightUp];
+  const launcherTap = computeAimDir(0, 0);
+  const cases = [straightDown, straightRight, straightLeft, straightUp, launcherTap];
 
   const allUpward = cases.every((d) => d.vy < -0.0001);
   const boundVx = Math.sin(MAX_AIM_FROM_VERTICAL);
@@ -364,6 +365,11 @@ function sameSet(a: Set<number>, b: Set<number>): boolean {
     'a shot already aimed up is not distorted by the clamp',
     Math.abs(straightUp.vx) < 1e-9 && straightUp.vy < -0.999,
     'straight-up input passes through the clamp unchanged',
+  );
+  selfTest(
+    'a tap directly on the launcher uses the safe straight-up fallback',
+    Math.abs(launcherTap.vx) < 1e-9 && launcherTap.vy < -0.999,
+    'the zero-length touch vector gets a friendly vertical shot',
   );
 }
 

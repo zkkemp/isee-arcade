@@ -7,7 +7,7 @@ import { playSound, unlockAudio } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
 
 /**
- * Color Cascade - an ORIGINAL shedding / crazy-eights style card game. It is
+ * Color Dash - an ORIGINAL shedding / crazy-eights style card game. It is
  * the reference genre popularized by a well-known trademarked game, but
  * nothing here copies that game's name, card back, or exact card layout: the
  * deck uses flat color-coded fronts with an original pinwheel wild icon, and
@@ -180,12 +180,23 @@ export type GameState = {
   activeColor: Color;
   turn: 0 | 1;
   direction: 1 | -1;
+  /** Press CALL ONE while holding two cards, before laying down one of them. */
+  oneCalled: [boolean, boolean];
 };
 
 export function newGame(rng: () => number): GameState {
   const deck = shuffle(buildDeck(), rng);
   const d = deal(deck);
-  return { ...d, turn: 0, direction: 1 };
+  return { ...d, turn: 0, direction: 1, oneCalled: [false, false] };
+}
+
+/** Announces "one card left" before the player's next play. This only arms
+ * when the player holds two cards, preventing accidental early calls. */
+export function callOne(state: GameState, player: 0 | 1): GameState {
+  if (state.hands[player].length !== 2) return state;
+  const oneCalled: [boolean, boolean] = [state.oneCalled[0], state.oneCalled[1]];
+  oneCalled[player] = true;
+  return { ...state, oneCalled };
 }
 
 export function handIsEmpty(hand: Card[]): boolean {
@@ -258,6 +269,8 @@ export type PlayResult = {
   effect: PlayEffect;
   /** How many cards the opponent was made to draw (0, 2, or 4). */
   opponentDrew: number;
+  /** Gentle penalty for ending on one card without first calling it. */
+  callerPenalty: number;
 };
 
 /**
@@ -292,6 +305,7 @@ export function applyPlay(
   let turn: 0 | 1 = opponent;
   let effect: PlayEffect = 'none';
   let opponentDrew = 0;
+  const oneCalled: [boolean, boolean] = [state.oneCalled[0], state.oneCalled[1]];
 
   if (card.rank === 'skip') {
     turn = player;
@@ -320,10 +334,28 @@ export function applyPlay(
 
   const activeColor: Color = card.color ?? (chosenColor ?? state.activeColor);
 
+  // Fair, explicit house rule: say "Call One" before putting down the card
+  // that leaves a single card. Forgetting is a gentle two-card penalty, shown
+  // immediately in the play banner. Emptying the hand still wins normally.
+  let callerDrew = 0;
+  if (hands[player].length === 1) {
+    if (!oneCalled[player]) {
+      const d = drawN(drawPile, discard, 2, rng);
+      drawPile = d.drawPile;
+      discard = d.discard;
+      hands[player] = hands[player].concat(d.drawn);
+      callerDrew = d.drawn.length;
+    }
+    oneCalled[player] = false;
+  } else {
+    oneCalled[player] = false;
+  }
+
   return {
-    state: { hands, drawPile, discard, activeColor, turn, direction },
+    state: { hands, drawPile, discard, activeColor, turn, direction, oneCalled },
     effect,
     opponentDrew,
+    callerPenalty: callerDrew,
   };
 }
 
@@ -476,6 +508,10 @@ function insideRect(r: PileRect, x: number, y: number): boolean {
   return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 }
 
+function callOneRect(cw: number): PileRect {
+  return { x: 98, y: 10, w: Math.min(112, cw * 0.28), h: TOP - 20 };
+}
+
 // --- component state -----------------------------------------------------------
 
 type Nudge = { cardId: number; t: number };
@@ -595,20 +631,28 @@ function playBanner(
   effect: PlayEffect,
   opponentDrew: number,
   opponentLabel: string,
+  callerPenalty = 0,
 ): string {
   let base = `${actorLabel} played ${describeCard(card)}`;
   if (!card.color) base += ` and chose ${effectiveColor}`;
+  let sentence: string;
   switch (effect) {
     case 'skip':
-      return `${base}! ${opponentLabel} ${loseVerb(opponentLabel)} a turn.`;
+      sentence = `${base}! ${opponentLabel} ${loseVerb(opponentLabel)} a turn.`;
+      break;
     case 'reverse':
-      return `${base}! Reverse.`;
+      sentence = `${base}! Reverse.`;
+      break;
     case 'draw2':
     case 'wild4':
-      return `${base}! ${opponentLabel} ${drawVerb(opponentLabel)} ${opponentDrew}.`;
+      sentence = `${base}! ${opponentLabel} ${drawVerb(opponentLabel)} ${opponentDrew}.`;
+      break;
     default:
-      return `${base}.`;
+      sentence = `${base}.`;
   }
+  return callerPenalty > 0
+    ? `${sentence} Forgot CALL ONE - draw ${callerPenalty}.`
+    : sentence;
 }
 
 /**
@@ -643,6 +687,7 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
     discard: { x: 0, y: 0, w: 1, h: 1 },
   });
   const colorButtonsRef = useRef<{ color: Color; x: number; y: number; w: number; h: number }[]>([]);
+  const callOneRef = useRef<PileRect>({ x: 98, y: 10, w: 1, h: 1 });
   const rngRef = useRef<() => number>(lcg(1));
 
   useEffect(() => {
@@ -715,7 +760,7 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
     const fromOpponent = s.mode === 'cpu' && actingPlayer !== s.viewer;
     const actorLabel = seatLabel(s.mode, s.humanIndex, actingPlayer);
     const opponentLabel = seatLabel(s.mode, s.humanIndex, otherPlayer(actingPlayer));
-    const text = playBanner(actorLabel, playedCard, s.game.activeColor, result.effect, result.opponentDrew, opponentLabel);
+    const text = playBanner(actorLabel, playedCard, s.game.activeColor, result.effect, result.opponentDrew, opponentLabel, result.callerPenalty);
     s.anim = {
       text,
       card: playedCard,
@@ -791,6 +836,18 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
     const current = s.game.turn;
     if (current !== s.viewer) return; // not the on-screen player's turn to act
 
+    if (insideRect(callOneRef.current, sx, sy)) {
+      if (s.game.hands[current].length === 2) {
+        s.game = callOne(s.game, current);
+        playSound('powerup');
+        api.setStatus('Call One! Now play a card.');
+      } else {
+        playSound('wrong');
+        api.setStatus('Use Call One when you have 2 cards.');
+      }
+      return;
+    }
+
     if (s.pendingWild) {
       for (const btn of colorButtonsRef.current) {
         if (sx >= btn.x && sx <= btn.x + btn.w && sy >= btn.y && sy <= btn.y + btn.h) {
@@ -860,7 +917,10 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
             const cpu = s.game.turn;
             const top = s.game.discard[s.game.discard.length - 1];
             const choice = chooseCpuPlay(s.game.hands[cpu], top, s.game.activeColor, rngRef.current);
-            if (choice) playCard(s, cpu, choice.card, choice.chosenColor, api);
+            if (choice) {
+              if (s.game.hands[cpu].length === 2) s.game = callOne(s.game, cpu);
+              playCard(s, cpu, choice.card, choice.chosenColor, api);
+            }
             else attemptDraw(s, cpu, api);
           }
         }
@@ -882,6 +942,7 @@ export default function CardMatch({ paused, api, restartToken, difficulty, contr
         handSlotsRef.current = [];
       }
 
+      callOneRef.current = callOneRect(cw);
       draw(ctx, s, cw, ch, controlsInset, paused, colorButtonsRef, handSlotsRef.current);
     },
   });
@@ -945,7 +1006,7 @@ function drawMenu(ctx: CanvasRenderingContext2D, cw: number, ch: number): void {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
   ctx.font = `bold ${Math.min(38, cw * 0.1)}px system-ui, sans-serif`;
-  ctx.fillText('Color Cascade', cw / 2, ch * 0.16);
+  ctx.fillText('Color Dash', cw / 2, ch * 0.16);
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.font = `600 ${Math.min(17, cw * 0.042)}px system-ui, sans-serif`;
   ctx.fillText('Match the color, dodge the wilds, empty your hand!', cw / 2, ch * 0.16 + 30);
@@ -1007,6 +1068,21 @@ function drawTopBar(ctx: CanvasRenderingContext2D, s: UIState, cw: number, _inse
   ctx.font = '600 15px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('Menu', 48, TOP / 2 + 1);
+
+  const call = callOneRect(cw);
+  const canCall = s.phase === 'play' && s.game.turn === s.viewer && s.game.hands[s.viewer].length === 2;
+  roundRect(ctx, call.x, call.y, call.w, call.h, 12);
+  ctx.fillStyle = canCall ? 'rgba(255,215,94,0.28)' : 'rgba(255,255,255,0.06)';
+  ctx.fill();
+  ctx.lineWidth = canCall ? 2 : 1;
+  ctx.strokeStyle = canCall ? '#ffd75e' : 'rgba(255,255,255,0.14)';
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = canCall ? '#fff1a8' : 'rgba(255,255,255,0.45)';
+  ctx.font = 'bold 12px system-ui, sans-serif';
+  ctx.fillText('CALL ONE!', call.x + call.w / 2, call.y + 17);
+  ctx.font = '600 9px system-ui, sans-serif';
+  ctx.fillText(canCall ? 'before your last card' : 'when you have 2', call.x + call.w / 2, call.y + 29);
 
   const turnLabel =
     s.game.turn === s.viewer

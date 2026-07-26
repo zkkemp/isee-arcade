@@ -1,6 +1,7 @@
 import {
   createSkyState,
   dropSkyBlock,
+  levelParams,
   overlapWidth,
   SKY_STACK_W,
 } from '../components/games/SkyStack';
@@ -27,10 +28,25 @@ for (let i = 0; i < 8; i += 1) {
 assert(sky.level === 2 && sky.placed === 8, 'sky level progression');
 assert(sky.moving.x > -SKY_STACK_W && sky.moving.x < SKY_STACK_W * 2, 'sky moving block sane');
 
+// Every level is measurably harder, but the floor keeps even late levels fair.
+for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+  let previous = levelParams(1, difficulty);
+  for (let level = 2; level <= 20; level += 1) {
+    const current = levelParams(level, difficulty);
+    assert(current.speed > previous.speed || current.speed === 154, `${difficulty} level ${level} speeds up`);
+    assert(current.baseWidth <= previous.baseWidth, `${difficulty} level ${level} does not widen`);
+    assert(current.baseWidth >= 58, `${difficulty} level ${level} retains fair minimum width`);
+    previous = current;
+  }
+}
+const easyL2 = levelParams(2, 'easy');
+const hardL2 = levelParams(2, 'hard');
+assert(hardL2.speed > easyL2.speed && easyL2.baseWidth < levelParams(1, 'easy').baseWidth, 'difficulty and level ramps are visible');
+
 // Firefly timing wraps correctly across the zero/two-pi seam.
 assert(orbitDistance(0.05, Math.PI * 2 - 0.05) < 0.11, 'orbit seam distance');
 assert(Math.abs(orbitDistance(0, Math.PI) - Math.PI) < 1e-9, 'orbit opposite distance');
 const orbit = createOrbitState();
 assert(orbit.lives === 3 && orbit.level === 1 && orbit.catches === 0, 'orbit fresh state');
 
-console.log('New games: Sky Stack placement/level geometry and Firefly Orbit timing checks passed.');
+console.log('New games: Sky Stack geometry, fair level ramp, and Firefly Orbit timing checks passed.');

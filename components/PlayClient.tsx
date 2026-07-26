@@ -2,7 +2,6 @@
 
 import GameShell from './GameShell';
 import Frogger from './games/Frogger';
-import Snake from './games/Snake';
 import SnakeV2 from './games/SnakeV2';
 import Platformer from './games/Platformer';
 import PlatformerV2 from './games/PlatformerV2';
@@ -40,7 +39,6 @@ import { GAMES, type GameComponent, type GameId } from '@/lib/games';
  */
 const COMPONENTS: Record<GameId, GameComponent> = {
   frogger: Frogger,
-  snake: Snake,
   snake2: SnakeV2,
   platformer: Platformer,
   platformer2: PlatformerV2,

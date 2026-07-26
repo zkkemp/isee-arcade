@@ -8,7 +8,6 @@ const ART_KIND: Record<GameId, ArtKind> = {
   runner: 'adventure',
   climber: 'adventure',
   frogger: 'adventure',
-  snake: 'arena',
   snake2: 'arena',
   maze: 'arena',
   breakout: 'arena',

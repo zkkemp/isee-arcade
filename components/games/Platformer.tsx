@@ -113,6 +113,8 @@ type State = {
   shake: number;
   /** Countdown of the world-name banner shown when a level starts. */
   intro: number;
+  /** Frozen-at-rest stride phase: keeps the family avatar from snapping poses. */
+  runPhase: number;
   /** Door tile the player is currently standing on, for the on-canvas prompt. */
   onDoor: { tx: number; ty: number } | null;
   /** Index into data.coins of this level's one rainbow coin, or -1. */
@@ -154,6 +156,7 @@ function freshState(level: number, difficulty: GameCanvasProps['difficulty'], co
     pulse: 0,
     shake: 0,
     intro: 2.2,
+    runPhase: 0,
     onDoor: null,
     // One magic rainbow coin per level, picked deterministically so replays of
     // a level hide it in the same place. Worth extra and worth hunting for.
@@ -397,10 +400,12 @@ export default function Platformer({
       }
 
       // --- input ---
-      if (input.consumeJump()) s.jumpBuffer = JUMP_BUFFER;
+      const jumpPressed = input.consumeJump();
+      if (jumpPressed) s.jumpBuffer = JUMP_BUFFER;
       if (s.jumpBuffer > 0) s.jumpBuffer -= dt;
       if (s.coyote > 0) s.coyote -= dt;
 
+      const wasGrounded = b.onGround;
       const canJump = b.onGround || s.coyote > 0;
       const firing = s.jumpBuffer > 0 && canJump;
       if (firing) {
@@ -491,7 +496,11 @@ export default function Platformer({
       // --- doors: stand still in one to use it ---
       // The prompt state is tracked whether or not the player is still enough to
       // warp, so a kid running through a doorway still gets told the trick.
-      const doorUsable = res.door !== null && b.onGround && s.doorCd <= 0;
+      // Tap/jump is an explicit, reliable door action. It is also useful for
+      // keyboard and switch users who cannot comfortably release a direction
+      // with the exact timing needed by the original stand-still gesture.
+      const doorUsable =
+        res.door !== null && (b.onGround || (jumpPressed && wasGrounded)) && s.doorCd <= 0;
       s.onDoor = doorUsable ? { tx: res.door!.tx, ty: res.door!.ty } : null;
       // The trigger is INPUT, not speed: the old `|vx| < 24` gate kept resetting
       // off residual velocity, so "hold still" never fired for a kid whose thumb
@@ -500,9 +509,9 @@ export default function Platformer({
       // snapped to zero so the body visibly settles into the doorway. A kid who
       // walks onto a door and releases the buttons ALWAYS warps in ~0.3s.
       const steering = input.held.left || input.held.right;
-      if (doorUsable && !steering) {
-        b.vx = 0;
-        s.dwell += dt;
+      if (doorUsable && (!steering || jumpPressed)) {
+        if (!steering) b.vx = 0;
+        s.dwell = jumpPressed ? 0.31 : s.dwell + dt;
         if (s.dwell > 0.3) {
           const door = s.data.doors.find((d) => d.tx === res.door!.tx && d.ty === res.door!.ty);
           if (door) {
@@ -740,8 +749,16 @@ export default function Platformer({
       const wantX = b.x + PW / 2 - viewW / 2 + lead;
       const clampedX = Math.max(0, Math.min(wantX, Math.max(0, LEVEL_W - viewW)));
       s.camX += (clampedX - s.camX) * Math.min(1, dt * CAMERA_LERP);
+      // Stop the last sub-pixel tail instead of pixel-snapping it for several
+      // frames. That tail was the visible "jiggle" after the hero stopped.
+      if (Math.abs(clampedX - s.camX) < 0.08 / zoom) s.camX = clampedX;
       // Vertical follow is slower than horizontal: a jump should not yank the view.
-      s.camY += (cameraY(b.y, bodyTop(s), viewH) - s.camY) * Math.min(1, dt * CAMERA_LERP * 0.7);
+      const wantY = cameraY(b.y, bodyTop(s), viewH);
+      s.camY += (wantY - s.camY) * Math.min(1, dt * CAMERA_LERP * 0.7);
+      if (Math.abs(wantY - s.camY) < 0.08 / zoom) s.camY = wantY;
+      // Run phase advances with actual distance, then holds its last pose when
+      // stationary. The sprite no longer pops back to frame zero on release.
+      s.runPhase += Math.abs(b.vx) * dt * 0.08;
 
       draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
     },
@@ -1836,7 +1853,7 @@ function draw(
   if (s.onDoor) {
     const bx = s.onDoor.tx * TILE + TILE / 2;
     const by = s.onDoor.ty * TILE - 36;
-    const bw = 74;
+    const bw = 94;
     ctx.fillStyle = 'rgba(24,12,44,0.78)';
     roundRectPath(ctx, bx - bw / 2, by, bw, 17, 4);
     ctx.fill();
@@ -1846,7 +1863,7 @@ function draw(
     ctx.fillStyle = '#fdf6ff';
     ctx.font = 'bold 6.5px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Hold still to warp!', bx, by + 7.5);
+    ctx.fillText('Tap jump or hold still!', bx, by + 7.5);
     ctx.textAlign = 'left';
     const frac = Math.min(1, s.dwell / 0.3);
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
@@ -1992,7 +2009,6 @@ function draw(
     // purpose: it resized the sprite by a fraction of a pixel every frame,
     // which is exactly the standing-still vibration the kids noticed. An idle
     // hero now renders pixel-identical frames until something really moves.
-    const moving = b.onGround && Math.abs(b.vx) > 20;
     const skidding =
       b.onGround &&
       Math.abs(b.vx) > 45 &&
@@ -2005,9 +2021,9 @@ function draw(
     // <1 squashes (landing). s.squash is the 0..1 impulse the game tracks.
     let squash = b.onGround ? 1 - s.squash * 0.16 : 1 + s.squash * 0.12;
     if (skidding) squash *= 0.9; // lean into the brake
-    // `frame` advances the two-step run cycle (and the dog's tail wag): steady
-    // rate while running, a quick cycle for the victory dance, frozen at rest.
-    const runFrame = moving ? s.animTime * 9 : cheering ? s.animTime * 6 : 0;
+    // `frame` advances with travelled distance, with a quick victory dance and
+    // a frozen final stride at rest rather than a visible pose reset.
+    const runFrame = cheering ? s.animTime * 6 : s.runPhase;
     drawCharacterSprite(ctx, character, b.x + PW / 2 - dw / 2, b.y + h - dh - hop, dw, dh, {
       frame: runFrame,
       facing: s.facing,

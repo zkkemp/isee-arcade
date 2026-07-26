@@ -1052,15 +1052,24 @@ function draw(
   }
 
   // --- side rails, so the bounce surfaces are visible ---
-  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  const railHue = ['#69d8ff', '#ff79bb', '#ffd75e', '#7ee29a'][(w.level - 1) % 4];
+  ctx.fillStyle = railHue;
+  ctx.shadowColor = railHue;
+  ctx.shadowBlur = 6;
+  ctx.globalAlpha = 0.45;
   ctx.fillRect(0, 0, 1.4, g.h);
   ctx.fillRect(FIELD_W - 1.4, 0, 1.4, g.h);
   ctx.fillRect(0, 0, FIELD_W, 1.4);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
 
   // --- bricks ---
   for (const brick of w.wall.bricks) {
     if (brick.hp <= 0) continue;
     const r = brickRect(g, brick);
+    ctx.save();
+    ctx.shadowColor = BRICK_COLOR[brick.tint];
+    ctx.shadowBlur = brick.tint === 'strong' ? 3 : 5;
     if (sp) {
       const name =
         brick.tint === 'strong' && brick.hp < brick.maxHp
@@ -1072,6 +1081,7 @@ function draw(
       roundRect(ctx, r.x, r.y, r.w, r.h, 1.6);
       ctx.fill();
     }
+    ctx.restore();
     if (brick.tint === 'strong' && brick.hp > 1) {
       // Two-hitters get a rim so they are obvious at a glance.
       ctx.strokeStyle = 'rgba(255,255,255,0.55)';
@@ -1118,6 +1128,19 @@ function draw(
 
   // --- balls ---
   for (const b of w.balls) {
+    const speed = Math.max(1, Math.hypot(b.vx, b.vy));
+    const tx = (b.vx / speed) * 12;
+    const ty = (b.vy / speed) * 12;
+    const trail = ctx.createLinearGradient(b.x, b.y, b.x - tx, b.y - ty);
+    trail.addColorStop(0, 'rgba(255,239,164,.65)');
+    trail.addColorStop(1, 'rgba(255,239,164,0)');
+    ctx.strokeStyle = trail;
+    ctx.lineWidth = b.r * 1.15;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x - tx, b.y - ty);
+    ctx.stroke();
     const gr = ctx.createRadialGradient(
       b.x - b.r * 0.35,
       b.y - b.r * 0.35,
@@ -1130,18 +1153,24 @@ function draw(
     gr.addColorStop(0.55, '#ffe9a8');
     gr.addColorStop(1, '#e0a52c');
     ctx.fillStyle = gr;
+    ctx.shadowColor = '#ffe58c';
+    ctx.shadowBlur = 7;
     ctx.beginPath();
     ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
   }
 
   // --- serve prompt ---
   if (w.serving) {
     const b = w.balls[0];
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillStyle = 'rgba(8,7,24,.68)';
+    roundRect(ctx, FIELD_W / 2 - 68, g.paddleY - 25, 136, 14, 7);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
     ctx.font = 'bold 7px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('lift finger or press space to launch', FIELD_W / 2, g.paddleY - 16);
+    ctx.fillText('DRAG TO AIM · LIFT TO LAUNCH', FIELD_W / 2, g.paddleY - 16);
     if (b) {
       ctx.strokeStyle = 'rgba(255,255,255,0.35)';
       ctx.lineWidth = 0.8;
@@ -1156,17 +1185,20 @@ function draw(
   }
 
   // --- HUD ---
-  ctx.font = 'bold 8px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillText(`WALL ${w.level}`, 4, 10);
+  ctx.fillStyle = 'rgba(8,7,24,.58)';
+  roundRect(ctx, 3, 3, FIELD_W - 6, 13, 6);
+  ctx.fill();
+  ctx.font = '900 8px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText(`WALL ${w.level}`, 8, 12);
   ctx.textAlign = 'right';
-  ctx.fillText(`${bricksLeft(w)} left`, FIELD_W - 4, 10);
+  ctx.fillText(`${bricksLeft(w)} LEFT`, FIELD_W - 8, 12);
   ctx.textAlign = 'left';
 
   if (w.combo > 1) {
     ctx.fillStyle = '#ffd75e';
     ctx.textAlign = 'center';
-    ctx.fillText(`x${w.combo} combo`, FIELD_W / 2, 10);
+    ctx.fillText(`×${w.combo} COMBO`, FIELD_W / 2, 12);
     ctx.textAlign = 'left';
   }
 

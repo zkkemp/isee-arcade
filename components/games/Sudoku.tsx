@@ -43,11 +43,22 @@ import { useCanvasGame } from '@/lib/useCanvasGame';
 // --- pure rules --------------------------------------------------------------
 
 export type Grid = number[]; // length n*n, row-major, 0 = empty, 1..n = filled
-export type Size = 4 | 6;
+export type Size = 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export const SUDOKU_SIZES: Size[] = [4, 5, 6, 7, 8, 9, 10];
 
 /** Box height/width in cells. 4x4 uses 2x2 boxes; 6x6 uses 2-row x 3-col boxes. */
 export function boxDims(n: Size): { bh: number; bw: number } {
-  return n === 4 ? { bh: 2, bw: 2 } : { bh: 2, bw: 3 };
+  switch (n) {
+    case 4: return { bh: 2, bw: 2 };
+    case 6: return { bh: 2, bw: 3 };
+    case 8: return { bh: 2, bw: 4 };
+    case 9: return { bh: 3, bw: 3 };
+    case 10: return { bh: 2, bw: 5 };
+    // Prime-size boards use one full row per region. The board still has
+    // visible regions, and row/column uniqueness remains the full puzzle rule.
+    case 5: return { bh: 1, bw: 5 };
+    case 7: return { bh: 1, bw: 7 };
+  }
 }
 
 export function rowOf(n: Size, i: number): number {
@@ -170,35 +181,19 @@ export function shuffledIndices(count: number, rng: () => number): number[] {
   return arr;
 }
 
-/** A complete, valid n x n grid, built by backtracking with a shuffled candidate order. */
+/** A complete, valid n x n grid. The band/stack pattern is then shuffled, so
+ * 10x10 boards stay instant while retaining genuine row/column/region rules. */
 export function generateSolvedGrid(n: Size, rng: () => number): Grid {
-  const total = n * n;
-  const g: Grid = new Array(total).fill(0);
-
-  const shuffledSymbols = (): number[] => {
-    const arr = Array.from({ length: n }, (_, i) => i + 1);
-    for (let i = arr.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(rng() * (i + 1));
-      const t = arr[i];
-      arr[i] = arr[j];
-      arr[j] = t;
-    }
-    return arr;
-  };
-
-  const fill = (pos: number): boolean => {
-    if (pos >= total) return true;
-    for (const v of shuffledSymbols()) {
-      if (!conflicts(g, n, pos, v)) {
-        g[pos] = v;
-        if (fill(pos + 1)) return true;
-        g[pos] = 0;
-      }
-    }
-    return false;
-  };
-
-  fill(0);
+  const { bh, bw } = boxDims(n);
+  const symbols = shuffledIndices(n, rng).map((v) => v + 1);
+  const rowBands = shuffledIndices(n / bh, rng);
+  const colStacks = shuffledIndices(n / bw, rng);
+  const rows = rowBands.flatMap((band) => shuffledIndices(bh, rng).map((offset) => band * bh + offset));
+  const cols = colStacks.flatMap((stack) => shuffledIndices(bw, rng).map((offset) => stack * bw + offset));
+  const g: Grid = [];
+  for (const r of rows) {
+    for (const c of cols) g.push(symbols[(r * bw + Math.floor(r / bh) + c) % n]);
+  }
   return g;
 }
 
@@ -216,8 +211,15 @@ export type LevelConfig = { size: Size; givens: number };
  * is always clamped to a safe range so the generator never has to search for
  * an unreasonably sparse puzzle.
  */
-export function configForLevel(level: number, bias = 0): LevelConfig {
+export function configForLevel(level: number, bias = 0, chosenSize?: Size): LevelConfig {
   const lv = Math.max(1, Math.floor(level));
+  if (chosenSize) {
+    const total = chosenSize * chosenSize;
+    // Large boards begin with many anchors so the unique-solution remover stays
+    // fast and the first puzzle at a new size remains inviting.
+    const base = Math.ceil(total * (0.68 - Math.min(0.16, (lv - 1) * 0.025)));
+    return { size: chosenSize, givens: clamp(base + bias, Math.ceil(total * 0.5), total - 1) };
+  }
   if (lv <= 5) {
     const total = 16;
     const base = 10 - (lv - 1);
@@ -251,8 +253,8 @@ export type Puzzle = {
  * givens count, removal simply stops early - the puzzle is always solvable
  * and always unique, even if a little easier than the level's target.
  */
-export function makePuzzle(level: number, rng: () => number, bias = 0): Puzzle {
-  const { size, givens } = configForLevel(level, bias);
+export function makePuzzle(level: number, rng: () => number, bias = 0, chosenSize?: Size): Puzzle {
+  const { size, givens } = configForLevel(level, bias, chosenSize);
   const solution = generateSolvedGrid(size, rng);
   const total = size * size;
   const order = shuffledIndices(total, rng);
@@ -279,7 +281,7 @@ export function makePuzzle(level: number, rng: () => number, bias = 0): Puzzle {
 
 // --- layout ------------------------------------------------------------------
 
-const TOP = 44;
+const TOP = 76;
 const PALETTE_H = 76;
 const GAP = 10;
 
@@ -337,6 +339,17 @@ function paletteIndexAt(l: Layout, x: number, y: number, count: number): number 
   return -1;
 }
 
+function sizeButtonAt(cw: number, x: number, y: number): Size | null {
+  if (y < 35 || y > 68) return null;
+  const gap = 4;
+  const w = (cw - 16 - gap * (SUDOKU_SIZES.length - 1)) / SUDOKU_SIZES.length;
+  for (let i = 0; i < SUDOKU_SIZES.length; i += 1) {
+    const bx = 8 + i * (w + gap);
+    if (x >= bx && x <= bx + w) return SUDOKU_SIZES[i];
+  }
+  return null;
+}
+
 // --- state -------------------------------------------------------------------
 
 type State = {
@@ -346,16 +359,18 @@ type State = {
   selected: number;
   time: number;
   solvedFlashT: number;
+  chosenSize: Size;
 };
 
 function freshState(difficulty: Difficulty, seed: number): State {
   const rng = lcg(seed);
-  const puzzle = makePuzzle(1, rng, GIVENS_BIAS[difficulty]);
-  return { difficulty, rng, puzzle, selected: -1, time: 0, solvedFlashT: 0 };
+  const chosenSize: Size = 4;
+  const puzzle = makePuzzle(1, rng, GIVENS_BIAS[difficulty], chosenSize);
+  return { difficulty, rng, puzzle, selected: -1, time: 0, solvedFlashT: 0, chosenSize };
 }
 
 function dealNext(s: State): void {
-  s.puzzle = makePuzzle(s.puzzle.level + 1, s.rng, GIVENS_BIAS[s.difficulty]);
+  s.puzzle = makePuzzle(s.puzzle.level + 1, s.rng, GIVENS_BIAS[s.difficulty], s.chosenSize);
   s.selected = -1;
 }
 
@@ -368,6 +383,10 @@ const SYMBOL_COLORS: Record<number, string> = {
   4: '#ff6a9e',
   5: '#ffd75e',
   6: '#c77dff',
+  7: '#4be3c2',
+  8: '#ff9f5a',
+  9: '#8fe3ff',
+  10: '#f3a6d8',
 };
 
 export default function Sudoku({ paused, api, restartToken, difficulty, controlsInset }: GameCanvasProps) {
@@ -424,6 +443,14 @@ export default function Sudoku({ paused, api, restartToken, difficulty, controls
     const s = stateRef.current;
     if (!s) return;
     const l = layoutRef.current;
+    const newSize = sizeButtonAt(l.cw, sx, sy);
+    if (newSize) {
+      s.chosenSize = newSize;
+      s.puzzle = makePuzzle(1, s.rng, GIVENS_BIAS[s.difficulty], newSize);
+      s.selected = -1;
+      playSound('powerup');
+      return;
+    }
     const count = s.puzzle.size + 1; // n symbols + 1 eraser
 
     const pIdx = paletteIndexAt(l, sx, sy, count);
@@ -530,12 +557,34 @@ function drawTopBar(ctx: CanvasRenderingContext2D, s: State, cw: number): void {
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.fillText(`Level ${s.puzzle.level}`, 16, TOP / 2 + 6);
+  ctx.fillText(`Level ${s.puzzle.level}`, 16, 22);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.font = '600 15px system-ui, sans-serif';
-  ctx.fillText(`${s.puzzle.size} x ${s.puzzle.size}`, cw - 16, TOP / 2 + 6);
+  ctx.fillText(`${s.puzzle.size} x ${s.puzzle.size}`, cw - 16, 22);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = '600 11px system-ui, sans-serif';
+  ctx.fillText('Board size', 10, 47);
+  const gap = 4;
+  const w = (cw - 16 - gap * (SUDOKU_SIZES.length - 1)) / SUDOKU_SIZES.length;
+  for (let i = 0; i < SUDOKU_SIZES.length; i += 1) {
+    const size = SUDOKU_SIZES[i];
+    const x = 8 + i * (w + gap);
+    roundRect(ctx, x, 35, w, 33, 8);
+    const active = size === s.chosenSize;
+    ctx.fillStyle = active ? 'rgba(125,212,144,0.28)' : 'rgba(255,255,255,0.07)';
+    ctx.fill();
+    ctx.strokeStyle = active ? '#7dd490' : 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = active ? 2 : 1;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = active ? '#dfffe8' : 'rgba(255,255,255,0.72)';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillText(String(size), x + w / 2, 58);
+  }
 }
 
 function drawBoard(ctx: CanvasRenderingContext2D, s: State, l: Layout): void {

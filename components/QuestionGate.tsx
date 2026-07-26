@@ -64,7 +64,7 @@ export type QuestionGateProps = {
   /** What happens next, e.g. "Answer one question to get back in." */
   subhead: string;
   reward: number;
-  /** Read the question and choices aloud (for pre-reading kids: K / 1st grade). */
+  /** Show optional listening helpers for pre-reading kids (K / 1st grade). */
   narrate?: boolean;
   onAnswered: (correct: boolean) => void;
 };
@@ -84,6 +84,7 @@ export default function QuestionGate({
 }: QuestionGateProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [lock, setLock] = useState(0);
+  const [speakingKey, setSpeakingKey] = useState<string | null>(null);
   // Reading starts locked; every other kind is answerable immediately.
   const [readLock, setReadLock] = useState(
     question.kind === 'reading' ? READING_LOCK_SECONDS : 0,
@@ -97,11 +98,25 @@ export default function QuestionGate({
   const canSpeak = speechAvailable();
   const subjectIcon = SUBJECT_ICONS[question.subject];
 
+  const toggleSpeech = useCallback((key: string, line: string) => {
+    if (speakingKey === key) {
+      stopSpeaking();
+      setSpeakingKey(null);
+      return;
+    }
+    setSpeakingKey(key);
+    speak(line, {
+      onEnd: () => setSpeakingKey((current) => (current === key ? null : current)),
+    });
+  }, [speakingKey]);
+
   const choose = useCallback(
     (i: number) => {
       // The reading lock has to hold here too, not just disable the buttons, or a
       // keyboard 1-8 press would walk straight past it.
       if (picked !== null || readLock > 0) return;
+      stopSpeaking();
+      setSpeakingKey(null);
       setPicked(i);
       // A wrong answer holds the explanation on screen. There is no skipping it,
       // and the next question will be the same kind.
@@ -122,19 +137,10 @@ export default function QuestionGate({
     return () => clearTimeout(t);
   }, [readLock]);
 
-  // Read the question and choices aloud for a pre-reading child, and stop any
-  // speech when the question changes or the gate closes.
+  // Never auto-play. Only stop speech when the question changes or closes.
   useEffect(() => {
-    if (!narrate) return;
-    speak(speechLine);
     return () => stopSpeaking();
-  }, [narrate, speechLine]);
-
-  // Speak the result too, so a non-reader hears whether they got it right.
-  useEffect(() => {
-    if (!narrate || picked === null) return;
-    speak(correct ? 'Correct! Great job!' : `Not quite. ${toSpeakable(question.explain)}`);
-  }, [narrate, picked, correct, question.explain]);
+  }, [question.id]);
 
   // Bring the explanation into view once answered. After a reading question the
   // passage has pushed it well below the fold, so without this the feedback for
@@ -236,8 +242,8 @@ export default function QuestionGate({
             >
               <span className="text-2xl" aria-hidden="true">👂</span>
               <div className="min-w-0">
-                <div className="text-sm font-black text-white">Listen, then pick your answer</div>
-                <div className="text-xs text-white/55">Tap any little speaker to hear it again.</div>
+                <div className="text-sm font-black text-white">Read it or listen when you want</div>
+                <div className="text-xs text-white/55">Tap a speaker to play. Tap it again to stop.</div>
               </div>
             </div>
           )}
@@ -247,15 +253,15 @@ export default function QuestionGate({
             {canSpeak && (
               <button
                 type="button"
-                onClick={() => speak(speechLine)}
-                aria-label="Hear the question"
+                onClick={() => toggleSpeech('question', speechLine)}
+                aria-label={speakingKey === 'question' ? 'Stop reading the question' : 'Hear the question'}
                 className={`flex flex-shrink-0 items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-bold transition active:scale-95 ${
                   narrate ? 'border-current' : 'border-white/20 text-white/70'
                 }`}
                 style={narrate ? { color: accent, background: `${accent}1f` } : undefined}
               >
-                <span className="text-lg">🔊</span>
-                {narrate && <span>Hear it</span>}
+                <span className="text-lg">{speakingKey === 'question' ? '⏹' : '🔊'}</span>
+                {narrate && <span>{speakingKey === 'question' ? 'Stop' : 'Hear it'}</span>}
               </button>
             )}
           </div>
@@ -313,11 +319,19 @@ export default function QuestionGate({
                   {narrate && canSpeak && (
                     <button
                       type="button"
-                      onClick={() => speak(`${LETTERS[i]}. ${toSpeakable(choice)}`)}
-                      aria-label={`Hear answer ${LETTERS[i]}`}
-                      className="flex min-h-16 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.055] text-xl text-white/75 transition hover:bg-white/10 active:scale-95"
+                      onClick={() => toggleSpeech(`choice-${i}`, `${LETTERS[i]}. ${toSpeakable(choice)}`)}
+                      aria-label={
+                        speakingKey === `choice-${i}`
+                          ? `Stop reading answer ${LETTERS[i]}`
+                          : `Hear answer ${LETTERS[i]}`
+                      }
+                      className={`flex min-h-16 w-14 items-center justify-center rounded-2xl border text-xl transition active:scale-95 ${
+                        speakingKey === `choice-${i}`
+                          ? 'border-amber-300/45 bg-amber-300/15 text-amber-200'
+                          : 'border-white/15 bg-white/[0.055] text-white/75 hover:bg-white/10'
+                      }`}
                     >
-                      🔊
+                      {speakingKey === `choice-${i}` ? '⏹' : '🔊'}
                     </button>
                   )}
                 </div>

@@ -1,13 +1,12 @@
 'use client';
 
 /**
- * Read questions aloud for kids who cannot read yet (the kindergarten and
- * first-grade profiles). Uses the browser's built-in Web Speech API - no assets,
- * works offline on iOS Safari / the installed PWA.
+ * On-demand listening support for kids who cannot read yet (the kindergarten
+ * and first-grade profiles). Uses the browser's built-in Web Speech API - no
+ * assets, and it works offline on iOS Safari / the installed PWA.
  *
- * iOS only allows speech to START from inside a user gesture the first time, so
- * auto-narration may be silent until the child taps once; the on-screen speaker
- * button (a real tap) always works and is the reliable path.
+ * Speech is deliberately user-triggered. A child taps a speaker to start and
+ * taps it again to stop; questions never begin talking by themselves.
  */
 
 export function speechAvailable(): boolean {
@@ -37,16 +36,57 @@ export function questionSpeech(prompt: string, choices: string[]): string {
   return `${p}. The choices are: ${opts}`;
 }
 
+type SpeakOptions = {
+  onStart?: () => void;
+  onEnd?: () => void;
+};
+
+/**
+ * Prefer the most natural local English voice the device exposes. Voice names
+ * vary across Apple, Google and Microsoft, so this is a ranked fuzzy match with
+ * a clean English fallback rather than one hard-coded platform voice.
+ */
+function preferredVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
+  const english = synth.getVoices().filter((voice) => /^en([-_]|$)/i.test(voice.lang));
+  if (english.length === 0) return null;
+  const preferredNames = [
+    'samantha',
+    'ava',
+    'allison',
+    'susan',
+    'google us english',
+    'microsoft aria',
+    'microsoft jenny',
+    'daniel',
+    'karen',
+  ];
+  for (const wanted of preferredNames) {
+    const found = english.find((voice) => voice.name.toLowerCase().includes(wanted));
+    if (found) return found;
+  }
+  return english.find((voice) => voice.localService && voice.default) ??
+    english.find((voice) => voice.localService) ??
+    english[0];
+}
+
 /** Speak a phrase, cancelling anything already speaking. No-op where unsupported. */
-export function speak(text: string): void {
+export function speak(text: string, options: SpeakOptions = {}): void {
   if (!speechAvailable()) return;
   try {
     const synth = window.speechSynthesis;
     synth.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.92; // a touch slower, easier for a young child to follow
-    u.pitch = 1.08;
+    const voice = preferredVoice(synth);
+    if (voice) u.voice = voice;
+    // Natural pacing without the high, synthetic "kid voice" effect.
+    u.rate = 0.96;
+    u.pitch = 1;
     u.lang = 'en-US';
+    if (options.onStart) u.onstart = options.onStart;
+    if (options.onEnd) {
+      u.onend = options.onEnd;
+      u.onerror = options.onEnd;
+    }
     synth.speak(u);
   } catch {
     // No speech available; the on-screen text is still there.

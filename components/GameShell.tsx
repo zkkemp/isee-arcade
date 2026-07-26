@@ -693,7 +693,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           out against the size they are given rather than a fixed aspect. */}
       <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1 sm:px-5 sm:pb-3">
         <div
-          className="relative w-full flex-1 overflow-hidden rounded-3xl border bg-black shadow-2xl sm:rounded-[2rem]"
+          className="game-stage relative w-full flex-1 overflow-hidden rounded-3xl border bg-black shadow-2xl sm:rounded-[2rem]"
+          data-game={meta.id}
           style={{
             borderColor: `${meta.accent}4d`,
             boxShadow: `0 24px 70px rgba(0,0,0,.5), 0 0 36px ${meta.accent}18, inset 0 1px rgba(255,255,255,.12)`,
@@ -710,6 +711,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           />
 
           <TouchOverlay scheme={meta.controls} input={input} disabled={paused} />
+          <div className="game-stage__finish pointer-events-none absolute inset-0 z-[12]" aria-hidden="true" />
 
           {manualPause && !gate && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm">
@@ -757,7 +759,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               headline={headline}
               subhead={subhead}
               reward={CORRECT_REWARD}
-              // Read questions aloud for the pre-reading grades.
+              // Offer on-demand listening support for the pre-reading grades.
               narrate={band === 'k' || band === 'grade1'}
               onAnswered={handleAnswered}
             />
@@ -827,7 +829,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             </p>
             <p className="mt-3 text-xs leading-relaxed text-white/40">
               Answer a short study block to earn play time. Dying is free until the clock runs out.
-              Tap 1–4 to answer a question.
+              Tap an answer, or press its number key, to answer a question.
             </p>
             <button
               type="button"

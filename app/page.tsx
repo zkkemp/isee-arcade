@@ -16,7 +16,7 @@ const GAME_SECTIONS: Array<{ eyebrow: string; title: string; ids: GameId[] }> = 
   {
     eyebrow: 'Run · jump · dodge',
     title: 'Fast & fearless',
-    ids: ['platformer2', 'platformer', 'snake2', 'snake', 'runner', 'frogger', 'climber', 'breakout'],
+    ids: ['platformer2', 'platformer', 'snake2', 'runner', 'frogger', 'climber', 'breakout'],
   },
   {
     eyebrow: 'Match · stack · solve',

@@ -362,6 +362,9 @@ export const MAX_AIM_FROM_VERTICAL = (75 * Math.PI) / 180;
  * `cos(MAX_AIM_FROM_VERTICAL)` of the way to straight up.
  */
 export function computeAimDir(dx: number, dy: number): { vx: number; vy: number } {
+  // A tap directly on the launcher has no meaningful angle. Treat it as a
+  // friendly straight shot instead of Math.atan2(0, -0)'s surprising pi.
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return { vx: 0, vy: -1 };
   let angle = Math.atan2(dx, -dy);
   if (angle > MAX_AIM_FROM_VERTICAL) angle = MAX_AIM_FROM_VERTICAL;
   if (angle < -MAX_AIM_FROM_VERTICAL) angle = -MAX_AIM_FROM_VERTICAL;
@@ -449,7 +452,9 @@ function freshState(difficulty: Difficulty, seed: number): State {
     current: pickColor(rng, grid),
     next: pickColor(rng, grid),
     projectile: null,
-    aim: null,
+    // A persistent, vertical aim line means keyboard players get useful
+    // feedback before their first arrow press, and touch has a safe default.
+    aim: { x: LAUNCHER_X, y: LAUNCHER_Y - 120 },
     streak: 0,
     rowInterval,
     rowTimer: rowInterval,
@@ -468,7 +473,7 @@ function freshState(difficulty: Difficulty, seed: number): State {
 function resetBoard(s: State): void {
   s.grid = seedInitialGrid(s.rng);
   s.projectile = null;
-  s.aim = null;
+  s.aim = { x: LAUNCHER_X, y: LAUNCHER_Y - 120 };
   s.streak = 0;
   s.rowTimer = s.rowInterval;
   s.current = pickColor(s.rng, s.grid);
@@ -501,6 +506,21 @@ function triggerDeath(s: State, api: GameApi): void {
   playSound('gameOver');
   api.died('Bubbles reached the bottom');
   resetBoard(s);
+}
+
+function fireShot(s: State): void {
+  if (s.projectile || !s.aim) return;
+  const dir = computeAimDir(s.aim.x - LAUNCHER_X, s.aim.y - LAUNCHER_Y);
+  s.projectile = {
+    x: LAUNCHER_X,
+    y: LAUNCHER_Y,
+    vx: dir.vx * PROJECTILE_SPEED,
+    vy: dir.vy * PROJECTILE_SPEED,
+    color: s.current,
+  };
+  s.current = s.next;
+  s.next = pickColor(s.rng, s.grid);
+  playSound('click');
 }
 
 /** Lands a travelling bubble at (x, y): finds its cell, applies the pure
@@ -617,40 +637,36 @@ export default function BubblePop({
       if (s.flash > 0) s.flash = Math.max(0, s.flash - dt * 2);
       advanceFx(s, dt);
 
-      // --- input: aim continuously while the pointer is down, shoot on release ---
+      // --- input: touch fires on press, not release --------------------------
+      // A very quick tap may begin and end between animation frames. The old
+      // release-only flow then saw no pointer coordinates and silently lost the
+      // whole shot. Press edges retain their coordinates, so every tap now both
+      // chooses an angle and fires. Dragging still steers the next available
+      // shot, while keyboard players use Left/Right then Space/Up to fire.
       const pressed = input.consumePointerPress();
-      const released = input.consumePointerRelease();
-      void pressed;
+      input.consumePointerRelease();
       const px = input.pointerX;
       const py = input.pointerY;
       const bx = px === null ? null : (px * cw - layout.ox) / layout.scale;
       const by = py === null ? null : (py * ch - layout.oy) / layout.scale;
 
       if (!s.projectile) {
-        if (input.pointerDown && bx !== null && by !== null) {
+        if ((input.pointerDown || pressed) && bx !== null && by !== null) {
           s.aim = { x: bx, y: by };
-        } else if (!input.pointerDown) {
-          s.aim = null;
         }
-        if (released && s.aim) {
-          const ax = bx ?? s.aim.x;
-          const ay = by ?? s.aim.y;
-          const dir = computeAimDir(ax - LAUNCHER_X, ay - LAUNCHER_Y);
-          s.projectile = {
-            x: LAUNCHER_X,
-            y: LAUNCHER_Y,
-            vx: dir.vx * PROJECTILE_SPEED,
-            vy: dir.vy * PROJECTILE_SPEED,
-            color: s.current,
+        if (input.held.left || input.held.right) {
+          const current = s.aim ?? { x: LAUNCHER_X, y: LAUNCHER_Y - 120 };
+          const nudge = (input.held.right ? 1 : 0) - (input.held.left ? 1 : 0);
+          s.aim = {
+            x: clamp(current.x + nudge * dt * 155, LAUNCHER_X - 180, LAUNCHER_X + 180),
+            y: Math.min(current.y, LAUNCHER_Y - 42),
           };
-          s.current = s.next;
-          s.next = pickColor(s.rng, s.grid);
-          s.aim = null;
-          playSound('click');
         }
+        if (pressed || input.consumeJump()) fireShot(s);
       }
-      // A release with a shot already in flight has nothing to do - it was
-      // still consumed above so the edge does not linger into the next shot.
+      // Consume a keyboard fire edge even while a shot is travelling so it
+      // cannot unexpectedly launch a second bubble later.
+      else input.consumeJump();
 
       // --- projectile flight, substepped so a fast shot cannot tunnel ---
       if (s.projectile) {

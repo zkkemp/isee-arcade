@@ -34,6 +34,19 @@ function difficultySpeed(difficulty: Difficulty): number {
   return difficulty === 'easy' ? 53 : difficulty === 'hard' ? 86 : 68;
 }
 
+/**
+ * The level ramp is deliberately visible and bounded: every new skyline starts
+ * a little narrower and sweeps faster, but never shrinks below a width that is
+ * reasonable to catch. Pure so the progression can be checked without canvas.
+ */
+export function levelParams(level: number, difficulty: Difficulty): { baseWidth: number; speed: number } {
+  const safeLevel = Math.max(1, level);
+  return {
+    baseWidth: Math.max(58, BASE_W - (safeLevel - 1) * 7),
+    speed: Math.min(154, difficultySpeed(difficulty) + (safeLevel - 1) * 9),
+  };
+}
+
 function freshMoving(width: number, y: number, level: number, difficulty: Difficulty): MovingBlock {
   const fromLeft = level % 2 === 0;
   return {
@@ -41,7 +54,7 @@ function freshMoving(width: number, y: number, level: number, difficulty: Diffic
     w: width,
     y,
     dir: fromLeft ? 1 : -1,
-    speed: difficultySpeed(difficulty) + Math.min(38, level * 3),
+    speed: levelParams(level, difficulty).speed,
     hue: (level * 43 + 185) % 360,
   };
 }
@@ -72,11 +85,12 @@ export function overlapWidth(a: StackBlock, b: StackBlock): { x: number; w: numb
 
 /** A new level has a fresh, friendly-wide tower, while score/lives stay in the shell/state. */
 function beginLevel(s: SkyState, worldH: number, difficulty: Difficulty): void {
-  const width = Math.max(62, BASE_W - (s.level - 1) * 4);
+  const width = levelParams(s.level, difficulty).baseWidth;
   const baseY = worldH - 38;
   s.blocks = [{ x: (SKY_STACK_W - width) / 2, w: width, y: baseY, hue: (s.level * 43 + 162) % 360 }];
   s.moving = freshMoving(width, baseY - BLOCK_H, s.level, difficulty);
-  s.message = `Level ${s.level} — build the sky!`;
+  const p = levelParams(s.level, difficulty);
+  s.message = `Level ${s.level}: ${Math.round(p.speed)} speed, ${Math.round(p.baseWidth)} wide`;
   s.messageT = 2;
 }
 
@@ -131,7 +145,7 @@ export function dropSkyBlock(s: SkyState, worldH: number, difficulty: Difficulty
     beginLevel(s, worldH, difficulty);
     return 'level';
   }
-  s.moving = freshMoving(landed.w, landed.y - BLOCK_H, s.placed + s.level, difficulty);
+  s.moving = freshMoving(landed.w, landed.y - BLOCK_H, s.level, difficulty);
   return 'placed';
 }
 
@@ -227,14 +241,15 @@ function drawScene(ctx: CanvasRenderingContext2D, s: SkyState, cw: number, ch: n
   // Accessible, high-contrast in-canvas instruction / progress language.
   ctx.fillStyle = 'rgba(20,29,72,0.62)';
   ctx.beginPath();
-  ctx.roundRect(8, 8, 104, 26, 7);
+  ctx.roundRect(8, 8, 137, 31, 7);
   ctx.fill();
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(`LEVEL ${s.level}  •  ${s.placed % LEVEL_STEPS}/${LEVEL_STEPS}`, 14, 20);
+  ctx.fillText(`LEVEL ${s.level}  •  ${s.placed % LEVEL_STEPS}/${LEVEL_STEPS}`, 14, 19);
   ctx.font = 'bold 7px ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = '#edf7ff';
-  ctx.fillText('TAP / SPACE TO DROP', 14, 29);
+  ctx.fillText(`${Math.round(s.moving.speed)} SPEED  •  ${Math.round(s.blocks[0].w)} WIDE`, 14, 28);
+  ctx.fillText('TAP / SPACE TO DROP', 14, 36);
   for (let i = 0; i < START_LIVES; i += 1) {
     ctx.fillStyle = i < s.lives ? '#ff7498' : 'rgba(255,255,255,0.28)';
     ctx.beginPath();

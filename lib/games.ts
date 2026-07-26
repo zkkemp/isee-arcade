@@ -8,7 +8,6 @@ export type GameId =
   | 'blocks'
   | 'tetris'
   | 'frogger'
-  | 'snake'
   | 'snake2'
   | 'platformer'
   | 'platformer2'
@@ -107,16 +106,6 @@ export const GAMES: Record<GameId, GameMeta> = {
     gateNote: 'Study time buys play time.',
     icon: '🐸',
     accent: '#3ddc84',
-    controls: 'dpad',
-    aspect: 1,
-  },
-  snake: {
-    id: 'snake',
-    name: 'Byte Snake',
-    tagline: 'Eat, grow, and try not to trip over yourself.',
-    gateNote: 'Study time buys play time.',
-    icon: '🐍',
-    accent: '#4ea8ff',
     controls: 'dpad',
     aspect: 1,
   },
@@ -352,8 +341,8 @@ export const GAMES: Record<GameId, GameMeta> = {
   },
   cards: {
     id: 'cards',
-    name: 'Color Cascade',
-    tagline: 'Match the color, dodge the wilds, empty your hand!',
+    name: 'Color Dash',
+    tagline: 'Match colors and numbers, call one, and race to empty your hand!',
     gateNote: 'Study time buys play time.',
     icon: '🃏',
     accent: '#ff5252',
@@ -426,8 +415,6 @@ export const HOW_TO: Record<GameId, string> = {
     'Shapes fall from the top. Move and rotate them so they fit together with no gaps. Fill a whole row and it disappears. Keep the stack from reaching the top.',
   frogger:
     'Hop across the road and river to reach the safe spots at the top. Dodge the cars, and ride the logs and lily pads across the water - do not fall in! Grab coins along the way.',
-  snake:
-    'Steer the snake to eat the food. Every bite makes it longer. Do not run into the walls or into your own tail.',
   snake2:
     'Guide your snake through the garden to munch sweet berries. Every berry makes your trail longer, so plan ahead and do not bump into the fence or your own tail.',
   platformer:
@@ -469,7 +456,7 @@ export const HOW_TO: Record<GameId, string> = {
   dots:
     'Take turns drawing one line between two dots. Finish the fourth side of a box to claim it and go again. Whoever owns the most boxes wins. Play a friend or the computer.',
   cards:
-    'Play a card that matches the color OR the number of the top card. No match? Draw a card. Use Rainbow cards to change the color. First to empty their hand wins!',
+    'Play a card that matches the color or number on top. Wild cards let you choose a color; action cards skip, reverse, or make the other player draw. When you have two cards, tap CALL ONE before playing one - forget and you draw two cards! Empty your hand to win.',
   wordhunt:
     'Find the hidden words in the letter grid. Drag from the first letter to the last - words go across, down, and diagonally. Find them all to move on.',
   spelling:
@@ -493,7 +480,6 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.maze,
   GAMES.climber,
   GAMES.frogger,
-  GAMES.snake,
   GAMES.snake2,
   GAMES.tictactoe,
   GAMES.memory,

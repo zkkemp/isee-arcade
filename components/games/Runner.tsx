@@ -896,6 +896,24 @@ const SKY: Record<Biome, [string, string]> = {
   dirt: ['#e0a06a', '#ffeadb'],
 };
 
+const SUN_COLOR: Record<Biome, string> = {
+  grass: '#fff4ad',
+  sand: '#ffd36a',
+  stone: '#f2f5ff',
+  snow: '#ffffff',
+  purple: '#d9e5ff',
+  dirt: '#ffbd7a',
+};
+
+const BIOME_LABEL: Record<Biome, string> = {
+  grass: 'GREENWAY',
+  sand: 'SUN DUNES',
+  stone: 'OLD RIDGE',
+  snow: 'FROST RUN',
+  purple: 'MOON GARDEN',
+  dirt: 'AUTUMN TRAIL',
+};
+
 const DECOR: Record<Biome, string[]> = {
   grass: ['bush', 'mushroom_red', 'rock'],
   sand: ['cactus', 'rock', 'hill'],
@@ -1490,11 +1508,14 @@ function draw(
   // a sun and two parallax cloud layers, both procedural, both above the
   // backdrop's own horizon, which is where the empty band was.
   const skyH = groundY;
-  ctx.fillStyle = '#ffffff';
-  ctx.globalAlpha = 0.32;
+  ctx.fillStyle = SUN_COLOR[here];
+  ctx.shadowColor = SUN_COLOR[here];
+  ctx.shadowBlur = Math.max(16, skyH * 0.08);
+  ctx.globalAlpha = here === 'purple' ? 0.72 : 0.5;
   ctx.beginPath();
   ctx.arc(cw * 0.78, skyH * 0.16, Math.max(14, skyH * 0.055), 0, Math.PI * 2);
   ctx.fill();
+  ctx.shadowBlur = 0;
   ctx.globalAlpha = 0.1;
   ctx.beginPath();
   ctx.arc(cw * 0.78, skyH * 0.16, Math.max(26, skyH * 0.11), 0, Math.PI * 2);
@@ -1533,6 +1554,15 @@ function draw(
     }
   }
   ctx.globalAlpha = 1;
+
+  // A soft cinematic grade binds the sprite layers together and makes each
+  // biome feel like its own chapter rather than a palette swap.
+  const grade = ctx.createLinearGradient(0, 0, cw, playH);
+  grade.addColorStop(0, here === 'purple' ? 'rgba(100,75,180,.13)' : 'rgba(255,235,175,.08)');
+  grade.addColorStop(0.55, 'rgba(255,255,255,0)');
+  grade.addColorStop(1, here === 'snow' ? 'rgba(150,215,255,.08)' : 'rgba(36,20,82,.08)');
+  ctx.fillStyle = grade;
+  ctx.fillRect(0, 0, cw, playH);
 
   // --- world ------------------------------------------------------------
   // Whole screen pixels, so the tile grid does not shimmer as it scrolls.
@@ -1824,10 +1854,27 @@ function draw(
   }
   ctx.textAlign = 'left';
 
+  ctx.fillStyle = 'rgba(255,255,255,.62)';
+  ctx.font = '900 8px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(BIOME_LABEL[here], 78, 18);
+
   // Speed meter, so the ramp is something the player can watch coming. Kept
   // top-LEFT: the shell floats its own status banner across the top centre.
   ctx.fillStyle = 'rgba(255,255,255,0.16)';
   ctx.fillRect(10, 21, 62, 3);
   ctx.fillStyle = hot > 0.72 ? '#ff8f5d' : '#ffd75e';
   ctx.fillRect(10, 21, 62 * Math.max(0.05, hot), 3);
+
+  const vignette = ctx.createRadialGradient(
+    cw / 2,
+    playH * 0.44,
+    playH * 0.22,
+    cw / 2,
+    playH * 0.44,
+    Math.max(cw, playH) * 0.72,
+  );
+  vignette.addColorStop(0, 'rgba(8,6,20,0)');
+  vignette.addColorStop(1, 'rgba(8,6,20,.16)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, cw, playH);
 }

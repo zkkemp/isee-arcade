@@ -144,7 +144,7 @@ function independentCountSolutions(grid: Grid, n: Size, cap = 2): number {
 {
   let checked = 0;
   let bad = 0;
-  for (const n of [4, 6] as Size[]) {
+  for (const n of [4, 5, 6, 7, 8, 9, 10] as Size[]) {
     for (let seed = 1; seed <= 60; seed += 1) {
       const g = generateSolvedGrid(n, lcg(seed * 97 + n));
       checked += 1;
@@ -154,7 +154,7 @@ function independentCountSolutions(grid: Grid, n: Size, cap = 2): number {
     }
   }
   assert(bad === 0, `${bad}/${checked} generated solved grids failed validation`);
-  console.log(`generateSolvedGrid: ${checked} grids across sizes 4 and 6, all valid.`);
+  console.log(`generateSolvedGrid: ${checked} grids across selectable sizes 4 through 10, all valid.`);
 }
 
 // 2) Every generated puzzle: givens are consistent with its own solution,

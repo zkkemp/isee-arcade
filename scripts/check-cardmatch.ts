@@ -24,6 +24,7 @@
 import {
   applyPlay,
   buildDeck,
+  callOne,
   chooseCpuPlay,
   COLORS,
   deal,
@@ -373,6 +374,7 @@ function simulateGame(seed: number): { plies: number; winner: 0 | 1 | null; ille
     const choice = chooseCpuPlay(state.hands[player], top, state.activeColor, rng);
     if (choice) {
       if (!isLegalPlay(choice.card, top, state.activeColor)) illegalPlay = true;
+      if (state.hands[player].length === 2) state = callOne(state, player);
       const r = applyPlay(state, player, choice.card, choice.chosenColor, rng);
       state = r.state;
     } else {
@@ -453,6 +455,6 @@ if (failures > 0 || selfFails > 0) {
   process.exit(1);
 }
 console.log(
-  '\nColor Cascade: deck composition, shuffle, legal-play rules, applyPlay turn/draw effects, ' +
+  '\nColor Dash: deck composition, shuffle, legal-play rules, applyPlay turn/draw effects, ' +
     'and full random self-play games all verified.',
 );

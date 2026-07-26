@@ -794,6 +794,21 @@ function drawLane(ctx: CanvasRenderingContext2D, s: State, lane: Lane, sp: Sprit
         // Car art points up; a quarter turn makes it face along the lane.
         const angle = lane.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
         drawRotated(ctx, img, px + pw / 2, y + CELL / 2, CELL - 6, pw - 6, angle);
+        // Headlights/tail lights make direction readable before the car reaches
+        // the player, especially on the darker stone and purple roads.
+        const nose = lane.dir > 0 ? px + pw - 4 : px + 4;
+        const tail = lane.dir > 0 ? px + 4 : px + pw - 4;
+        ctx.fillStyle = 'rgba(255,244,168,.9)';
+        ctx.shadowColor = '#fff0a0';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(nose, y + CELL * 0.32, 1.8, 0, Math.PI * 2);
+        ctx.arc(nose, y + CELL * 0.68, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,80,90,.8)';
+        ctx.fillRect(tail - 1.5, y + CELL * 0.27, 3, 3);
+        ctx.fillRect(tail - 1.5, y + CELL * 0.64, 3, 3);
       }
     } else if (lane.kind === 'log') {
       drawLog(ctx, px, y, pw);
@@ -907,7 +922,11 @@ function draw(
   ch: number,
   character: Character,
 ): void {
-  ctx.fillStyle = '#0d2b52';
+  const surround = ctx.createRadialGradient(cw / 2, ch * 0.42, 20, cw / 2, ch * 0.45, Math.max(cw, ch) * 0.7);
+  surround.addColorStop(0, '#244f68');
+  surround.addColorStop(0.62, '#102f4f');
+  surround.addColorStop(1, '#09182f');
+  ctx.fillStyle = surround;
   ctx.fillRect(0, 0, cw, ch);
   ctx.save();
   fitBoard(ctx, cw, ch, W, H);
@@ -945,6 +964,14 @@ function drawBoard(
     const y = r * CELL;
     if (kind === 'goal' || kind === 'start' || kind === 'safe') {
       drawGrassRow(ctx, sp, r, bank);
+      // Tiny deterministic flowers/pebbles break up the repeated bank tile.
+      for (let c = 0; c < COLS; c += 1) {
+        if ((c * 5 + r * 3 + plan.level) % 7 !== 0) continue;
+        ctx.fillStyle = (c + r) % 2 === 0 ? 'rgba(255,236,139,.8)' : 'rgba(255,155,205,.75)';
+        ctx.beginPath();
+        ctx.arc(c * CELL + CELL * 0.76, y + CELL * 0.3, 2.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
     } else if (kind === 'river') {
       const grad = ctx.createLinearGradient(0, y, 0, y + CELL);
       grad.addColorStop(0, theme.water[0]);
@@ -959,6 +986,10 @@ function drawBoard(
         ctx.moveTo(x + drift, y + CELL * 0.35);
         ctx.lineTo(x + drift + 14, y + CELL * 0.35);
         ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,.09)';
+      for (let x = (r * 31 + Math.floor(s.animTime * 12)) % 53; x < W; x += 53) {
+        ctx.fillRect(x, y + CELL * 0.72, 11, 1.3);
       }
     } else if (kind === 'road') {
       ctx.fillStyle = theme.road;
@@ -987,6 +1018,13 @@ function drawBoard(
   drawPlayer(ctx, s, character);
   drawParticles(ctx, s);
 
+  const boardGrade = ctx.createLinearGradient(0, 0, W, H);
+  boardGrade.addColorStop(0, 'rgba(255,255,255,.055)');
+  boardGrade.addColorStop(0.45, 'rgba(255,255,255,0)');
+  boardGrade.addColorStop(1, 'rgba(9,8,32,.12)');
+  ctx.fillStyle = boardGrade;
+  ctx.fillRect(0, 0, W, H);
+
   // --- HUD ---
   ctx.fillStyle = 'rgba(0,0,0,0.34)';
   ctx.fillRect(0, H - 18, W, 18);
@@ -994,7 +1032,13 @@ function drawBoard(
   ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText(`BANK ${s.slotsFilled}/${GOAL_SLOTS}`, 6, H - 6);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,.58)';
+  ctx.font = '900 7px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(`${plan.biome.toUpperCase()} CROSSING`, W / 2, H - 6);
   ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
   ctx.fillText(`LEVEL ${plan.level}`, W - 6, H - 6);
   ctx.textAlign = 'left';
 }
