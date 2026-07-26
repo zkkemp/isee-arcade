@@ -16,9 +16,19 @@ import { useCallback, useSyncExternalStore } from 'react';
  * blurry on a Retina iPad.
  */
 
-export type CharacterId = 'marty' | 'dakota' | 'carson' | 'colton' | 'hudson';
+export type CharacterId =
+  | 'marty'
+  | 'dakota'
+  | 'carson'
+  | 'colton'
+  | 'hudson'
+  | 'sadie'
+  | 'miles'
+  | 'ruby'
+  | 'jasper'
+  | 'nova';
 
-type HairStyle = 'bun' | 'ponytail' | 'part' | 'tousled';
+type HairStyle = 'bun' | 'ponytail' | 'part' | 'tousled' | 'pigtails' | 'cap' | 'buzz' | 'puffs';
 
 export type Character = {
   id: CharacterId;
@@ -41,10 +51,18 @@ export type Character = {
   dots: boolean;
   /** Carson has braces, and she would be annoyed if they were left out. */
   braces: boolean;
+  /** A sprinkle of freckles across the nose and cheeks. */
+  freckles?: boolean;
+  /** Round glasses frames over the eyes. */
+  glasses?: boolean;
 };
 
 const SKIN = '#f7dcc4';
 const SKIN_SHADE = '#e8bfa0';
+const SKIN_TAN = '#d9a06c';
+const SKIN_TAN_SHADE = '#b9824f';
+const SKIN_DEEP = '#8c5a3c';
+const SKIN_DEEP_SHADE = '#6b4128';
 
 export const CHARACTERS: Character[] = [
   {
@@ -134,6 +152,98 @@ export const CHARACTERS: Character[] = [
     shirt: '#2fc7e8',
     shirtShade: '#1fa3c2',
     stripes: false,
+    dots: false,
+    braces: false,
+  },
+  {
+    id: 'sadie',
+    name: 'Sadie',
+    kind: 'kid',
+    age: 9,
+    blurb: 'Nine. Freckles and fast pigtails.',
+    accent: '#ff6a4d',
+    hair: 'pigtails',
+    hairColor: '#c65a3b',
+    hairShade: '#a8452b',
+    skin: SKIN,
+    skinShade: SKIN_SHADE,
+    shirt: '#ffb648',
+    shirtShade: '#d99730',
+    stripes: false,
+    dots: false,
+    braces: false,
+    freckles: true,
+  },
+  {
+    id: 'miles',
+    name: 'Miles',
+    kind: 'kid',
+    age: 11,
+    blurb: 'Eleven. Sees everything twice.',
+    accent: '#8a6fd8',
+    hair: 'part',
+    hairColor: '#5b3a24',
+    hairShade: '#402710',
+    skin: SKIN_TAN,
+    skinShade: SKIN_TAN_SHADE,
+    shirt: '#3f7d5c',
+    shirtShade: '#2b5c42',
+    stripes: false,
+    dots: false,
+    braces: false,
+    glasses: true,
+  },
+  {
+    id: 'ruby',
+    name: 'Ruby',
+    kind: 'kid',
+    age: 7,
+    blurb: 'Seven. Cap on, ready to go.',
+    accent: '#e83e5c',
+    hair: 'cap',
+    hairColor: '#caa06a',
+    hairShade: '#a37f4d',
+    skin: SKIN,
+    skinShade: SKIN_SHADE,
+    shirt: '#f5a800',
+    shirtShade: '#c98700',
+    stripes: false,
+    dots: true,
+    braces: false,
+  },
+  {
+    id: 'jasper',
+    name: 'Jasper',
+    kind: 'kid',
+    age: 12,
+    blurb: 'Twelve. Buzzcut and business.',
+    accent: '#4a90d9',
+    hair: 'buzz',
+    hairColor: '#1c1c1c',
+    hairShade: '#0a0a0a',
+    skin: SKIN_DEEP,
+    skinShade: SKIN_DEEP_SHADE,
+    shirt: '#c0392b',
+    shirtShade: '#96271d',
+    stripes: false,
+    dots: false,
+    braces: false,
+  },
+  {
+    id: 'nova',
+    name: 'Nova',
+    kind: 'kid',
+    age: 5,
+    blurb: 'Five. Puffs and pure energy.',
+    accent: '#ffd23f',
+    hair: 'puffs',
+    hairColor: '#2b1b12',
+    hairShade: '#180f0a',
+    skin: SKIN_TAN,
+    skinShade: SKIN_TAN_SHADE,
+    shirt: '#ff6f91',
+    shirtShade: '#d94f70',
+    stripes: true,
     dots: false,
     braces: false,
   },
@@ -317,6 +427,18 @@ function drawHairBack(
     ellipse(ctx, cx + r * 0.95, cy + r * 0.1, r * 0.26, r * 0.52, 0.25);
   } else if (c.hair === 'bun') {
     circle(ctx, cx, cy - r * 0.95, r * 0.34);
+  } else if (c.hair === 'pigtails') {
+    // Two ponytails, one per side, so both read in a front-facing portrait.
+    for (const s of [-1, 1]) {
+      ellipse(ctx, cx + s * r * 0.92, cy + r * 0.14, r * 0.22, r * 0.48, s * 0.15);
+    }
+  } else if (c.hair === 'puffs') {
+    // Round afro puffs, curly-edged like the dog's coat, one per side.
+    for (const s of [-1, 1]) {
+      curlyEdge(ctx, cx + s * r * 0.88, cy - r * 0.48, r * 0.3, r * 0.3, c.hairShade, 9);
+      ctx.fillStyle = c.hairColor;
+      ellipse(ctx, cx + s * r * 0.88, cy - r * 0.48, r * 0.27, r * 0.27);
+    }
   }
 }
 
@@ -374,6 +496,44 @@ function drawHairFront(
       ctx.closePath();
       ctx.fill();
       break;
+    case 'pigtails':
+      // A smooth top layer, plus a coloured tie at the base of each pigtail.
+      ellipse(ctx, cx, cy - r * 0.56, r * 0.94, r * 0.48);
+      ctx.fillStyle = c.accent;
+      for (const s of [-1, 1]) {
+        ellipse(ctx, cx + s * r * 0.88, cy - r * 0.02, r * 0.11, r * 0.09);
+      }
+      break;
+    case 'puffs':
+      // The puffs themselves are drawn behind the head; just the ties show up front.
+      ctx.fillStyle = c.accent;
+      for (const s of [-1, 1]) {
+        ellipse(ctx, cx + s * r * 0.7, cy - r * 0.28, r * 0.09, r * 0.07);
+      }
+      break;
+    case 'cap': {
+      // Dome plus a brim jutting off to one side, in the character's own colour.
+      ctx.fillStyle = c.accent;
+      ellipse(ctx, cx, cy - r * 0.5, r * 0.98, r * 0.56);
+      ctx.beginPath();
+      ctx.ellipse(cx + r * 0.62, cy - r * 0.34, r * 0.46, r * 0.16, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // A little fringe peeking out at the temples below the cap.
+      ctx.fillStyle = c.hairColor;
+      for (const s of [-1, 1]) {
+        ellipse(ctx, cx + s * r * 0.84, cy - r * 0.02, r * 0.1, r * 0.18, s * 0.25);
+      }
+      break;
+    }
+    case 'buzz':
+      // Short and close to the scalp, with a few flecks of texture rather than a
+      // big silhouette.
+      ellipse(ctx, cx, cy - r * 0.58, r * 0.9, r * 0.4);
+      ctx.fillStyle = c.hairShade;
+      for (let i = -3; i <= 3; i += 1) {
+        circle(ctx, cx + i * r * 0.18, cy - r * 0.62, r * 0.05);
+      }
+      break;
     default:
       break;
   }
@@ -407,9 +567,44 @@ export function drawKidFace(
 
   eyes(ctx, cx, cy + r * 0.04, r * 0.36, r * 0.16, look);
 
+  if (c.glasses) {
+    // Simple round frames, sized to sit just outside the eyes drawn above.
+    const gy = cy + r * 0.04;
+    const gSpread = r * 0.36;
+    const gr = r * 0.22;
+    ctx.strokeStyle = '#2c2c34';
+    ctx.lineWidth = Math.max(1.2, r * 0.05);
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(cx + s * gSpread, gy, gr, gr * 0.9, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // Bridge between the lenses.
+    ctx.beginPath();
+    ctx.moveTo(cx - gSpread + gr, gy - gr * 0.1);
+    ctx.lineTo(cx + gSpread - gr, gy - gr * 0.1);
+    ctx.stroke();
+  }
+
   // Blush.
   ctx.fillStyle = 'rgba(240,140,140,0.32)';
   for (const s of [-1, 1]) ellipse(ctx, cx + s * r * 0.55, cy + r * 0.32, r * 0.17, r * 0.11);
+
+  if (c.freckles) {
+    // A scatter of small dots across the nose and cheeks.
+    ctx.fillStyle = 'rgba(180,100,60,0.55)';
+    const freckleSpots = [
+      [-0.42, 0.26],
+      [-0.3, 0.34],
+      [-0.16, 0.28],
+      [0.16, 0.28],
+      [0.3, 0.34],
+      [0.42, 0.26],
+    ] as const;
+    for (const [dx, dy] of freckleSpots) {
+      circle(ctx, cx + dx * r, cy + dy * r, r * 0.025);
+    }
+  }
 
   // Nose.
   ctx.fillStyle = c.skinShade;
@@ -618,4 +813,63 @@ export function useCharacter(): [Character, (id: CharacterId) => void] {
   }, []);
 
   return [getCharacter(id), choose];
+}
+
+// --- custom name -------------------------------------------------------------
+
+const NAME_KEY = 'isee-arcade:character-name';
+const NAME_MAX_LENGTH = 16;
+
+/**
+ * Letters and spaces only, capped to a short length. Trimming is left to the
+ * caller (typically on blur) rather than done here, so a space typed between
+ * two words is not stripped mid-keystroke.
+ */
+export function sanitizeCharacterName(raw: string): string {
+  return raw.replace(/[^a-zA-Z ]/g, '').slice(0, NAME_MAX_LENGTH);
+}
+
+export function readCharacterName(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+// Same external-store shape as useCharacter above, and for the same reason:
+// useSyncExternalStore gives a stable ('') server snapshot and avoids setting
+// state from an effect, and writes go through a module-level listener set so
+// every mounted hook re-renders together.
+const nameListeners = new Set<() => void>();
+
+function subscribeCharacterName(cb: () => void): () => void {
+  nameListeners.add(cb);
+  return () => {
+    nameListeners.delete(cb);
+  };
+}
+
+/**
+ * A custom name for the chosen character, persisted so it survives a reload.
+ * Empty string means "no custom name set" - callers should fall back to the
+ * character's own `name`.
+ */
+export function useCharacterName(): [string, (next: string) => void] {
+  const name = useSyncExternalStore(subscribeCharacterName, readCharacterName, () => '');
+
+  const setName = useCallback((next: string) => {
+    const clean = sanitizeCharacterName(next);
+    try {
+      if (clean) window.localStorage.setItem(NAME_KEY, clean);
+      else window.localStorage.removeItem(NAME_KEY);
+    } catch {
+      // Private browsing. The name then lasts only this session, in which case
+      // the notify below still refreshes the in-memory view.
+    }
+    nameListeners.forEach((l) => l());
+  }, []);
+
+  return [name, setName];
 }
