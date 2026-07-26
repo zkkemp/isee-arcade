@@ -26,7 +26,7 @@ import {
  * the passcode is a speed bump between siblings, not real auth (see lib/profiles).
  */
 
-type View = 'closed' | 'choose' | 'login' | 'create' | 'parent';
+type View = 'closed' | 'choose' | 'login' | 'create' | 'parent' | 'parentUnlock';
 
 const ACCENT = '#a78bfa';
 
@@ -38,8 +38,36 @@ export default function ProfileGate() {
 
   // Open straight to the chooser when nobody is signed in yet.
   const [view, setView] = useState<View>('closed');
+  // True once the parent has unlocked a switch this session, so the chooser can
+  // activate a player directly instead of re-asking for that kid's own passcode.
+  const [unlocked, setUnlocked] = useState(false);
   const open = view !== 'closed';
   const showChooser = open || !active;
+
+  /**
+   * Switching to a DIFFERENT player is gated behind the parent passcode, so a kid
+   * cannot hop to an easier grade's questions to coast through the study block.
+   * - Nobody signed in yet (first setup): open the chooser freely.
+   * - Someone signed in but no parent code set yet: force creating one first - it
+   *   is the lock, so without it there is nothing stopping a switch.
+   * - Otherwise: ask for the parent code, then reveal the chooser.
+   */
+  const onSwitch = () => {
+    if (open) {
+      setView('closed');
+      setUnlocked(false);
+      return;
+    }
+    if (!active) {
+      setView('choose');
+      return;
+    }
+    if (!masterExists) {
+      setView('parent');
+      return;
+    }
+    setView('parentUnlock');
+  };
 
   return (
     <div className="mb-5">
@@ -62,16 +90,25 @@ export default function ProfileGate() {
         )}
         <button
           type="button"
-          onClick={() => setView(showChooser && open ? 'closed' : 'choose')}
+          onClick={onSwitch}
           className="flex-shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-white/80 transition active:scale-95"
         >
-          {active ? 'Switch player' : 'Choose player'}
+          {active ? (open ? 'Close' : 'Switch player') : 'Choose player'}
         </button>
       </div>
 
       {showChooser && (
         <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          {view === 'login' ? (
+          {view === 'parentUnlock' ? (
+            <ParentUnlockPanel
+              actions={actions}
+              back={() => setView('closed')}
+              onDone={() => {
+                setUnlocked(true);
+                setView('choose');
+              }}
+            />
+          ) : view === 'login' ? (
             <LoginPanel actions={actions} back={() => setView('choose')} onDone={() => setView('closed')} />
           ) : view === 'create' ? (
             <CreatePanel actions={actions} back={() => setView('choose')} onDone={() => setView('closed')} />
@@ -80,17 +117,20 @@ export default function ProfileGate() {
               actions={actions}
               profiles={profiles}
               masterExists={masterExists}
-              back={() => setView('choose')}
+              back={() => setView('closed')}
             />
           ) : (
             <ChoosePanel
               profiles={profiles}
+              // After a parent unlock, activate directly (the parent is choosing).
+              // During first setup, still honor a kid's own passcode if they set one.
               onPick={(p) => {
-                if (p.passcodeHash) {
+                if (!unlocked && p.passcodeHash) {
                   pendingRef.selected = p;
                   setView('login');
                 } else {
                   actions.setActive(p.id);
+                  setUnlocked(false);
                   setView('closed');
                 }
               }}
@@ -100,6 +140,49 @@ export default function ProfileGate() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Parent-passcode prompt shown before the player chooser, to block self-switching. */
+function ParentUnlockPanel({
+  actions,
+  back,
+  onDone,
+}: {
+  actions: Actions;
+  back: () => void;
+  onDone: () => void;
+}) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="mx-auto max-w-xs text-center">
+      <div className="text-2xl">🔒</div>
+      <div className="mt-1 font-bold text-white">Parent passcode to switch</div>
+      <div className="mb-3 text-xs text-white/50">
+        Only a parent can change who is playing, so kids can&apos;t switch to easier questions.
+      </div>
+      <PasscodeInput value={code} onChange={(v) => { setCode(v); setError(false); }} placeholder="••••" />
+      {error && <div className="mt-2 text-xs font-semibold text-rose-400">Wrong passcode.</div>}
+      <button
+        type="button"
+        disabled={busy || code.length === 0}
+        onClick={async () => {
+          setBusy(true);
+          const ok = await actions.verifyMaster(code);
+          setBusy(false);
+          if (ok) onDone();
+          else { setError(true); setCode(''); }
+        }}
+        className="mt-3 w-full rounded-xl px-4 py-2.5 text-sm font-bold text-[#101020] disabled:opacity-40"
+        style={{ background: ACCENT }}
+      >
+        Unlock
+      </button>
+      <BackRow label="Cancel" back={back} />
     </div>
   );
 }
