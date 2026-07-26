@@ -17,7 +17,8 @@ export type GameId =
   | 'tictactoe'
   | 'memory'
   | 'merge'
-  | 'bubble';
+  | 'bubble'
+  | 'checkers';
 
 /**
  * How a game is driven on touch.
@@ -222,6 +223,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'grid',
     aspect: 3 / 4,
   },
+  checkers: {
+    id: 'checkers',
+    name: 'Checkers',
+    tagline: 'Red vs black. Jump your way to a king.',
+    gateNote: 'Study time buys play time.',
+    icon: '🔴',
+    accent: '#e63946',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -239,6 +250,7 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.memory,
   GAMES.merge,
   GAMES.bubble,
+  GAMES.checkers,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

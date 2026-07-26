@@ -15,6 +15,7 @@ import TicTacToe from './games/TicTacToe';
 import MemoryMatch from './games/MemoryMatch';
 import NumberMerge from './games/NumberMerge';
 import BubblePop from './games/BubblePop';
+import Checkers from './games/Checkers';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -36,6 +37,7 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   memory: MemoryMatch,
   merge: NumberMerge,
   bubble: BubblePop,
+  checkers: Checkers,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {
