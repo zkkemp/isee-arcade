@@ -191,7 +191,9 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       avoidKind: avoid.length > 0 ? avoid : null,
     });
 
-    seenIdsRef.current = [...seenIdsRef.current, question.id].slice(-40);
+    // Keep a deep history (larger than the biggest bank) so the least-recently-
+    // used picker in pickQuestion cycles the WHOLE bank before any family repeats.
+    seenIdsRef.current = [...seenIdsRef.current, question.id].slice(-300);
     if (question.passageId) {
       seenPassagesRef.current = [...seenPassagesRef.current, question.passageId].slice(-14);
     }

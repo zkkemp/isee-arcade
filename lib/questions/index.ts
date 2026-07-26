@@ -249,35 +249,50 @@ export function pickQuestion(args: PickArgs = {}): Question {
     if (rotated.length > 0) inScope = rotated;
   }
 
-  const recent = new Set(recentIds);
   const usedPassages = new Set(recentPassageIds);
 
-  // Prefer families that are neither recently served nor tied to an already-read
-  // passage, then fall back progressively rather than ever returning nothing.
-  const fresh = inScope.filter(
-    (c) => !recent.has(c.id) && (!c.passageId || !usedPassages.has(c.passageId)),
-  );
-  const pool = fresh.length > 0 ? fresh : inScope.filter((c) => !recent.has(c.id));
-  const usable = pool.length > 0 ? pool : inScope;
+  // Least-recently-used selection. `recentIds` is ordered oldest-first, so a
+  // family's recency is the index of its LAST appearance: never-served families
+  // rank -1 (freshest), and the just-served one ranks highest. Choosing only from
+  // the lowest-ranked families means the whole pool is cycled before ANY family
+  // repeats - the fix for "it keeps asking the same question". The old code only
+  // filtered out a fixed recent WINDOW and, once every family in a small bank was
+  // inside that window (the 24-item grade banks vs a longer history), fell back
+  // to a blind random pick that could re-serve what was just asked.
+  const lastSeen = new Map<string, number>();
+  recentIds.forEach((id, i) => lastSeen.set(id, i));
+  const recencyOf = (id: string): number => (lastSeen.has(id) ? (lastSeen.get(id) as number) : -1);
 
-  // 1. Spaced repetition: re-ask something previously missed.
-  const reviewable = usable.filter((c) => (missed[c.id] ?? 0) > 0);
+  // A re-read passage is worse than a repeated family, so drop already-read
+  // passages first when that still leaves something to serve.
+  const passageOk = inScope.filter((c) => !c.passageId || !usedPassages.has(c.passageId));
+  const scope = passageOk.length > 0 ? passageOk : inScope;
+
+  // The least-recently-used subset: everything tied for the oldest last-seen rank
+  // (all never-served families when any exist).
+  let minRank = Infinity;
+  for (const c of scope) minRank = Math.min(minRank, recencyOf(c.id));
+  const lru = scope.filter((c) => recencyOf(c.id) === minRank);
+
+  // 1. Spaced repetition: re-ask something previously missed - but only from the
+  // LRU set, so a missed item still can never come back-to-back.
+  const reviewable = lru.filter((c) => (missed[c.id] ?? 0) > 0);
   if (reviewable.length > 0 && Math.random() < 0.35) {
     return pickRandom(reviewable).materialize();
   }
 
-  // 2. Adaptive difficulty.
+  // 2. Adaptive difficulty, chosen within the LRU set.
   let target: 1 | 2 | 3 = 2;
   if (recentAccuracy !== null) {
     if (recentAccuracy >= 0.85) target = 3;
     else if (recentAccuracy < 0.5) target = 1;
   }
 
-  const atTarget = usable.filter((c) => c.difficulty === target);
+  const atTarget = lru.filter((c) => c.difficulty === target);
   if (atTarget.length > 0) return pickRandom(atTarget).materialize();
 
-  const nearTarget = usable.filter((c) => Math.abs(c.difficulty - target) === 1);
+  const nearTarget = lru.filter((c) => Math.abs(c.difficulty - target) === 1);
   if (nearTarget.length > 0) return pickRandom(nearTarget).materialize();
 
-  return pickRandom(usable).materialize();
+  return pickRandom(lru).materialize();
 }
