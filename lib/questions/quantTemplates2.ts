@@ -286,20 +286,23 @@ export const QUANT_TEMPLATES_2: QuestionTemplate[] = [
     difficulty: 2,
     topic: 'which number sentence is true',
     generate: (rng) => {
-      const a = randInt(rng, 3, 8);
-      const b = randInt(rng, 3, 8);
-      const correct = `${a} x ${b} = ${a * b}`;
+      // Two-digit x one-digit, so the "fact" cannot be answered from rote
+      // times-table memory alone -- it takes an actual multiplication step.
+      const a = randInt(rng, 12, 29);
+      const b = randInt(rng, 3, 9);
+      const product = a * b;
+      const correct = `${a} x ${b} = ${product}`;
       const { choices, answer } = buildChoices(rng, correct, [
-        `${a} x ${b} = ${a * b + b}`,
-        `${a} x ${b} = ${a * b - b}`,
-        `${a} + ${b} = ${a * b}`,
-        `${a} x ${b} = ${a * b + a}`,
+        `${a} x ${b} = ${product + b}`,
+        `${a} x ${b} = ${product - b}`,
+        `${a} + ${b} = ${product}`,
+        `${a} x ${b} = ${product + a}`,
       ]);
       return {
         prompt: 'Which number sentence is TRUE?',
         choices,
         answer,
-        explain: `${a} x ${b} = ${a * b}, so that sentence is the true one. The others give the wrong total.`,
+        explain: `${a} x ${b} = ${product}, so that sentence is the true one. The others give the wrong total.`,
       };
     },
   },
@@ -362,21 +365,29 @@ export const QUANT_TEMPLATES_2: QuestionTemplate[] = [
     difficulty: 1,
     topic: 'find a number between two others',
     generate: (rng) => {
-      const a = randInt(rng, 4, 12);
-      const b = a + randInt(rng, 4, 9);
-      const correct = num(randInt(rng, a + 1, b - 1));
+      // Decimals to a tenth, not tiny whole numbers -- finding what lies
+      // between 3.2 and 3.5 takes real understanding of the tenths place,
+      // where finding what lies between 4 and 12 does not.
+      const whole = randInt(rng, 1, 9);
+      const lowTenths = randInt(rng, 1, 5);
+      const gap = randInt(rng, 2, 3);
+      const hiTenths = lowTenths + gap;
+      const midTenths = randInt(rng, lowTenths + 1, hiTenths - 1);
+      const low = `${whole}.${lowTenths}`;
+      const hi = `${whole}.${hiTenths}`;
+      const correct = `${whole}.${midTenths}`;
       const { choices, answer } = buildChoices(rng, correct, [
-        num(a),
-        num(b),
-        num(a - 2),
-        num(b + 2),
-        num(b + 1),
+        low,
+        hi,
+        `${whole - 1}.${midTenths}`,
+        `${whole + 1}.${midTenths}`,
+        `${whole}.${hiTenths + 1}`,
       ]);
       return {
-        prompt: `Which number is greater than ${a} but less than ${b}?`,
+        prompt: `Which decimal is greater than ${low} but less than ${hi}?`,
         choices,
         answer,
-        explain: `It has to be bigger than ${a} and smaller than ${b}. Only ${correct} fits between them.`,
+        explain: `It has to be bigger than ${low} and smaller than ${hi}. ${midTenths} tenths is between ${lowTenths} and ${hiTenths} tenths, so ${correct} fits.`,
       };
     },
   },
@@ -387,25 +398,37 @@ export const QUANT_TEMPLATES_2: QuestionTemplate[] = [
     difficulty: 2,
     topic: 'which comparison statement is true',
     generate: (rng) => {
-      const a = randInt(rng, 2, 20);
-      let b = randInt(rng, 2, 20);
-      if (a === b) b = a + 1;
-      const correct = a > b ? `${a} is greater than ${b}` : `${a} is less than ${b}`;
-      const opposite = a > b ? `${a} is less than ${b}` : `${a} is greater than ${b}`;
+      // Compares two COMPUTED products, not two raw small whole numbers --
+      // "13 is less than 16" needs no arithmetic at all, but deciding whether
+      // 7 x 8 beats 6 x 9 takes two multiplications first.
+      const a = randInt(rng, 3, 9);
+      const b = randInt(rng, 3, 9);
+      const c = randInt(rng, 3, 9);
+      let d = randInt(rng, 3, 9);
+      const left = a * b;
+      let right = c * d;
+      if (left === right) {
+        d = d >= 9 ? d - 1 : d + 1;
+        right = c * d;
+      }
+      const bigger = left > right;
+      const correct = bigger
+        ? `${a} x ${b} is greater than ${c} x ${d}`
+        : `${a} x ${b} is less than ${c} x ${d}`;
+      const opposite = bigger
+        ? `${a} x ${b} is less than ${c} x ${d}`
+        : `${a} x ${b} is greater than ${c} x ${d}`;
       const { choices, answer } = buildChoices(rng, correct, [
-        `${a} is equal to ${b}`,
+        `${a} x ${b} is equal to ${c} x ${d}`,
         opposite,
-        `${a} plus ${b} is less than ${Math.min(a, b)}`,
-        `${a} minus ${b} is greater than ${a}`,
+        `${a} x ${b} plus ${c} x ${d} is less than ${Math.min(left, right)}`,
+        `${a} x ${b} minus ${c} x ${d} is greater than ${a} x ${b}`,
       ]);
       return {
         prompt: 'Which statement is TRUE?',
         choices,
         answer,
-        explain:
-          a > b
-            ? `${a} is the bigger number, so "${a} is greater than ${b}" is true.`
-            : `${a} is the smaller number, so "${a} is less than ${b}" is true.`,
+        explain: `${a} x ${b} = ${left} and ${c} x ${d} = ${right}, so "${correct}" is true.`,
       };
     },
   },
@@ -416,9 +439,11 @@ export const QUANT_TEMPLATES_2: QuestionTemplate[] = [
     difficulty: 1,
     topic: 'order three numbers least to greatest',
     generate: (rng) => {
+      // 3-4 digit numbers, so ordering takes real place-value comparison
+      // instead of eyeballing three small one/two-digit numbers.
       const nums: number[] = [];
       while (nums.length < 3) {
-        const x = randInt(rng, 2, 30);
+        const x = randInt(rng, 100, 9999);
         if (!nums.includes(x)) nums.push(x);
       }
       const asc = [...nums].sort((p, q) => p - q);
