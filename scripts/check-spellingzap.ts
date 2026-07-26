@@ -1,5 +1,5 @@
 /**
- * Proves Spelling Zap's scramble and tap rules are honest.
+ * Proves Spelling Zap's scramble, tap and peek rules are honest.
  *
  * The failures that quietly ruin this genre are all invisible from the renderer:
  *
@@ -16,6 +16,12 @@
  *     pool (every tap always the correct next tile, chosen at random when
  *     duplicate letters offer a choice) and asserting each one lands on the
  *     exact target with every tile used exactly once.
+ *  5. The whole point of this game silently disappearing - a definition (or any
+ *     other word-identifying text) shown next to the tiles turns "spell it from
+ *     memory" into "copy the giveaway." `VOCAB_POOL` entries are checked to carry
+ *     nothing but the word itself, and the peek gate (`canUsePeek`) is checked
+ *     the same way the letter-tap gate is: it must refuse mid-flash, mid-peek,
+ *     and with no peeks left, never just "whenever tapped."
  *
  * Each self-test at the end sabotages a check and confirms it fails, mirroring
  * check-tictactoe.ts's expectFail pattern. A verifier that cannot fail proves
@@ -24,18 +30,24 @@
  * Run: npx tsx scripts/check-spellingzap.ts
  */
 import {
+  FLASH_SECONDS,
+  MAX_PEEKS_PER_WORD,
   MAX_WORD_LEN,
   MILESTONE_WORDS,
   MIN_WORD_LEN,
+  PEEK_SECONDS,
   QUICK_BONUS,
   VOCAB_POOL,
   acceptsNextLetter,
   buildLetterBank,
   canTapTile,
+  canUsePeek,
   lcg,
   layoutFor,
   matchesTargetPrefix,
+  peekButtonRect,
   pickWord,
+  pointInRect,
   quickWindowFor,
   resolveTap,
   shuffleLetters,
@@ -81,6 +93,14 @@ function expectThrow(label: string, fn: () => void): void {
     if (!/^[A-Z]+$/.test(w.word)) fail(`VOCAB_POOL contains a non-pure-letter entry: ${JSON.stringify(w.word)}`);
     if (w.word.length < MIN_WORD_LEN || w.word.length > MAX_WORD_LEN) {
       fail(`VOCAB_POOL entry ${w.word} is outside ${MIN_WORD_LEN}-${MAX_WORD_LEN} letters`);
+    }
+    // The old design showed the vocab bank's `.explain` definition as a spelling
+    // "hint," which routinely just restated the word. A VocabWord must carry
+    // nothing but the word itself - no hint/explain/definition field for a
+    // future edit to accidentally start rendering as a giveaway.
+    const keys = Object.keys(w as unknown as Record<string, unknown>);
+    if (keys.length !== 1 || keys[0] !== 'word') {
+      fail(`VOCAB_POOL entry for "${w.word}" carries extra field(s) beyond "word": ${JSON.stringify(keys)} - a giveaway risk`);
     }
   }
   const byLen = new Map<number, number>();
@@ -365,6 +385,71 @@ for (const wordLen of [3, 5, 8]) {
 
 console.log(`Random-but-legal spelling playthroughs: ${played} across the full vocab pool (3 seeds each).`);
 
+// --- 8. memorize/peek timing constants are sane ------------------------------
+
+{
+  if (!(FLASH_SECONDS > 0)) fail('FLASH_SECONDS must be positive');
+  if (!(PEEK_SECONDS > 0)) fail('PEEK_SECONDS must be positive');
+  if (!(MAX_PEEKS_PER_WORD > 0)) fail('MAX_PEEKS_PER_WORD must be positive - a Peek button that can never be used is not a safety valve');
+  if (!(FLASH_SECONDS > PEEK_SECONDS)) {
+    fail('FLASH_SECONDS should be longer than PEEK_SECONDS - the opening memorize window must not be shorter than a mid-word reminder');
+  }
+}
+
+// --- 9. canUsePeek: the one gate a peek tap is checked against --------------
+
+{
+  if (!canUsePeek('playing', false, MAX_PEEKS_PER_WORD)) fail('canUsePeek: refused a peek while playing, not already peeking, with peeks left');
+  if (canUsePeek('flash', false, MAX_PEEKS_PER_WORD)) fail('canUsePeek: allowed a peek during the flash phase');
+  if (canUsePeek('complete', false, MAX_PEEKS_PER_WORD)) fail('canUsePeek: allowed a peek during the complete/milestone phase');
+  if (canUsePeek('playing', true, MAX_PEEKS_PER_WORD)) fail('canUsePeek: allowed stacking a second peek while one is already active');
+  if (canUsePeek('playing', false, 0)) fail('canUsePeek: allowed a peek with zero peeks left');
+  if (!canUsePeek('playing', false, 1)) fail('canUsePeek: refused a peek with exactly one peek left');
+}
+
+// --- self-test: a peek gate that ignores peeksLeft is caught -----------------
+{
+  const buggyCanUsePeek = (phase: string, peeking: boolean): boolean => phase === 'playing' && !peeking; // ignores peeksLeft entirely
+  const real = canUsePeek('playing', false, 0);
+  const buggy = buggyCanUsePeek('playing', false);
+  if (!(real === false && buggy === true)) {
+    fail('self-test: did not demonstrate a peeksLeft-blind peek gate being distinguishable from the real canUsePeek');
+  }
+}
+
+// --- 10. peekButtonRect / pointInRect: a real hit lands, a wild miss does not
+
+for (const wordLen of [3, 5, 8]) {
+  const boardW = layoutFor(380, 640, 30, wordLen).boardW;
+  const r = peekButtonRect(boardW);
+  if (!(r.w > 0 && r.h > 0)) fail(`peekButtonRect(boardW for len ${wordLen}): non-positive size`);
+  if (r.x < 0 || r.x + r.w > boardW) fail(`peekButtonRect(boardW for len ${wordLen}): button falls outside the board width`);
+
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  if (!pointInRect(cx, cy, r)) fail(`pointInRect(len ${wordLen}): rejected the button's own centre point`);
+  if (pointInRect(-9999, -9999, r)) fail(`pointInRect(len ${wordLen}): accepted a point nowhere near the button`);
+  if (pointInRect(r.x - 1, cy, r)) fail(`pointInRect(len ${wordLen}): accepted a point just left of the button`);
+  if (pointInRect(r.x + r.w + 1, cy, r)) fail(`pointInRect(len ${wordLen}): accepted a point just right of the button`);
+
+  // The peek button must not overlap the tile row a tap could also land on,
+  // or a single tap could be ambiguous between "peek" and "spell a letter".
+  const firstTile = tileCentre(0, wordLen);
+  if (pointInRect(firstTile.x, firstTile.y, r)) {
+    fail(`peekButtonRect(len ${wordLen}): overlaps the tile row - a tap there would be ambiguous`);
+  }
+}
+
+// --- self-test: a rect check that forgets the upper bound is caught ---------
+{
+  const r = { x: 10, y: 10, w: 20, h: 20 };
+  const buggyPointInRect = (px: number, py: number): boolean => px >= r.x && py >= r.y; // no upper bound at all
+  const farAway = { px: 9999, py: 9999 };
+  if (!(pointInRect(farAway.px, farAway.py, r) === false && buggyPointInRect(farAway.px, farAway.py) === true)) {
+    fail('self-test: did not demonstrate an unbounded rect check being distinguishable from the real pointInRect');
+  }
+}
+
 // --- report ------------------------------------------------------------------
 
 if (errors.length > 0) {
@@ -384,3 +469,7 @@ console.log(' - wordLenForIndex ramps non-decreasing and caps at 8 for every dif
 console.log(' - pickWord returns an exact-length match when one exists and never returns nothing on an empty pool');
 console.log(' - wordCompletionScore never negative, rewards no-miss and quick finishes, non-decreasing in length');
 console.log(' - tile layout/input round-trips hit the exact tile tapped; off-board and slot-row points return null');
+console.log(' - VOCAB_POOL entries carry the word only - no hint/explain/definition field that could leak the answer');
+console.log(' - FLASH_SECONDS/PEEK_SECONDS/MAX_PEEKS_PER_WORD are positive and the opening flash outlasts a peek');
+console.log(' - canUsePeek refuses mid-flash, mid-complete, mid-peek, and zero-peeks-left; allows only the legit case');
+console.log(' - peekButtonRect sits inside the board and never overlaps the tile row a letter tap would hit');

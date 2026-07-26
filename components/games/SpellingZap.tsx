@@ -14,7 +14,7 @@ import { VOCAB_NR } from '@/lib/questions/vocab/nr';
 import { VOCAB_SZ } from '@/lib/questions/vocab/sz';
 
 /**
- * Spelling Zap - a scrambled-letter speller built from the ISEE synonym vocabulary
+ * Spelling Zap - a spell-from-memory game built from the ISEE synonym vocabulary
  * bank, so spelling a word out loud (well, tile by tile) reinforces the same word
  * the study block quizzes on.
  *
@@ -24,11 +24,32 @@ import { VOCAB_SZ } from '@/lib/questions/vocab/sz';
  * as words are added to ab.ts..sz.ts. (WordHunt.tsx does the same extraction
  * independently, since these two files are not allowed to share a new lib file.)
  *
+ * The whole point of a spelling game is figuring out letters you do not already
+ * see spelled out. An earlier version showed the vocab bank's `.explain`
+ * definition as an on-screen "hint" while the child spelled - which, for a
+ * concrete noun/verb like AGILE or NIMBLE, routinely just IS the word restated
+ * in other words, so there was nothing left to figure out. This version never
+ * shows word-identifying text at all:
+ *
+ *  1. Each word opens with a `flash` phase - the target word appears large and
+ *     clear for FLASH_SECONDS with a "Memorize this word!" prompt, and the
+ *     letter tiles are not drawn yet.
+ *  2. The word then hides and the scrambled tiles appear. The child taps them
+ *     in order, from memory, to rebuild the word.
+ *  3. A "PEEK" button re-flashes the word for PEEK_SECONDS without touching any
+ *     progress already made, capped at MAX_PEEKS_PER_WORD taps per word so a
+ *     stuck kid always has a way forward without the game turning into "read
+ *     the word, then copy it."
+ *  4. No definition, category or defining text is ever shown. The only
+ *     information on screen besides the flashed word itself is the tile count
+ *     (which the scrambled tiles already reveal for free) and the running
+ *     word/streak counters.
+ *
  * Everything above the component is pure: no canvas, no React, no Math.random.
- * `shuffleLetters`, `buildLetterBank`, `matchesTargetPrefix`, `canTapTile` and
- * `resolveTap` are the real functions the game runs, and
- * scripts/check-spellingzap.ts drives them headlessly to prove the things that
- * quietly ruin this genre:
+ * `shuffleLetters`, `buildLetterBank`, `matchesTargetPrefix`, `canTapTile`,
+ * `resolveTap`, and the peek-button geometry/eligibility helpers are the real
+ * functions the game runs, and scripts/check-spellingzap.ts drives them
+ * headlessly to prove the things that quietly ruin this genre:
  *
  *  1. A scramble that is not an honest permutation - a dropped or duplicated
  *     letter reads as the game cheating the moment the child cannot make the
@@ -46,15 +67,19 @@ import { VOCAB_SZ } from '@/lib/questions/vocab/sz';
  *     spellings (always tapping a legal next tile) across the whole vocab pool
  *     and proves every one lands on the exact target word with every tile used
  *     exactly once.
+ *  4. A peek gate that lets a peek through when it should not (mid-flash,
+ *     mid-peek, or with no peeks left) - `canUsePeek` is the one gate a peek tap
+ *     is checked against, same discipline as the letter-tap gate.
  *
  * Art is drawn procedurally on canvas - no assets - laid out from the same pure
  * `boardSize`/`layoutFor`/`tileIndexAt` triple the checker exercises, so a
- * layout change cannot silently move the tiles out from under the input mapping.
+ * layout change cannot silently move the tiles (or the peek button) out from
+ * under the input mapping.
  */
 
 // ------------------------------------------------------------------ vocabulary
 
-export type VocabWord = { word: string; hint: string };
+export type VocabWord = { word: string };
 
 const ALL_VOCAB: Question[] = [
   ...VOCAB_AB,
@@ -69,9 +94,10 @@ export const MIN_WORD_LEN = 3;
 export const MAX_WORD_LEN = 8;
 
 /**
- * Every vocab entry whose prompt is a bare A-Z word 3-8 letters long, deduped and
- * upper-cased, paired with its `.explain` as the definition hint shown while
- * spelling it. Phrases, hyphenated words and anything with spaces are skipped.
+ * Every vocab entry whose prompt is a bare A-Z word 3-8 letters long, deduped
+ * and upper-cased. Only the word itself is kept - no definition, no explain
+ * text - so there is nothing in this pool that could be shown as a giveaway.
+ * Phrases, hyphenated words and anything with spaces are skipped.
  */
 export function extractVocabWords(): VocabWord[] {
   const seen = new Set<string>();
@@ -82,7 +108,7 @@ export function extractVocabWords(): VocabWord[] {
     if (w.length < MIN_WORD_LEN || w.length > MAX_WORD_LEN) continue;
     if (seen.has(w)) continue;
     seen.add(w);
-    out.push({ word: w, hint: q.explain });
+    out.push({ word: w });
   }
   return out;
 }
@@ -206,7 +232,7 @@ export function pickWord(pool: readonly VocabWord[], len: number, rand: () => nu
       }
     }
   }
-  return { word: 'STUDY', hint: 'To study is to work at learning something.' };
+  return { word: 'STUDY' };
 }
 
 // -------------------------------------------------------------------- scoring
@@ -233,13 +259,52 @@ export function wordCompletionScore(len: number, mistakes: number, elapsed: numb
   return BASE_WORD_POINTS + lenBonus + noMiss + quick;
 }
 
+// ---------------------------------------------------------------- memorize/peek
+
+/** How long the word is flashed at the start of each word. */
+export const FLASH_SECONDS = 2.5;
+/** How long a "Peek" re-flash lasts - short on purpose, a reminder not a copy. */
+export const PEEK_SECONDS = 1.0;
+/** Peeks available per word. Free, but capped so it never replaces memorizing. */
+export const MAX_PEEKS_PER_WORD = 2;
+
+/**
+ * Whether a tap on the Peek button right now should do anything: only while
+ * actively spelling (not mid-flash, not mid-complete-banner), only when not
+ * already peeking, and only with peeks remaining. This is the one gate a peek
+ * tap is checked against, same role as `canTapTile` for letter taps.
+ */
+export function canUsePeek(phase: string, peeking: boolean, peeksLeft: number): boolean {
+  return phase === 'playing' && !peeking && peeksLeft > 0;
+}
+
+export type Rect = { x: number; y: number; w: number; h: number };
+
+const PEEK_BTN_W = 104;
+const PEEK_BTN_H = 28;
+
+/** The Peek button's hitbox in board-space pixels, centred in its own row. */
+export function peekButtonRect(boardW: number): Rect {
+  return {
+    x: boardW / 2 - PEEK_BTN_W / 2,
+    y: HUD_H + (PEEK_ROW_H - PEEK_BTN_H) / 2,
+    w: PEEK_BTN_W,
+    h: PEEK_BTN_H,
+  };
+}
+
+/** Whether board-space point (px, py) falls inside rect `r`. */
+export function pointInRect(px: number, py: number, r: Rect): boolean {
+  return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+}
+
 // -------------------------------------------------------------------- layout
 
 const TILE = 46;
 const GAP = 10;
 const PAD = 14;
 const HUD_H = 30;
-const HINT_H = 52;
+const PEEK_ROW_H = 40;
 const ROW_GAP = 16;
 
 export type Layout = { scale: number; ox: number; oy: number; boardW: number; boardH: number };
@@ -247,7 +312,7 @@ export type Layout = { scale: number; ox: number; oy: number; boardW: number; bo
 export function boardSize(wordLen: number): { w: number; h: number } {
   const rowW = wordLen * TILE + (wordLen - 1) * GAP;
   const w = Math.max(rowW + PAD * 2, 280);
-  const h = HUD_H + HINT_H + TILE + ROW_GAP + TILE + PAD * 2;
+  const h = HUD_H + PEEK_ROW_H + TILE + ROW_GAP + TILE + PAD * 2;
   return { w, h };
 }
 
@@ -266,10 +331,10 @@ export function layoutFor(cw: number, ch: number, inset: number, wordLen: number
 }
 
 function slotRowY(): number {
-  return HUD_H + HINT_H + TILE / 2;
+  return HUD_H + PEEK_ROW_H + TILE / 2;
 }
 function tileRowY(): number {
-  return HUD_H + HINT_H + TILE + ROW_GAP + TILE / 2;
+  return HUD_H + PEEK_ROW_H + TILE + ROW_GAP + TILE / 2;
 }
 function colX(i: number): number {
   return PAD + i * (TILE + GAP) + TILE / 2;
@@ -301,10 +366,10 @@ export function tileIndexAt(bx: number, by: number, wordLen: number): number | n
 // ----------------------------------------------------------------- simulation
 //
 // Everything below is presentation only: timers, animation and drawing. Every
-// decision that matters (is this tap legal, is the word complete) always goes
-// through the pure functions above.
+// decision that matters (is this tap legal, is the word complete, is a peek
+// allowed) always goes through the pure functions above.
 
-type Phase = 'intro' | 'playing' | 'complete';
+type Phase = 'flash' | 'playing' | 'complete';
 
 type TileAnim = { placed: boolean; popT: number; shakeT: number };
 type Popup = { x: number; y: number; text: string; t: number; life: number; color: string };
@@ -323,6 +388,9 @@ export type Sim = {
   t: number;
   dur: number;
   wordStartTime: number;
+  peeking: boolean;
+  peekT: number;
+  peeksLeft: number;
   popAnimT: number;
   shakeAll: number;
   rand: () => number;
@@ -352,10 +420,13 @@ export function makeSim(difficulty: Difficulty, seed: number): Sim {
     built: '',
     mistakes: 0,
     streak: 0,
-    phase: 'intro',
+    phase: 'flash',
     t: 0,
-    dur: 0.3,
+    dur: FLASH_SECONDS,
     wordStartTime: 0,
+    peeking: false,
+    peekT: 0,
+    peeksLeft: MAX_PEEKS_PER_WORD,
     popAnimT: 1,
     shakeAll: 0,
     rand,
@@ -376,9 +447,13 @@ function startNextWord(sim: Sim): void {
   sim.tileAnim = freshTileAnim(sim.tiles);
   sim.built = '';
   sim.mistakes = 0;
-  sim.wordStartTime = sim.time;
+  sim.peeking = false;
+  sim.peekT = 0;
+  sim.peeksLeft = MAX_PEEKS_PER_WORD;
   sim.popAnimT = 1;
-  sim.phase = 'playing';
+  sim.phase = 'flash';
+  sim.t = 0;
+  sim.dur = FLASH_SECONDS;
 }
 
 function spawnZapParticles(sim: Sim, x: number, y: number, color: string): void {
@@ -403,7 +478,7 @@ function addPopup(sim: Sim, x: number, y: number, text: string, color: string): 
 }
 
 function handleTap(sim: Sim, api: GameApi, i: number): void {
-  if (sim.phase !== 'playing') return;
+  if (sim.phase !== 'playing' || sim.peeking) return;
   const target = sim.target.word;
 
   if (!canTapTile(sim.tiles, sim.built, target, i)) {
@@ -448,6 +523,15 @@ function handleTap(sim: Sim, api: GameApi, i: number): void {
   }
 }
 
+/** Tries a Peek tap. No-ops (silently) when `canUsePeek` says no. */
+function handlePeekTap(sim: Sim): void {
+  if (!canUsePeek(sim.phase, sim.peeking, sim.peeksLeft)) return;
+  sim.peeking = true;
+  sim.peekT = 0;
+  sim.peeksLeft -= 1;
+  playSound('click');
+}
+
 function advanceEffects(sim: Sim, dt: number): void {
   for (const a of sim.tileAnim) {
     if (a.shakeT > 0) {
@@ -488,26 +572,41 @@ export function update(
   advanceEffects(sim, dt);
 
   switch (sim.phase) {
-    case 'intro': {
+    case 'flash': {
+      input.consumePointerPress(); // drain taps while memorizing - nothing to tap yet
       sim.t += dt;
       if (sim.t >= sim.dur) {
         sim.phase = 'playing';
         sim.wordStartTime = sim.time;
-        api.setStatus('Tap the letters in order to spell the word');
+        api.setStatus('Spell it from memory!');
       }
       break;
     }
 
     case 'playing': {
+      if (sim.peeking) {
+        input.consumePointerPress(); // drain taps while the peek overlay is up
+        sim.peekT += dt;
+        if (sim.peekT >= PEEK_SECONDS) {
+          sim.peeking = false;
+          sim.peekT = 0;
+        }
+        break;
+      }
       if (input.consumePointerPress() && input.pointerX !== null && input.pointerY !== null) {
         const b = toBoard(layout, cw, ch, input.pointerX, input.pointerY);
-        const i = tileIndexAt(b.x, b.y, sim.tiles.length);
-        if (i !== null) handleTap(sim, api, i);
+        if (pointInRect(b.x, b.y, peekButtonRect(layout.boardW))) {
+          handlePeekTap(sim);
+        } else {
+          const i = tileIndexAt(b.x, b.y, sim.tiles.length);
+          if (i !== null) handleTap(sim, api, i);
+        }
       }
       break;
     }
 
     case 'complete': {
+      input.consumePointerPress(); // drain taps during the milestone banner
       sim.t += dt;
       if (sim.t >= sim.dur) {
         api.requestGate(`${sim.wordIndex} words spelled!`);
@@ -532,30 +631,18 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let line = '';
-  for (const w of words) {
-    const test = line ? `${line} ${w}` : w;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = w;
-      if (lines.length >= maxLines - 1) break;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  if (lines.length > maxLines) lines.length = maxLines;
-  return lines;
-}
-
 function easeOutBack(t: number): number {
   const k = Math.max(0, Math.min(1, t));
   const c1 = 1.7;
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+}
+
+/** Fade in, hold, fade out - used for both the opening flash and a peek. */
+function flashAlpha(t: number, dur: number): number {
+  const fadeIn = Math.min(1, t / 0.2);
+  const fadeOut = Math.min(1, Math.max(0, dur - t) / 0.2);
+  return Math.max(0, Math.min(fadeIn, fadeOut));
 }
 
 function paintBackdrop(ctx: CanvasRenderingContext2D, cw: number, ch: number): void {
@@ -578,13 +665,74 @@ function drawHud(ctx: CanvasRenderingContext2D, sim: Sim, boardW: number): void 
   ctx.textAlign = 'left';
 }
 
-function drawHint(ctx: CanvasRenderingContext2D, sim: Sim, boardW: number): void {
-  ctx.font = '500 12px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.78)';
+/** The big word reveal, used both for the opening memorize flash and a Peek. */
+function drawWordFlash(
+  ctx: CanvasRenderingContext2D,
+  sim: Sim,
+  boardW: number,
+  boardH: number,
+  caption: string,
+  alpha: number,
+): void {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  const top = HUD_H + 4;
+  const panelH = boardH - top - PAD;
+  ctx.fillStyle = 'rgba(2,20,16,0.94)';
+  roundRect(ctx, PAD, top, boardW - PAD * 2, panelH, 16);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(63,214,176,0.85)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, PAD, top, boardW - PAD * 2, panelH, 16);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '700 13px ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = 'center';
-  const lines = wrapLines(ctx, sim.target.hint || 'Spell the word above.', boardW - PAD * 2, 2);
-  lines.forEach((line, i) => ctx.fillText(line, boardW / 2, HUD_H + 18 + i * 15));
+  ctx.fillText(caption, boardW / 2, top + 24);
+
+  const word = sim.target.word;
+  const maxWidth = boardW - PAD * 2 - 20;
+  let fontSize = 46;
+  ctx.font = `800 ${fontSize}px ui-monospace, monospace`;
+  while (fontSize > 16 && ctx.measureText(word).width > maxWidth) {
+    fontSize -= 2;
+    ctx.font = `800 ${fontSize}px ui-monospace, monospace`;
+  }
+  ctx.fillStyle = '#ffe86a';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(word, boardW / 2, top + panelH / 2 + 10);
+  ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+/** The PEEK button - only live while actively spelling. */
+function drawPeekButton(ctx: CanvasRenderingContext2D, sim: Sim, boardW: number): void {
+  if (sim.phase !== 'playing') return;
+  const r = peekButtonRect(boardW);
+  const enabled = canUsePeek(sim.phase, sim.peeking, sim.peeksLeft);
+
+  ctx.save();
+  ctx.fillStyle = enabled ? 'rgba(63,214,176,0.22)' : 'rgba(255,255,255,0.06)';
+  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+  ctx.fill();
+  ctx.strokeStyle = enabled ? 'rgba(63,214,176,0.85)' : 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 1.6;
+  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+  ctx.stroke();
+
+  ctx.fillStyle = enabled ? '#3fd6b0' : 'rgba(255,255,255,0.4)';
+  ctx.font = '700 13px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const label = sim.peeksLeft > 0 ? `PEEK  x${sim.peeksLeft}` : 'PEEK';
+  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 1);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
 }
 
 function drawSlots(ctx: CanvasRenderingContext2D, sim: Sim): void {
@@ -696,13 +844,20 @@ function draw(ctx: CanvasRenderingContext2D, sim: Sim, layout: Layout, cw: numbe
   ctx.save();
   ctx.translate(layout.ox, layout.oy);
   ctx.scale(layout.scale, layout.scale);
-  ctx.globalAlpha = sim.phase === 'intro' ? sim.t / sim.dur : 1;
 
   drawHud(ctx, sim, layout.boardW);
-  drawHint(ctx, sim, layout.boardW);
-  drawSlots(ctx, sim);
-  drawTiles(ctx, sim);
-  drawBanner(ctx, sim, layout.boardW, layout.boardH);
+
+  if (sim.phase === 'flash') {
+    drawWordFlash(ctx, sim, layout.boardW, layout.boardH, 'Memorize this word!', flashAlpha(sim.t, sim.dur));
+  } else {
+    drawPeekButton(ctx, sim, layout.boardW);
+    drawSlots(ctx, sim);
+    drawTiles(ctx, sim);
+    drawBanner(ctx, sim, layout.boardW, layout.boardH);
+    if (sim.peeking) {
+      drawWordFlash(ctx, sim, layout.boardW, layout.boardH, 'Peek!', flashAlpha(sim.peekT, PEEK_SECONDS));
+    }
+  }
 
   for (const p of sim.particles) {
     ctx.globalAlpha = Math.max(0, p.life / p.max);
