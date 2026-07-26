@@ -13,7 +13,8 @@ export type GameId =
   | 'runner'
   | 'breakout'
   | 'climber'
-  | 'maze';
+  | 'maze'
+  | 'tictactoe';
 
 /**
  * How a game is driven on touch.
@@ -22,8 +23,11 @@ export type GameId =
  *  lanes     - tap left/right halves to change lane, swipe up to jump
  *  paddle    - drag anywhere to move a paddle
  *  grid      - tap and drag on a board; both pointer axes plus press/release edges
+ *  board     - turn-based board games (tic-tac-toe, checkers, chess, crazy eights).
+ *              No overlay and no dpad: the game attaches its own pointer handling
+ *              directly to its canvas and runs its own turn logic.
  */
-export type ControlScheme = 'dpad' | 'run-jump' | 'lanes' | 'paddle' | 'grid';
+export type ControlScheme = 'dpad' | 'run-jump' | 'lanes' | 'paddle' | 'grid' | 'board';
 
 export type GameMeta = {
   id: GameId;
@@ -175,6 +179,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'run-jump',
     aspect: 4 / 3,
   },
+  tictactoe: {
+    id: 'tictactoe',
+    name: 'Tic-Tac-Toe',
+    tagline: 'Three in a row. Play a friend or take on the computer.',
+    gateNote: 'Study time buys play time.',
+    icon: '❌',
+    accent: '#5ec8ff',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -188,6 +202,7 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.climber,
   GAMES.frogger,
   GAMES.snake,
+  GAMES.tictactoe,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

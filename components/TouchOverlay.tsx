@@ -69,6 +69,12 @@ export default function TouchOverlay({
 
   if (disabled) return null;
 
+  if (scheme === 'board') {
+    // Board games own their input: they attach pointer handlers straight to their
+    // own canvas, so the overlay stays out of the way entirely.
+    return null;
+  }
+
   if (scheme === 'grid') {
     // Puzzle boards need both axes and press/release edges, reported normalised
     // so the game works out cells from its own layout.

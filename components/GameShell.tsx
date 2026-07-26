@@ -510,6 +510,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         return 'Drag anywhere to slide the paddle. Keyboard: left / right arrows.';
       case 'grid':
         return 'Tap and drag on the board. Keyboard: arrows or W A S D.';
+      case 'board':
+        return 'Tap a square to play. Choose two players or play against the computer from the menu at the top.';
       default:
         return 'Swipe up, down, left, or right anywhere on the board, or press the arrow pad below. Keyboard: arrows or W A S D.';
     }

@@ -11,6 +11,7 @@ import Maze from './games/Maze';
 import Match3 from './games/Match3';
 import Blocks from './games/Blocks';
 import Tetra from './games/Tetra';
+import TicTacToe from './games/TicTacToe';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 
 /**
@@ -28,6 +29,7 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   match3: Match3,
   blocks: Blocks,
   tetris: Tetra,
+  tictactoe: TicTacToe,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {
