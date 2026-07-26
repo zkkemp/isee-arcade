@@ -450,7 +450,9 @@ export default function Platformer({
         playSound('land');
         burst(s, b.x + PW / 2, b.y + bodyTop(s), 5, 30);
         puffAt(s, b.x + PW / 2, b.y + bodyTop(s));
-        if (res.landedAt > 400) s.shake = Math.max(s.shake, 0.12);
+        // Only a genuinely HARD fall thumps the camera. Ordinary jumps land above
+        // 400, and shaking on every one is what made the game feel jittery.
+        if (res.landedAt > 720) s.shake = Math.max(s.shake, 0.1);
       }
       if (res.sprung) {
         const sp = s.data.springs.find((v) => v.tx === res.sprung!.tx && v.ty === res.sprung!.ty);
@@ -1616,8 +1618,15 @@ function draw(
   let camX = baseCamX;
   let camY = baseCamY;
   if (s.shake > 0) {
-    camX += Math.round(Math.sin(s.animTime * 67) * s.shake * 14);
-    camY += Math.round(Math.cos(s.animTime * 81) * s.shake * 10);
+    // A soft, low-frequency thump - deliberately NOT the old high-frequency,
+    // Math.round'd (pixel-quantised) shake, which buzzed the camera +/-1px and,
+    // because it fired on every landing, read as the whole game "constantly
+    // jittering". Kept as a smooth float that eases out fast (shake^2) and fades
+    // to nothing; the world translate below still snaps the final position to the
+    // device-pixel grid so it stays crisp.
+    const k = s.shake * s.shake;
+    camX += Math.sin(s.animTime * 26) * k * 6;
+    camY += Math.cos(s.animTime * 30) * k * 4;
   }
   const biome = s.data.biome;
   // The context arrives pre-scaled by devicePixelRatio (useCanvasGame), so one
