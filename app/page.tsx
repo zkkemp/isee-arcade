@@ -7,35 +7,53 @@ import { GAMES, type GameId } from '@/lib/games';
 import { TEMPLATE_COUNT, TOTAL_FAMILIES, countBySubject } from '@/lib/questions';
 import { SUBJECT_LABELS, type Subject } from '@/lib/questions/types';
 
-const GAME_SECTIONS: Array<{ eyebrow: string; title: string; ids: GameId[] }> = [
+const GAME_SECTIONS: Array<{
+  eyebrow: string;
+  title: string;
+  icon: string;
+  accent: string;
+  ids: GameId[];
+}> = [
   {
     eyebrow: 'Brand-new adventures',
     title: 'Fresh from the workshop',
+    icon: '✦',
+    accent: '#fbbf24',
     ids: ['skystack', 'starfall', 'firefly'],
   },
   {
     eyebrow: 'Run · jump · dodge',
     title: 'Fast & fearless',
+    icon: '⚡',
+    accent: '#fb7185',
     ids: ['platformer3', 'platformer2', 'platformer', 'paperroute', 'pyramidhop', 'snake2', 'runner', 'frogger', 'climber', 'breakout'],
   },
   {
     eyebrow: 'Beloved rules · fresh worlds',
     title: 'Classics Reimagined',
+    icon: '★',
+    accent: '#38bdf8',
     ids: ['reversi', 'backgammon', 'seabattle', 'paddleduel', 'asteroids', 'stardefender', 'lunarlander', 'diamond'],
   },
   {
     eyebrow: 'Match · stack · solve',
     title: 'Puzzle power',
+    icon: '◆',
+    accent: '#a78bfa',
     ids: ['match3', 'blocks', 'tetris', 'merge', 'bubble', 'memory'],
   },
   {
     eyebrow: 'Plan · challenge · win',
     title: 'Tabletop legends',
+    icon: '♟',
+    accent: '#34d399',
     ids: ['chess', 'checkers', 'tictactoe', 'dots', 'sudoku', 'cards'],
   },
   {
     eyebrow: 'Remember · react · discover',
     title: 'Quick thinkers',
+    icon: '☄',
+    accent: '#fb923c',
     ids: ['maze', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling'],
   },
 ];
@@ -115,8 +133,9 @@ export default function Home() {
             {featured.name}
           </span>
           <span className="mt-2 max-w-md text-sm leading-relaxed text-white/60 sm:text-base">
-            The newest skybound Coin Runner adventure, with fresh routes, cloud kingdoms, and
-            your own family hero. Earlier editions are still here too.
+            A completely rebuilt six-stage platform adventure with a kingdom map, handcrafted
+            realms, powers, secrets, checkpoints, portals, enemies, and a final boss. Earlier
+            editions are still here too.
           </span>
           <span className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-[#21152b] shadow-[0_10px_30px_rgba(251,191,36,.25)] transition group-hover:gap-3">
             Start the adventure <span>→</span>
@@ -124,65 +143,105 @@ export default function Home() {
         </span>
       </Link>
 
-      <div className="space-y-10">
-        {GAME_SECTIONS.map((section) => (
-          <section key={section.title}>
-            <div className="mb-4 flex items-end justify-between gap-4">
-              <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-violet-300/70">
-                  {section.eyebrow}
-                </div>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-white sm:text-2xl">
-                  {section.title}
-                </h2>
-              </div>
-              <span className="text-xs font-semibold text-white/30">{section.ids.length} games</span>
+      <section aria-labelledby="game-library-title">
+        <div className="mb-4 flex items-end justify-between gap-4 px-1">
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-violet-300/70">
+              Pick your kind of fun
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {section.ids.map((id) => {
-                const g = GAMES[id];
-                const edition = id === 'platformer3' ? 'V3' : id.endsWith('2') ? 'V2' : id === 'platformer' ? 'Original' : null;
-                const isNewGame = NEW_GAME_IDS.has(id);
-                return (
-                  <Link
-                    key={g.id}
-                    href={`/play/${g.id}`}
-                    className="game-card group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-lg transition hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.075]"
-                    style={{ '--game-accent': g.accent } as React.CSSProperties}
-                  >
-                    <GameArtwork game={g.id} accent={g.accent} icon={g.icon} />
-                    <span className="block p-3.5 sm:p-4">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-extrabold text-white sm:text-base">
-                            {g.name}
+            <h2 id="game-library-title" className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
+              Browse the arcade
+            </h2>
+          </div>
+          <span className="hidden text-xs font-semibold text-white/35 sm:block">
+            Tap a category to explore
+          </span>
+        </div>
+
+        <div className="game-library space-y-3">
+          {GAME_SECTIONS.map((section, sectionIndex) => (
+            <details
+              key={section.title}
+              name="game-library"
+              className="game-category overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"
+              style={{ '--category-accent': section.accent } as React.CSSProperties}
+              open={sectionIndex === 0}
+            >
+              <summary className="game-category__summary">
+                <span className="game-category__icon" aria-hidden="true">
+                  {section.icon}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[9px] font-extrabold uppercase tracking-[0.2em] text-white/40 sm:text-[10px]">
+                    {section.eyebrow}
+                  </span>
+                  <span className="mt-0.5 block truncate text-lg font-black tracking-tight text-white sm:text-xl">
+                    {section.title}
+                  </span>
+                </span>
+                <span className="game-category__count">{section.ids.length} games</span>
+                <span className="game-category__chevron" aria-hidden="true">
+                  ↓
+                </span>
+              </summary>
+
+              <div className="game-category__content">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                  {section.ids.map((id) => {
+                    const g = GAMES[id];
+                    const edition =
+                      id === 'platformer3'
+                        ? 'V3'
+                        : id.endsWith('2')
+                          ? 'V2'
+                          : id === 'platformer'
+                            ? 'Original'
+                            : null;
+                    const isNewGame = NEW_GAME_IDS.has(id);
+                    return (
+                      <Link
+                        key={g.id}
+                        href={`/play/${g.id}`}
+                        className="game-card group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-lg transition hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.075]"
+                        style={{ '--game-accent': g.accent } as React.CSSProperties}
+                      >
+                        <GameArtwork game={g.id} accent={g.accent} icon={g.icon} />
+                        <span className="block p-3.5 sm:p-4">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-extrabold text-white sm:text-base">
+                                {g.name}
+                              </span>
+                              {edition && (
+                                <span className="mt-0.5 block text-[9px] font-black uppercase tracking-[0.18em] text-amber-300">
+                                  {edition === 'Original'
+                                    ? 'Original edition'
+                                    : `${edition} · Original preserved`}
+                                </span>
+                              )}
+                              {isNewGame && (
+                                <span className="mt-0.5 block text-[9px] font-black uppercase tracking-[0.18em] text-cyan-300">
+                                  New game
+                                </span>
+                              )}
+                            </span>
+                            <span className="game-card__play flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[10px] text-white">
+                              ▶
+                            </span>
                           </span>
-                          {edition && (
-                            <span className="mt-0.5 block text-[9px] font-black uppercase tracking-[0.18em] text-amber-300">
-                              {edition === 'Original' ? 'Original edition' : `${edition} · Original preserved`}
-                            </span>
-                          )}
-                          {isNewGame && (
-                            <span className="mt-0.5 block text-[9px] font-black uppercase tracking-[0.18em] text-cyan-300">
-                              New game
-                            </span>
-                          )}
+                          <span className="mt-1 line-clamp-2 min-h-8 text-xs leading-relaxed text-white/45 sm:text-sm">
+                            {g.tagline}
+                          </span>
                         </span>
-                        <span className="game-card__play flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[10px] text-white">
-                          ▶
-                        </span>
-                      </span>
-                      <span className="mt-1 line-clamp-2 min-h-8 text-xs leading-relaxed text-white/45 sm:text-sm">
-                        {g.tagline}
-                      </span>
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
 
       <section className="mt-12 grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
         <div className="rounded-3xl border border-violet-300/15 bg-violet-300/[0.055] p-5">

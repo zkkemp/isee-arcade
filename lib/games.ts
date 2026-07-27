@@ -220,8 +220,8 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'run-jump',
     aspect: 4 / 3,
   },
-  platformer3: { id: 'platformer3', name: 'Coin Runner: Skybound', tagline: 'Explore a spectacular sky kingdom, find three star relics, and race for the beacon.', gateNote: 'Study time buys play time.', icon: '☁️', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
-  diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Time the pitch, swing for the fences, and build a home-run streak.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4 },
+  platformer3: { id: 'platformer3', name: 'Coin Runner 3: Kingdom Quest', tagline: 'Cross six handcrafted realms, master magical powers, uncover secrets, and restore the kingdom.', gateNote: 'Study time buys play time.', icon: '🏰', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
+  diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Read the pitch, work the count, drive in runners, and play full innings.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4 },
   paperroute: { id: 'paperroute', name: 'Paper Route', tagline: 'Zip down the street, dodge trouble, and deliver every paper.', gateNote: 'Study time buys play time.', icon: '📰', accent: '#ffbd5a', controls: 'lanes', aspect: 3 / 4 },
   pyramidhop: { id: 'pyramidhop', name: 'Pyramid Hop', tagline: 'Hop through sunny ruins and uncover the golden path.', gateNote: 'Study time buys play time.', icon: '🔺', accent: '#efb24e', controls: 'dpad', aspect: 3 / 4 },
   reversi: { id: 'reversi', name: 'Reversi', tagline: 'Trap the discs, flip the board, and claim the most.', gateNote: 'Study time buys play time.', icon: '⚫', accent: '#5ed6a0', controls: 'board', aspect: 1 },
@@ -443,8 +443,10 @@ export const HOW_TO: Record<GameId, string> = {
     'Run and jump to the flag at the end. Collect coins, bounce on enemies to squash them, and watch out for spiky ones you cannot jump on. Jump over the pits! See a glowing OPEN door? Stand on it and STOP moving for a moment to warp to a hidden coin room.',
   platformer2:
     'Run through each storybook chapter to reach the flag. Collect coins, jump over pits, and bounce on safe enemies. Look for magical doors that lead to secret pages full of treasure.',
-  platformer3: 'Run and jump through Skybound Kingdom to reach each beacon. Stomp safe enemies, dodge hazards, use glowing portals, discover secret caches, and collect all three star relics hidden in every level.',
-  diamond: 'Tap the screen or press Space when the pitch reaches home plate. A well-timed swing earns a hit; nail the sweet spot for a home run. Five hits clear the inning, but three strikes end the run.',
+  platformer3:
+    'Choose a realm from the kingdom map, then run and jump to its beacon. Build speed smoothly, stomp creatures, cross pits, collect coins and hidden runes, light checkpoints, and step into glowing portals to find secret routes. Sunblooms give you a shield and comet stars let you charge through danger. Restore all six realms, then defeat the Aurora Sentinel with four careful stomps.',
+  diamond:
+    'Step up for a full inning. Move the yellow aim marker with Left and Right, then tap or press Space as the pitch reaches the bright strike zone. Take wild pitches for balls, protect the plate with two strikes, and drive fair balls past the fielders. Singles, doubles, triples, homers, walks, base runners, runs, outs, and three-out innings all count.',
   paperroute: 'Move left and right along the street. Deliver papers to the mailboxes, dodge obstacles, and keep your route rolling.',
   pyramidhop: 'Use the arrows to hop across the pyramid. Every jewel tile changes color when you land on it. Light every tile to clear the pyramid, and avoid the roaming dust bug.',
   reversi: 'Place a disc so it traps the other color in a straight line. Every trapped disc flips to your color. When the board is full, the most discs wins.',

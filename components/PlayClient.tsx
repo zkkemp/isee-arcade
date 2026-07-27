@@ -5,7 +5,7 @@ import Frogger from './games/Frogger';
 import SnakeV2 from './games/SnakeV2';
 import Platformer from './games/Platformer';
 import PlatformerV2 from './games/PlatformerV2';
-import PlatformerV3 from './games/PlatformerV3';
+import KingdomQuest from './games/KingdomQuest';
 import DiamondDerby from './games/DiamondDerby';
 import PaperRoute from './games/PaperRoute';
 import PyramidHop from './games/PyramidHop';
@@ -53,7 +53,7 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   snake2: SnakeV2,
   platformer: Platformer,
   platformer2: PlatformerV2,
-  platformer3: PlatformerV3,
+  platformer3: KingdomQuest,
   diamond: DiamondDerby,
   paperroute: PaperRoute,
   pyramidhop: PyramidHop,

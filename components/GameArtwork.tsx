@@ -66,7 +66,7 @@ export default function GameArtwork({
         ...(game === 'platformer3'
           ? {
               backgroundImage:
-                'linear-gradient(180deg, rgba(16,28,79,.02), rgba(14,18,66,.42)), url(/assets/coin-runner-v3/skybound-kingdom.png)',
+                'linear-gradient(180deg, rgba(16,28,79,.02), rgba(14,18,66,.42)), url(/assets/coin-runner-v3/kingdom-quest-key-art.webp)',
               backgroundPosition: 'center',
               backgroundSize: 'cover',
             }
