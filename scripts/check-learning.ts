@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { shouldOfferScratch } from '../components/QuestionGate';
 import { emptyProgress, recordAnswer } from '../lib/progress';
 import { ALL_TEMPLATES, STATIC_QUESTIONS, familyIdsForBand, pickQuestion, type Question } from '../lib/questions';
@@ -35,4 +37,29 @@ for (const band of ['k', 'grade1', 'grade3'] as const) {
     `${band} contains an out-of-band question`,
   );
 }
-console.log(`Learning audit: ${all.length} explanations, ${fractions.length} fraction walkthroughs, scratch criteria, and vocabulary spacing passed.`);
+
+const shellSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'GameShell.tsx'),
+  'utf8',
+);
+const answerHandler = shellSource
+  .split('const handleAnswered = useCallback(', 2)[1]
+  ?.split('const gateHeadline', 1)[0] ?? '';
+assert(
+  !/playSound\(['"](?:correct|wrong)['"]\)/.test(answerHandler),
+  'question answers must stay silent; correct/wrong sounds belong to games only',
+);
+
+const accordionSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'StableGameCategory.tsx'),
+  'utf8',
+);
+assert(
+  accordionSource.includes("scrollIntoView({ block: 'start'"),
+  'game categories must keep the newly opened shelf heading in view',
+);
+
+console.log(
+  `Learning audit: ${all.length} explanations, ${fractions.length} fraction walkthroughs, ` +
+    'scratch criteria, vocabulary spacing, silent answers, and stable category scrolling passed.',
+);

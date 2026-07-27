@@ -4,6 +4,7 @@ import DifficultyPicker from '@/components/DifficultyPicker';
 import ProgressStrip from '@/components/ProgressStrip';
 import GameArtwork from '@/components/GameArtwork';
 import RecentlyPlayed from '@/components/RecentlyPlayed';
+import StableGameCategory from '@/components/StableGameCategory';
 import { GAMES, type GameId } from '@/lib/games';
 import { TEMPLATE_COUNT, TOTAL_FAMILIES, countBySubject } from '@/lib/questions';
 import { SUBJECT_LABELS, type Subject } from '@/lib/questions/types';
@@ -179,12 +180,10 @@ export default function Home() {
 
         <div className="game-library space-y-3">
           {GAME_SECTIONS.map((section) => (
-            <details
+            <StableGameCategory
               key={section.title}
-              name="game-library"
-              className="game-category overflow-hidden"
-              style={{ '--category-accent': section.accent } as React.CSSProperties}
-              open={section.title === 'Fast & fearless'}
+              accent={section.accent}
+              initiallyOpen={section.title === 'Fast & fearless'}
             >
               <summary className="game-category__summary">
                 <span className="game-category__icon" aria-hidden="true">
@@ -257,7 +256,7 @@ export default function Home() {
                   })}
                 </div>
               </div>
-            </details>
+            </StableGameCategory>
           ))}
         </div>
       </section>

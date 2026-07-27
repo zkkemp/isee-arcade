@@ -409,7 +409,6 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       const wasReading = g.question.kind === 'reading';
 
       if (!correct) {
-        playSound('wrong');
         correctStreakRef.current = 0;
         setCorrectStreak(0);
         wrongStreakRef.current += 1;
@@ -447,7 +446,6 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       }
 
       // --- correct ---
-      playSound('correct');
       setGotRight((n) => n + 1);
       wrongStreakRef.current = 0;
       correctStreakRef.current += 1;
