@@ -5,6 +5,8 @@ import { VERBAL_QUESTIONS } from './verbal';
 import { READING_QUESTIONS } from './reading';
 import { READING_QUESTIONS_2 } from './reading2';
 import { READING_QUESTIONS_3 } from './reading3';
+import { LOWER_LEVEL_READING_QUESTIONS } from './readingLowerLevel';
+import { LOWER_LEVEL_VERBAL_QUESTIONS } from './verbalLowerLevel';
 import { VOCAB_AB } from './vocab/ab';
 import { VOCAB_CD } from './vocab/cd';
 import { VOCAB_EH } from './vocab/eh';
@@ -14,6 +16,7 @@ import { VOCAB_SZ } from './vocab/sz';
 import { MATH_TEMPLATES } from './mathTemplates';
 import { MATH_TEMPLATES_2 } from './mathTemplates2';
 import { MATH_TEMPLATES_3 } from './mathTemplates3';
+import { MATH_TEMPLATES_4 } from './mathTemplates4';
 import { QUANT_TEMPLATES } from './quantTemplates';
 import { QUANT_TEMPLATES_2 } from './quantTemplates2';
 import { QUANT_TEMPLATES_3 } from './quantTemplates3';
@@ -53,9 +56,11 @@ export const GRADE_BANDS: GradeBand[] = ['k', 'grade1', 'grade3', 'isee'];
  */
 export const STATIC_QUESTIONS: Question[] = [
   ...VERBAL_QUESTIONS,
+  ...LOWER_LEVEL_VERBAL_QUESTIONS,
   ...READING_QUESTIONS,
   ...READING_QUESTIONS_2,
   ...READING_QUESTIONS_3,
+  ...LOWER_LEVEL_READING_QUESTIONS,
   ...VOCAB_AB,
   ...VOCAB_CD,
   ...VOCAB_EH,
@@ -68,6 +73,7 @@ export const ALL_TEMPLATES: QuestionTemplate[] = [
   ...MATH_TEMPLATES,
   ...MATH_TEMPLATES_2,
   ...MATH_TEMPLATES_3,
+  ...MATH_TEMPLATES_4,
   ...QUANT_TEMPLATES,
   ...QUANT_TEMPLATES_2,
   ...QUANT_TEMPLATES_3,
@@ -84,6 +90,8 @@ type Candidate = {
   difficulty: 1 | 2 | 3;
   topic?: string;
   passageId?: string;
+  /** Static text with a topic must not take the template same-family retry path. */
+  templated: boolean;
   materialize: () => Question;
 };
 
@@ -94,6 +102,7 @@ function templatesToCandidates(ts: QuestionTemplate[]): Candidate[] {
     kind: t.kind,
     difficulty: t.difficulty,
     topic: t.topic,
+    templated: true,
     materialize: () => instantiate(t),
   }));
 }
@@ -107,6 +116,7 @@ const ISEE_CANDIDATES: Candidate[] = [
     difficulty: q.difficulty,
     topic: q.topic,
     passageId: q.passageId,
+    templated: false,
     materialize: () => q,
   })),
   ...templatesToCandidates(ALL_TEMPLATES),
@@ -147,6 +157,11 @@ export const TEMPLATE_COUNT = ALL_TEMPLATES.length;
 /** Family count for a specific band, for the profile picker. */
 export function familyCountForBand(band: GradeBand): number {
   return (BANDS[band] ?? ISEE_CANDIDATES).length;
+}
+
+/** Exposed for audits so grade-bank separation can be proven automatically. */
+export function familyIdsForBand(band: GradeBand): string[] {
+  return (BANDS[band] ?? ISEE_CANDIDATES).map((candidate) => candidate.id);
 }
 
 function pickRandom<T>(items: T[]): T {
@@ -218,7 +233,8 @@ export function pickQuestion(args: PickArgs = {}): Question {
   if (sameKindAs) {
     // Templated: regenerate the same family. New numbers, same shape — this is
     // the whole reason templates exist.
-    if (sameKindAs.topic) {
+    const missedCandidate = BY_ID.get(sameKindAs.id);
+    if (sameKindAs.topic && missedCandidate?.templated) {
       const sameTopic = CANDIDATES.find(
         (c) => c.topic === sameKindAs.topic && c.id === sameKindAs.id,
       );

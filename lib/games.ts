@@ -46,7 +46,10 @@ export type GameId =
   | 'starfall'
   | 'firefly'
   | 'mysteryfaces'
-  | 'colorbynumber';
+  | 'colorbynumber'
+  | 'hangman'
+  | 'wordscramble'
+  | 'diceroyale';
 
 /**
  * How a game is driven on touch.
@@ -443,6 +446,36 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'grid',
     aspect: 3 / 4,
   },
+  hangman: {
+    id: 'hangman',
+    name: 'Hangman: Word Rescue',
+    tagline: 'Use smart letter guesses to solve the word before the storm arrives.',
+    gateNote: 'Study time buys play time.',
+    icon: '🪁',
+    accent: '#67e8f9',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
+  wordscramble: {
+    id: 'wordscramble',
+    name: 'Word Scramble',
+    tagline: 'Unscramble picture words, school words, or challenging ISEE vocabulary.',
+    gateNote: 'Study time buys play time.',
+    icon: '🔤',
+    accent: '#e879f9',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
+  diceroyale: {
+    id: 'diceroyale',
+    name: 'Dice Royale',
+    tagline: 'Roll, hold, and build the best scorecard with friends or clever CPU rivals.',
+    gateNote: 'Study time buys play time.',
+    icon: '🎲',
+    accent: '#fbbf24',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
 };
 
 /**
@@ -454,7 +487,7 @@ export const HOW_TO: Record<GameId, string> = {
   match3:
     'Swap two touching candies to line up three or more of the same kind. They pop, you score, and new candies fall in. Make big matches for chains!',
   blocks:
-    'Drag the shapes from the tray onto the board. Fill a whole row or a whole column and it clears away. Each level starts with a fun picture to clear. It ends when no shape fits - so leave yourself room!',
+    'Choose a 10 by 10, 12 by 12, or 14 by 14 board, then drag shapes from the tray into open spaces. Fill a whole row or column to clear it. Every new game starts with a different picture and piece deal. It ends when no shape fits, so leave yourself room!',
   tetris:
     'Shapes fall from the top. Move and rotate them so they fit together with no gaps. Fill a whole row and it disappears. Keep the stack from reaching the top.',
   frogger:
@@ -474,7 +507,7 @@ export const HOW_TO: Record<GameId, string> = {
   reversi: 'Place a disc so it traps the other color in a straight line. Every trapped disc flips to your color. When the board is full, the most discs wins.',
   backgammon: 'This quick 12-point version keeps the classic race: move with the die, bump a lone opponent checker to the bar, bring every checker into your home area, then bear all five off to win.',
   seabattle: 'Tap squares in the enemy ocean to fire. Hits find ships and misses mark empty water. Find every ship before the other fleet finds yours.',
-  paddleduel: 'Choose 1P vs CPU or 2P Local at the top. In 1P, drag the blue bottom paddle. In 2P, one player drags anywhere in the top half for pink while the other simultaneously drags in the bottom half for blue. First to seven wins the round.',
+  paddleduel: 'Choose 1 player or 2 players before the match, then choose Chill, Classic, or Turbo ball speed. In 1P, drag the blue bottom paddle. In 2P, one player drags in the top half for pink while the other simultaneously drags in the bottom half for blue. After every point, both local players must tap Ready before the next serve. First to seven wins.',
   asteroids: 'Use Left and Right to turn, Up to thrust and auto-fire, and Down to brake. Clear every moving rock to open the next patrol field. Large rocks split into smaller pieces, so keep moving and use your three lives carefully.',
   stardefender: 'Slide your starship left and right; it fires automatically. Dodge enemy bolts and shoot every colorful invader before the formation reaches your defense line.',
   lunarlander: 'Use Left and Right for side thrust, Up for lift, and Down to brake. Watch both velocity numbers: they turn green when your sideways and downward speeds are safe. Land with both feet inside the glowing pad before fuel runs out.',
@@ -528,6 +561,12 @@ export const HOW_TO: Record<GameId, string> = {
     'A secret member of the Mystery Crew has been chosen. Ask yes-or-no questions, use each answer to cross off faces that cannot be the secret, then tap MAKE GUESS and choose the one face left. Easy mode helps cross off impossible faces for you.',
   colorbynumber:
     'Choose one of 42 original pictures, then pick a numbered color and paint every cell with that same number. Drag your finger to fill a run of cells. Wrong colors do not stick. Use the arrows and plus or minus buttons to pan and zoom, and come back later to resume right where you stopped.',
+  hangman:
+    'Use the clue and guess one letter at a time. Correct letters fill the word; wrong letters bring the storm closer. Solve four words to complete a Word Rescue mission. Word difficulty follows the active learner profile.',
+  wordscramble:
+    'Use the picture or meaning clue, then tap the mixed-up letter tiles in the right order. Undo, reshuffle, or place one hint letter when needed. Words automatically match the active learner profile and grow harder as rounds increase.',
+  diceroyale:
+    'Choose 1 to 4 players and decide which seats are people or computer rivals. Roll up to three times, tapping dice to hold the ones you want to keep. Then choose one open score row. Every row can be used once; the highest total after all 13 rounds wins.',
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -574,6 +613,9 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.firefly,
   GAMES.mysteryfaces,
   GAMES.colorbynumber,
+  GAMES.hangman,
+  GAMES.wordscramble,
+  GAMES.diceroyale,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

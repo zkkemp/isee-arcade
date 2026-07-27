@@ -41,14 +41,14 @@ const GAME_SECTIONS: Array<{
     title: 'Tabletop classics',
     icon: '♟',
     accent: '#34d399',
-    ids: ['reversi', 'backgammon', 'chess', 'checkers', 'tictactoe', 'dots', 'sudoku', 'cards'],
+    ids: ['reversi', 'backgammon', 'chess', 'checkers', 'tictactoe', 'dots', 'sudoku', 'cards', 'diceroyale'],
   },
   {
     eyebrow: 'Remember · react · discover',
     title: 'Quick thinkers',
     icon: '☄',
     accent: '#fb923c',
-    ids: ['mysteryfaces', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling', 'firefly'],
+    ids: ['mysteryfaces', 'hangman', 'wordscramble', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling', 'firefly'],
   },
 ];
 
@@ -69,6 +69,9 @@ const NEW_GAME_IDS = new Set<GameId>([
   'firefly',
   'mysteryfaces',
   'colorbynumber',
+  'hangman',
+  'wordscramble',
+  'diceroyale',
 ]);
 
 export default function Home() {
@@ -103,6 +106,26 @@ export default function Home() {
       <div className="mb-4">
         <ProgressStrip />
       </div>
+
+      <Link
+        href="/prep"
+        className="mb-5 flex items-center justify-between gap-4 rounded-3xl border border-violet-300/20 bg-gradient-to-r from-violet-400/12 via-sky-400/[.07] to-emerald-400/[.06] p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-violet-300/40 sm:p-5"
+      >
+        <span>
+          <span className="text-[10px] font-black uppercase tracking-[.22em] text-violet-200/70">
+            New · official test shape
+          </span>
+          <span className="mt-0.5 block text-lg font-black text-white sm:text-xl">
+            ISEE Test Prep Center
+          </span>
+          <span className="mt-1 block text-xs leading-relaxed text-white/50 sm:text-sm">
+            Full timed sections, a four-part diagnostic, skill review, and a 30-minute Essay Lab.
+          </span>
+        </span>
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-violet-300 text-lg font-black text-[#201631]">
+          →
+        </span>
+      </Link>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
         <ProfileGate />

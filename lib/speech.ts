@@ -29,10 +29,11 @@ export function toSpeakable(text: string): string {
     .trim();
 }
 
-/** Build the full spoken line for a question: the prompt, then each choice by number. */
+/** Build the full spoken line for a question using the same A-D labels on screen. */
 export function questionSpeech(prompt: string, choices: string[]): string {
   const p = toSpeakable(prompt);
-  const opts = choices.map((c, i) => `Number ${i + 1}. ${toSpeakable(c)}.`).join(' ');
+  const labels = ['A', 'B', 'C', 'D', 'E'];
+  const opts = choices.map((c, i) => `Choice ${labels[i]}. ${toSpeakable(c)}.`).join(' ');
   return `${p}. The choices are: ${opts}`;
 }
 
@@ -50,6 +51,9 @@ function preferredVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
   const english = synth.getVoices().filter((voice) => /^en([-_]|$)/i.test(voice.lang));
   if (english.length === 0) return null;
   const preferredNames = [
+    'ava premium',
+    'samantha enhanced',
+    'ava enhanced',
     'samantha',
     'ava',
     'allison',

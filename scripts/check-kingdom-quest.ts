@@ -1,6 +1,7 @@
 /** Focused structural regression check for the original Kingdom Quest campaign. */
 import { readFileSync } from 'node:fs';
-import { GROUND_Y, HERO_H, LEVELS, cloneLevel, levelHasGoalRoute, newHero, overlaps, reachableLanding, stepEnemy, stepHero } from '../lib/kingdomQuest.js';
+import { KINGDOM_THEME } from '../lib/kingdomMusic.js';
+import { GROUND_Y, HERO_H, LEVELS, cameraTarget, cloneLevel, dampCamera, levelHasGoalRoute, newHero, overlaps, portalExitX, portalTouches, questPace, questViewport, reachableLanding, simulationSteps, stepEnemy, stepHero } from '../lib/kingdomQuest.js';
 
 const fail = (message: string): never => { throw new Error(`Kingdom Quest check failed: ${message}`); };
 
@@ -32,6 +33,26 @@ stepHero(hero, floor, { left: false, right: true, jumpPressed: true, jumpHeld: t
 if (hero.vy >= 0 || hero.y >= GROUND_Y - HERO_H) fail('jump did not lift the hero');
 if (overlaps({ x: 0, y: 0, w: 10, h: 10 }, { x: 10, y: 0, w: 10, h: 10 })) fail('edge-touching rectangles should not collide');
 
+// Mobile/iPad layout uses every available pixel instead of subtracting the
+// already-separate control strip a second time.
+const portrait = questViewport(768, 1024);
+const landscape = questViewport(1024, 640);
+if (Math.abs(portrait.w * portrait.scale - 768) > 1 || Math.abs(portrait.h * portrait.scale - 1024) > 1) fail('portrait iPad viewport does not fill its stage');
+if (Math.abs(landscape.w * landscape.scale - 1024) > 1 || Math.abs(landscape.h * landscape.scale - 640) > 1) fail('landscape iPad viewport does not fill its stage');
+
+const target = cameraTarget(900, portrait.w, 2060);
+const eased30 = Array.from({ length: 30 }).reduce<number>((camera) => dampCamera(camera, target, 1 / 30), 0);
+const eased60 = Array.from({ length: 60 }).reduce<number>((camera) => dampCamera(camera, target, 1 / 60), 0);
+if (Math.abs(eased30 - eased60) > 0.01) fail('camera easing changes with frame rate');
+if (simulationSteps(1 / 20).some((slice) => slice > 1 / 120 + 1e-8)) fail('slow frames are not split into collision-safe physics slices');
+if (questPace(5, 1) <= questPace(0, 1)) fail('the six-stage campaign must build pace toward its finale');
+
+const warp = LEVELS[0].portals[0];
+const portalHero = newHero(warp.x - 5, warp.y + 4);
+if (!portalTouches(portalHero, warp)) fail('a hero brushing the visible warp ring must activate it');
+const exitRight = portalExitX(warp, 1, LEVELS[0].width);
+if (overlaps({ ...portalHero, x: exitRight, y: warp.toY }, { x: warp.toX, y: warp.toY, w: warp.w, h: warp.h })) fail('a warp must place the hero beyond the destination ring');
+
 // The touch UI promises that a tap jumps. A released jump must still cross the
 // widest authored gap (98px) once the hero has built normal running speed.
 const tapHero = newHero(0, GROUND_Y - HERO_H);
@@ -51,5 +72,11 @@ const componentSource = readFileSync(
 if (!componentSource.includes('className="absolute inset-0 h-full w-full touch-none"')) {
   fail('canvas must fill the game stage on phones and tablets');
 }
+if (componentSource.includes('ch - insetRef.current') || componentSource.includes('ch - controlsInset')) {
+  fail('Coin Runner 3 must not subtract the separate controls strip from its canvas again');
+}
+if (KINGDOM_THEME.length < 24 || new Set(KINGDOM_THEME.filter((note) => note !== null)).size < 8) {
+  fail('original platformer theme needs a real melodic phrase');
+}
 
-console.log(`Kingdom Quest verified: ${LEVELS.length} hand-authored realms, portals, checkpoints, power-ups, and final boss.`);
+console.log(`Kingdom Quest verified: ${LEVELS.length} realms, full-screen iPad viewports, stable camera/physics, safe warps, original theme, checkpoints, powers, and final boss.`);

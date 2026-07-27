@@ -46,8 +46,14 @@ import { useCanvasGame } from '@/lib/useCanvasGame';
  * comfortably drawable and droppable with a fingertip on an iPad.
  */
 export const GRID = 10;
+export const BOARD_SIZES = [10, 12, 14] as const;
+export type BoardSize = (typeof BOARD_SIZES)[number];
 /** All GRID columns occupied, as a bitmask. */
 export const FULL_ROW = (1 << GRID) - 1;
+
+export function fullRowFor(size: number): number {
+  return (1 << size) - 1;
+}
 
 /**
  * A board is a colour per cell for drawing plus one column-bitmask per row for
@@ -55,28 +61,31 @@ export const FULL_ROW = (1 << GRID) - 1;
  * to.
  */
 export type Board = {
+  /** Number of rows and columns. */
+  size: number;
   /** Tone index per cell, row-major. -1 is empty. */
   cells: number[];
   /** Bit c of rows[r] is set when cell (r,c) is filled. */
   rows: number[];
 };
 
-export function makeBoard(): Board {
+export function makeBoard(size: number = GRID): Board {
   return {
-    cells: new Array<number>(GRID * GRID).fill(-1),
-    rows: new Array<number>(GRID).fill(0),
+    size,
+    cells: new Array<number>(size * size).fill(-1),
+    rows: new Array<number>(size).fill(0),
   };
 }
 
 export function cloneBoard(b: Board): Board {
-  return { cells: b.cells.slice(), rows: b.rows.slice() };
+  return { size: b.size, cells: b.cells.slice(), rows: b.rows.slice() };
 }
 
 /** True when the row bitmasks describe exactly the filled cells. */
 export function masksAgree(b: Board): boolean {
-  for (let r = 0; r < GRID; r += 1) {
+  for (let r = 0; r < b.size; r += 1) {
     let mask = 0;
-    for (let c = 0; c < GRID; c += 1) if (b.cells[r * GRID + c] >= 0) mask |= 1 << c;
+    for (let c = 0; c < b.size; c += 1) if (b.cells[r * b.size + c] >= 0) mask |= 1 << c;
     if (mask !== b.rows[r]) return false;
   }
   return true;
@@ -228,7 +237,7 @@ export type Piece = { shape: Shape; tone: number };
  * exactly as it is shown, which is what keeps this playable one-handed.
  */
 export function canPlace(b: Board, s: Shape, r: number, c: number): boolean {
-  if (r < 0 || c < 0 || r + s.h > GRID || c + s.w > GRID) return false;
+  if (r < 0 || c < 0 || r + s.h > b.size || c + s.w > b.size) return false;
   for (let i = 0; i < s.h; i += 1) {
     if ((b.rows[r + i] & (s.rowMasks[i] << c)) !== 0) return false;
   }
@@ -240,7 +249,7 @@ export function place(b: Board, s: Shape, r: number, c: number, tone: number): v
   for (const cell of s.cells) {
     const rr = r + cell.dr;
     const cc = c + cell.dc;
-    b.cells[rr * GRID + cc] = tone;
+    b.cells[rr * b.size + cc] = tone;
     b.rows[rr] |= 1 << cc;
   }
 }
@@ -263,26 +272,27 @@ export type Clear = {
 export function clearLines(b: Board): Clear {
   const rows: number[] = [];
   const cols: number[] = [];
+  const fullRow = fullRowFor(b.size);
 
-  for (let r = 0; r < GRID; r += 1) if (b.rows[r] === FULL_ROW) rows.push(r);
+  for (let r = 0; r < b.size; r += 1) if (b.rows[r] === fullRow) rows.push(r);
 
   // A column is full exactly when its bit survives an AND across every row.
-  let colMask = FULL_ROW;
-  for (let r = 0; r < GRID; r += 1) colMask &= b.rows[r];
-  for (let c = 0; c < GRID; c += 1) if ((colMask & (1 << c)) !== 0) cols.push(c);
+  let colMask = fullRow;
+  for (let r = 0; r < b.size; r += 1) colMask &= b.rows[r];
+  for (let c = 0; c < b.size; c += 1) if ((colMask & (1 << c)) !== 0) cols.push(c);
 
   const cells: Clear['cells'] = [];
   if (rows.length === 0 && cols.length === 0) return { rows, cols, cells };
 
-  const rowHit = new Array<boolean>(GRID).fill(false);
-  const colHit = new Array<boolean>(GRID).fill(false);
+  const rowHit = new Array<boolean>(b.size).fill(false);
+  const colHit = new Array<boolean>(b.size).fill(false);
   for (const r of rows) rowHit[r] = true;
   for (const c of cols) colHit[c] = true;
 
-  for (let r = 0; r < GRID; r += 1) {
-    for (let c = 0; c < GRID; c += 1) {
+  for (let r = 0; r < b.size; r += 1) {
+    for (let c = 0; c < b.size; c += 1) {
       if (!rowHit[r] && !colHit[c]) continue;
-      const i = r * GRID + c;
+      const i = r * b.size + c;
       cells.push({ r, c, tone: b.cells[i] });
       b.cells[i] = -1;
       b.rows[r] &= ~(1 << c);
@@ -303,21 +313,22 @@ export function previewLines(
   c: number,
 ): { rows: number[]; cols: number[] } {
   const after = b.rows.slice();
+  const fullRow = fullRowFor(b.size);
   for (let i = 0; i < s.h; i += 1) after[r + i] |= s.rowMasks[i] << c;
 
   const rows: number[] = [];
   const cols: number[] = [];
-  for (let i = 0; i < GRID; i += 1) if (after[i] === FULL_ROW) rows.push(i);
-  let colMask = FULL_ROW;
-  for (let i = 0; i < GRID; i += 1) colMask &= after[i];
-  for (let i = 0; i < GRID; i += 1) if ((colMask & (1 << i)) !== 0) cols.push(i);
+  for (let i = 0; i < b.size; i += 1) if (after[i] === fullRow) rows.push(i);
+  let colMask = fullRow;
+  for (let i = 0; i < b.size; i += 1) colMask &= after[i];
+  for (let i = 0; i < b.size; i += 1) if ((colMask & (1 << i)) !== 0) cols.push(i);
   return { rows, cols };
 }
 
 /** First legal anchor in row-major order, or null when the shape fits nowhere. */
 export function firstFit(b: Board, s: Shape): { r: number; c: number } | null {
-  for (let r = 0; r + s.h <= GRID; r += 1) {
-    for (let c = 0; c + s.w <= GRID; c += 1) {
+  for (let r = 0; r + s.h <= b.size; r += 1) {
+    for (let c = 0; c + s.w <= b.size; c += 1) {
       if (canPlace(b, s, r, c)) return { r, c };
     }
   }
@@ -396,6 +407,28 @@ export function lcg(seed: number): () => number {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
     return s / 4294967296;
   };
+}
+
+/** A well-mixed, deterministic opening picture for a seed. */
+export function openingPatternOffset(seed: number): number {
+  let x = seed >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d);
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b);
+  x ^= x >>> 16;
+  return (x >>> 0) % PATTERN_NAMES.length;
+}
+
+/**
+ * Pick the next opening picture while guaranteeing it differs from the previous
+ * run. The seed still chooses among the other five, so restarts do not merely
+ * march through an obvious fixed loop.
+ */
+export function nextPatternOffset(seed: number, previous: number | null): number {
+  const proposed = openingPatternOffset(seed);
+  if (previous === null || proposed !== previous) return proposed;
+  return (proposed + 1 + ((seed >>> 8) % (PATTERN_NAMES.length - 1))) % PATTERN_NAMES.length;
 }
 
 function drawShape(rng: () => number, d: Difficulty): Shape {
@@ -659,8 +692,31 @@ export function patternNameForLevel(level: number): string {
   return PATTERN_NAMES[patternIndexForLevel(level)];
 }
 
-export function patternMaskForLevel(level: number): boolean[] {
-  return PATTERN_MASKS[patternIndexForLevel(level)];
+const RESIZED_PATTERNS = new Map<string, boolean[]>();
+
+/**
+ * Scale the hand-tuned 10x10 stencil to a larger board with nearest-neighbour
+ * sampling. This keeps the same recognisable art while giving the 12x12 and
+ * 14x14 modes genuinely more room to play around it.
+ */
+export function patternMaskForLevel(level: number, size: number = GRID): boolean[] {
+  const index = patternIndexForLevel(level);
+  if (size === GRID) return PATTERN_MASKS[index].slice();
+  const key = `${index}:${size}`;
+  const cached = RESIZED_PATTERNS.get(key);
+  if (cached) return cached.slice();
+
+  const source = PATTERN_MASKS[index];
+  const scaled = new Array<boolean>(size * size).fill(false);
+  for (let r = 0; r < size; r += 1) {
+    const sr = Math.min(GRID - 1, Math.floor(((r + 0.5) * GRID) / size));
+    for (let c = 0; c < size; c += 1) {
+      const sc = Math.min(GRID - 1, Math.floor(((c + 0.5) * GRID) / size));
+      scaled[r * size + c] = source[sr * GRID + sc];
+    }
+  }
+  RESIZED_PATTERNS.set(key, scaled);
+  return scaled.slice();
 }
 
 /** The tone every cell of a level's picture is drawn in - one flat colour, so it reads as a stencil rather than a jumble. */
@@ -669,14 +725,14 @@ export function patternToneForLevel(level: number): number {
 }
 
 /** A fresh board seeded from the level's picture, masks and colour cells in sync. */
-export function patternBoard(level: number): Board {
-  const mask = patternMaskForLevel(level);
+export function patternBoard(level: number, size: number = GRID): Board {
+  const mask = patternMaskForLevel(level, size);
   const tone = patternToneForLevel(level);
-  const b = makeBoard();
-  for (let r = 0; r < GRID; r += 1) {
-    for (let c = 0; c < GRID; c += 1) {
-      if (!mask[r * GRID + c]) continue;
-      b.cells[r * GRID + c] = tone;
+  const b = makeBoard(size);
+  for (let r = 0; r < size; r += 1) {
+    for (let c = 0; c < size; c += 1) {
+      if (!mask[r * size + c]) continue;
+      b.cells[r * size + c] = tone;
       b.rows[r] |= 1 << c;
     }
   }
@@ -759,12 +815,16 @@ export function applyPlacement(
 // exactly what it was, and every downstream layout number (tray, HUD, drag
 // lift) still derives from CELL and GRID rather than a hard-coded pixel count.
 const CELL = 24;
+const PLAY_PIXELS = GRID * CELL;
+export function cellForSize(size: number): number {
+  return PLAY_PIXELS / size;
+}
 const PAD = 6;
 const HUD_H = 26;
-export const BOARD_W = GRID * CELL + PAD * 2;
+export const BOARD_W = PLAY_PIXELS + PAD * 2;
 const GRID_X = PAD;
 const GRID_Y = HUD_H + PAD;
-const GRID_BOX = GRID * CELL + PAD * 2;
+const GRID_BOX = PLAY_PIXELS + PAD * 2;
 const TRAY_Y = HUD_H + GRID_BOX + 8;
 const TRAY_H = 78;
 export const BOARD_H = TRAY_Y + TRAY_H;
@@ -849,6 +909,41 @@ function slotRect(i: number): { x: number; y: number; w: number; h: number } {
   };
 }
 
+const SETUP_CARD_Y = 108;
+const SETUP_CARD_H = 116;
+const SETUP_CARD_GAP = 7;
+const SETUP_CARD_W = (BOARD_W - PAD * 2 - SETUP_CARD_GAP * 2) / 3;
+const SETUP_PLAY = { x: 26, y: 258, w: BOARD_W - 52, h: 54 };
+
+function setupCardRect(i: number): { x: number; y: number; w: number; h: number } {
+  return {
+    x: PAD + i * (SETUP_CARD_W + SETUP_CARD_GAP),
+    y: SETUP_CARD_Y,
+    w: SETUP_CARD_W,
+    h: SETUP_CARD_H,
+  };
+}
+
+/** Pure hit target shared by touch input and the headless iPad checks. */
+export function setupChoiceAt(bx: number, by: number): BoardSize | null {
+  for (let i = 0; i < BOARD_SIZES.length; i += 1) {
+    const r = setupCardRect(i);
+    if (bx >= r.x && bx <= r.x + r.w && by >= r.y && by <= r.y + r.h) {
+      return BOARD_SIZES[i];
+    }
+  }
+  return null;
+}
+
+export function setupPlayAt(bx: number, by: number): boolean {
+  return (
+    bx >= SETUP_PLAY.x &&
+    bx <= SETUP_PLAY.x + SETUP_PLAY.w &&
+    by >= SETUP_PLAY.y &&
+    by <= SETUP_PLAY.y + SETUP_PLAY.h
+  );
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
@@ -887,6 +982,8 @@ type GameApi = GameCanvasProps['api'];
 type State = {
   difficulty: Difficulty;
   board: Board;
+  /** Run-scoped rotation of the picture cycle, randomized at each new game. */
+  patternOffset: number;
   /** null once a piece has been played out of that slot. */
   tray: Array<Piece | null>;
   /** Drives the piece bag only. */
@@ -940,13 +1037,14 @@ type State = {
 };
 
 /** Per-cell delay for the level-start reveal wave: rings outward from the board's centre. */
-function computeReveal(mask: boolean[]): number[] {
-  const out = new Array<number>(GRID * GRID).fill(0);
-  for (let r = 0; r < GRID; r += 1) {
-    for (let c = 0; c < GRID; c += 1) {
-      const i = r * GRID + c;
+function computeReveal(mask: boolean[], size: number): number[] {
+  const out = new Array<number>(size * size).fill(0);
+  const mid = (size - 1) / 2;
+  for (let r = 0; r < size; r += 1) {
+    for (let c = 0; c < size; c += 1) {
+      const i = r * size + c;
       if (!mask[i]) continue;
-      out[i] = Math.hypot(r - MID, c - MID) * REVEAL_SPACING;
+      out[i] = Math.hypot(r - mid, c - mid) * REVEAL_SPACING;
     }
   }
   return out;
@@ -960,13 +1058,14 @@ function computeReveal(mask: boolean[]): number[] {
  * again rather than a blank grid (see `resetBoard`).
  */
 function seedLevel(s: State, level: number): void {
-  const mask = patternMaskForLevel(level);
+  const pictureLevel = level + s.patternOffset;
+  const mask = patternMaskForLevel(pictureLevel, s.board.size);
   s.level = level;
-  s.board = patternBoard(level);
+  s.board = patternBoard(pictureLevel, s.board.size);
   s.tray = refillTray(s.board, s.rng, s.difficulty);
-  s.patternName = patternNameForLevel(level);
+  s.patternName = patternNameForLevel(pictureLevel);
   s.isPatternCell = mask;
-  s.reveal = computeReveal(mask);
+  s.reveal = computeReveal(mask, s.board.size);
   s.levelT = 0;
   s.landCells = [];
   s.traySpawn = [1, 1, 1];
@@ -980,13 +1079,20 @@ function seedLevel(s: State, level: number): void {
   s.dirty = true;
 }
 
-function freshState(difficulty: Difficulty, seed: number): State {
+function freshState(
+  difficulty: Difficulty,
+  seed: number,
+  boardSize: BoardSize,
+  patternOffset: number,
+): State {
   const rng = lcg(seed);
-  const mask = patternMaskForLevel(1);
-  const board = patternBoard(1);
+  const pictureLevel = 1 + patternOffset;
+  const mask = patternMaskForLevel(pictureLevel, boardSize);
+  const board = patternBoard(pictureLevel, boardSize);
   return {
     difficulty,
     board,
+    patternOffset,
     tray: refillTray(board, rng, difficulty),
     rng,
     fxRng: lcg((seed ^ 0x9e3779b9) >>> 0),
@@ -994,10 +1100,10 @@ function freshState(difficulty: Difficulty, seed: number): State {
     lines: 0,
     level: 1,
     displayLevel: 1,
-    patternName: patternNameForLevel(1),
+    patternName: patternNameForLevel(pictureLevel),
     levelT: 0,
     isPatternCell: mask,
-    reveal: computeReveal(mask),
+    reveal: computeReveal(mask, boardSize),
     landCells: [],
     traySpawn: [1, 1, 1],
     streak: 0,
@@ -1052,12 +1158,15 @@ export default function Blocks({
 }: GameCanvasProps) {
   const stateRef = useRef<State | null>(null);
   const seedRef = useRef(1);
+  const selectedSizeRef = useRef<BoardSize>(GRID);
+  const openingOffsetRef = useRef<number | null>(null);
 
   // A fresh run gets a fresh seed so the bag is not identical every session. The
   // state itself is built on the first frame, which keeps generation out of
   // render entirely.
   useEffect(() => {
     seedRef.current = (Date.now() ^ Math.imul(restartToken + 1, 2654435761)) >>> 0 || 1;
+    openingOffsetRef.current = nextPatternOffset(seedRef.current, openingOffsetRef.current);
     stateRef.current = null;
   }, [restartToken, difficulty]);
 
@@ -1080,12 +1189,39 @@ export default function Blocks({
     // once and then idle, rather than leaving the last live frame on screen.
     active: true,
     step: (ctx, dt, cw, ch) => {
-      let s = stateRef.current;
-      if (!s || s.difficulty !== difficulty) {
-        s = freshState(difficulty, seedRef.current);
-        stateRef.current = s;
-      }
+      const s = stateRef.current;
       const layout = layoutFor(cw, ch, controlsInset);
+      if (!s) {
+        const pressed = input.consumePointerPress();
+        input.consumePointerRelease();
+        const px = input.pointerX;
+        const py = input.pointerY;
+        const bx = px === null ? null : (px * cw - layout.ox) / layout.scale;
+        const by = py === null ? null : (py * ch - layout.oy) / layout.scale;
+        if (!paused && pressed && bx !== null && by !== null) {
+          const choice = setupChoiceAt(bx, by);
+          if (choice !== null) {
+            selectedSizeRef.current = choice;
+            playSound('click');
+          } else if (setupPlayAt(bx, by)) {
+            const offset =
+              openingOffsetRef.current ?? openingPatternOffset(seedRef.current);
+            stateRef.current = freshState(
+              difficulty,
+              seedRef.current,
+              selectedSizeRef.current,
+              offset,
+            );
+            playSound('powerup');
+          }
+        }
+        drawSetup(ctx, layout, cw, ch, selectedSizeRef.current, paused);
+        return;
+      }
+      if (s.difficulty !== difficulty) {
+        stateRef.current = null;
+        return;
+      }
 
       if (paused) {
         // Painted once and then left alone, rather than burning a frame a second
@@ -1148,8 +1284,8 @@ export default function Blocks({
         seedLevel(s, want);
         playSound('levelClear');
         s.pops.push({
-          x: GRID_X + (GRID * CELL) / 2,
-          y: GRID_Y + (GRID * CELL) / 2,
+          x: GRID_X + PLAY_PIXELS / 2,
+          y: GRID_Y + PLAY_PIXELS / 2,
           text: `Level ${want}! ${capitalize(s.patternName)}`,
           t: 0,
           life: 1.8,
@@ -1200,11 +1336,17 @@ function slotAt(s: State, bx: number, by: number): number | null {
  * disappears completely - so short pieces get lifted further. The checker asserts
  * the whole piece ends up strictly above the fingertip for those.
  */
-export function dragOrigin(shape: Shape, fx: number, fy: number): { x: number; y: number } {
+export function dragOrigin(
+  shape: Shape,
+  fx: number,
+  fy: number,
+  boardSize: number = GRID,
+): { x: number; y: number } {
+  const cell = cellForSize(boardSize);
   const lift = LIFT + (shape.h <= 2 ? SHORT_LIFT : 0);
   return {
-    x: fx - (shape.w * CELL) / 2,
-    y: fy - lift - (shape.h * CELL) / 2,
+    x: fx - (shape.w * cell) / 2,
+    y: fy - lift - (shape.h * cell) / 2,
   };
 }
 
@@ -1218,16 +1360,17 @@ export type Aim = { ar: number; ac: number; near: boolean; valid: boolean };
  * "aimed at an occupied square".
  */
 export function aimAt(b: Board, shape: Shape, fx: number, fy: number): Aim {
-  const o = dragOrigin(shape, fx, fy);
-  const fr = (o.y - GRID_Y) / CELL;
-  const fc = (o.x - GRID_X) / CELL;
-  const ar = clamp(Math.round(fr), 0, GRID - shape.h);
-  const ac = clamp(Math.round(fc), 0, GRID - shape.w);
+  const cell = cellForSize(b.size);
+  const o = dragOrigin(shape, fx, fy, b.size);
+  const fr = (o.y - GRID_Y) / cell;
+  const fc = (o.x - GRID_X) / cell;
+  const ar = clamp(Math.round(fr), 0, b.size - shape.h);
+  const ac = clamp(Math.round(fc), 0, b.size - shape.w);
   const near =
     fr > -NEAR_SLACK &&
-    fr < GRID - shape.h + NEAR_SLACK &&
+    fr < b.size - shape.h + NEAR_SLACK &&
     fc > -NEAR_SLACK &&
-    fc < GRID - shape.w + NEAR_SLACK;
+    fc < b.size - shape.w + NEAR_SLACK;
   return { ar, ac, near, valid: near && canPlace(b, shape, ar, ac) };
 }
 
@@ -1241,8 +1384,9 @@ export function toBoard(layout: Layout, sx: number, sy: number): { x: number; y:
 }
 
 /** Centre of a grid cell, in board units. */
-export function cellCentre(r: number, c: number): { x: number; y: number } {
-  return { x: GRID_X + (c + 0.5) * CELL, y: GRID_Y + (r + 0.5) * CELL };
+export function cellCentre(r: number, c: number, boardSize: number = GRID): { x: number; y: number } {
+  const cell = cellForSize(boardSize);
+  return { x: GRID_X + (c + 0.5) * cell, y: GRID_Y + (r + 0.5) * cell };
 }
 
 function award(s: State, api: GameApi, n: number): void {
@@ -1314,8 +1458,8 @@ function drop(s: State, api: GameApi): void {
 
   const label = clearLabel(res.lines);
   s.pops.push({
-    x: GRID_X + (GRID * CELL) / 2,
-    y: GRID_Y + (GRID * CELL) / 2,
+    x: GRID_X + PLAY_PIXELS / 2,
+    y: GRID_Y + PLAY_PIXELS / 2,
     text: label ? `${label} +${res.clearPoints}` : `+${res.clearPoints}`,
     t: 0,
     life: res.lines > 1 ? 1.4 : 1,
@@ -1350,14 +1494,15 @@ function startSweep(s: State, cleared: Clear, originR: number, originC: number):
 }
 
 function landDust(s: State, shape: Shape, ar: number, ac: number): void {
+  const cellSize = cellForSize(s.board.size);
   for (const cell of shape.cells) {
     // Only the bottom edge of the piece throws dust, so the puff reads as impact.
     if (shape.cells.some((o) => o.dc === cell.dc && o.dr === cell.dr + 1)) continue;
-    const x = GRID_X + (ac + cell.dc + 0.5) * CELL;
-    const y = GRID_Y + (ar + cell.dr + 1) * CELL;
+    const x = GRID_X + (ac + cell.dc + 0.5) * cellSize;
+    const y = GRID_Y + (ar + cell.dr + 1) * cellSize;
     for (let i = 0; i < 3; i += 1) {
       pushSpark(s, {
-        x: x + (s.fxRng() - 0.5) * CELL * 0.7,
+        x: x + (s.fxRng() - 0.5) * cellSize * 0.7,
         y,
         vx: (s.fxRng() - 0.5) * 40,
         vy: -18 - s.fxRng() * 30,
@@ -1376,8 +1521,9 @@ function pushSpark(s: State, sp: Spark): void {
 }
 
 function burst(s: State, r: number, c: number, tone: number): void {
-  const x = GRID_X + (c + 0.5) * CELL;
-  const y = GRID_Y + (r + 0.5) * CELL;
+  const cell = cellForSize(s.board.size);
+  const x = GRID_X + (c + 0.5) * cell;
+  const y = GRID_Y + (r + 0.5) * cell;
   for (let i = 0; i < 6; i += 1) {
     const a = s.fxRng() * Math.PI * 2;
     const sp = 55 + s.fxRng() * 115;
@@ -1606,6 +1752,126 @@ function drawBlock(
   ctx.restore();
 }
 
+function drawSetup(
+  ctx: CanvasRenderingContext2D,
+  layout: Layout,
+  cw: number,
+  ch: number,
+  selected: BoardSize,
+  dim: boolean,
+): void {
+  ctx.clearRect(0, 0, cw, ch);
+  const bg = ctx.createLinearGradient(0, 0, 0, ch);
+  bg.addColorStop(0, '#182454');
+  bg.addColorStop(0.55, '#22144a');
+  bg.addColorStop(1, '#100a26');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, cw, ch);
+
+  ctx.save();
+  ctx.translate(layout.ox, layout.oy);
+  ctx.scale(layout.scale, layout.scale);
+
+  ctx.fillStyle = 'rgba(10,8,30,0.82)';
+  roundRect(ctx, 0, 0, BOARD_W, BOARD_H, 18);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(153,210,255,0.28)';
+  ctx.lineWidth = 1.2;
+  roundRect(ctx, 0.6, 0.6, BOARD_W - 1.2, BOARD_H - 1.2, 18);
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 24px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText('BLOCK DROP', BOARD_W / 2, 30);
+  ctx.fillStyle = '#a9cfff';
+  ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText('CHOOSE YOUR BOARD', BOARD_W / 2, 55);
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText('Bigger boards give you more room and longer games.', BOARD_W / 2, 75);
+
+  const labels = ['CLASSIC', 'GRAND', 'ROYAL'];
+  for (let i = 0; i < BOARD_SIZES.length; i += 1) {
+    const size = BOARD_SIZES[i];
+    const card = setupCardRect(i);
+    const active = size === selected;
+    const cardFill = ctx.createLinearGradient(card.x, card.y, card.x, card.y + card.h);
+    cardFill.addColorStop(0, active ? '#2f7de1' : 'rgba(55,61,101,0.82)');
+    cardFill.addColorStop(1, active ? '#6945c7' : 'rgba(26,28,59,0.9)');
+    ctx.fillStyle = cardFill;
+    roundRect(ctx, card.x, card.y, card.w, card.h, 11);
+    ctx.fill();
+    ctx.strokeStyle = active ? '#9fe8ff' : 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = active ? 2.4 : 1;
+    roundRect(ctx, card.x + 0.7, card.y + 0.7, card.w - 1.4, card.h - 1.4, 11);
+    ctx.stroke();
+
+    // A tiny board preview makes the density difference obvious before a child
+    // has to read the size label.
+    const previewSize = 44;
+    const previewX = card.x + (card.w - previewSize) / 2;
+    const previewY = card.y + 13;
+    const previewCell = previewSize / size;
+    ctx.fillStyle = 'rgba(4,9,30,0.7)';
+    roundRect(ctx, previewX - 2, previewY - 2, previewSize + 4, previewSize + 4, 4);
+    ctx.fill();
+    ctx.fillStyle = active ? 'rgba(186,238,255,0.7)' : 'rgba(174,181,224,0.52)';
+    for (let n = 0; n < size; n += 1) {
+      const row = (n * 7 + i * 3) % size;
+      ctx.fillRect(
+        previewX + n * previewCell + 0.4,
+        previewY + row * previewCell + 0.4,
+        Math.max(1, previewCell - 0.8),
+        Math.max(1, previewCell - 0.8),
+      );
+    }
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 19px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(`${size}×${size}`, card.x + card.w / 2, card.y + 76);
+    ctx.fillStyle = active ? '#d8f7ff' : 'rgba(255,255,255,0.66)';
+    ctx.font = '800 8px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(labels[i], card.x + card.w / 2, card.y + 98);
+  }
+
+  const play = ctx.createLinearGradient(
+    SETUP_PLAY.x,
+    SETUP_PLAY.y,
+    SETUP_PLAY.x,
+    SETUP_PLAY.y + SETUP_PLAY.h,
+  );
+  play.addColorStop(0, '#59d4ff');
+  play.addColorStop(1, '#3471df');
+  ctx.fillStyle = play;
+  roundRect(ctx, SETUP_PLAY.x, SETUP_PLAY.y, SETUP_PLAY.w, SETUP_PLAY.h, 18);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(220,250,255,0.85)';
+  ctx.lineWidth = 1.5;
+  roundRect(
+    ctx,
+    SETUP_PLAY.x + 0.8,
+    SETUP_PLAY.y + 0.8,
+    SETUP_PLAY.w - 1.6,
+    SETUP_PLAY.h - 1.6,
+    18,
+  );
+  ctx.stroke();
+  ctx.fillStyle = '#07152e';
+  ctx.font = '900 17px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(`PLAY ${selected}×${selected}`, BOARD_W / 2, SETUP_PLAY.y + 22);
+  ctx.font = '800 8px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(7,21,46,0.72)';
+  ctx.fillText('A NEW PICTURE + NEW BLOCKS EVERY GAME', BOARD_W / 2, SETUP_PLAY.y + 39);
+  ctx.restore();
+
+  if (dim) {
+    ctx.fillStyle = 'rgba(4,2,10,0.55)';
+    ctx.fillRect(0, 0, cw, ch);
+  }
+}
+
 function draw(
   ctx: CanvasRenderingContext2D,
   s: State,
@@ -1689,6 +1955,8 @@ function drawHud(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
+  const grid = s.board.size;
+  const cell = cellForSize(grid);
   ctx.fillStyle = p.frame;
   roundRect(ctx, 0, HUD_H, BOARD_W, GRID_BOX, 14);
   ctx.fill();
@@ -1701,26 +1969,26 @@ function drawGrid(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
   // clearest possible way to say "put it here".
   const lit = ghostLines(s);
 
-  for (let r = 0; r < GRID; r += 1) {
-    for (let c = 0; c < GRID; c += 1) {
-      const x = GRID_X + c * CELL;
-      const y = GRID_Y + r * CELL;
+  for (let r = 0; r < grid; r += 1) {
+    for (let c = 0; c < grid; c += 1) {
+      const x = GRID_X + c * cell;
+      const y = GRID_Y + r * cell;
       const hot = lit.rows.has(r) || lit.cols.has(c);
       ctx.fillStyle = p.well;
-      roundRect(ctx, x + 1.2, y + 1.2, CELL - 2.4, CELL - 2.4, CELL * 0.2);
+      roundRect(ctx, x + 1.2, y + 1.2, cell - 2.4, cell - 2.4, cell * 0.2);
       ctx.fill();
 
       // Inner top shadow: makes each cell read as a recess, not a flat tile.
-      const sh = ctx.createLinearGradient(x, y, x, y + CELL * 0.5);
+      const sh = ctx.createLinearGradient(x, y, x, y + cell * 0.5);
       sh.addColorStop(0, 'rgba(0,0,0,0.34)');
       sh.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = sh;
-      roundRect(ctx, x + 1.2, y + 1.2, CELL - 2.4, CELL - 2.4, CELL * 0.2);
+      roundRect(ctx, x + 1.2, y + 1.2, cell - 2.4, cell - 2.4, cell * 0.2);
       ctx.fill();
 
       if (hot) {
         ctx.fillStyle = 'rgba(255,255,255,0.13)';
-        roundRect(ctx, x + 1.2, y + 1.2, CELL - 2.4, CELL - 2.4, CELL * 0.2);
+        roundRect(ctx, x + 1.2, y + 1.2, cell - 2.4, cell - 2.4, cell * 0.2);
         ctx.fill();
       }
     }
@@ -1750,7 +2018,7 @@ function ghostLines(s: State): { rows: Set<number>; cols: Set<number> } {
  * settling from a small pop to full size.
  */
 function cellAnim(s: State, r: number, c: number): { alpha: number; scale: number } {
-  const i = r * GRID + c;
+  const i = r * s.board.size + c;
   if (s.levelT < REVEAL_TOTAL && s.isPatternCell[i]) {
     const local = clamp((s.levelT - s.reveal[i]) / REVEAL_DUR, 0, 1);
     return { alpha: local, scale: easeOutBack(local) };
@@ -1765,19 +2033,21 @@ function cellAnim(s: State, r: number, c: number): { alpha: number; scale: numbe
 }
 
 function drawPlaced(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
-  for (let r = 0; r < GRID; r += 1) {
-    for (let c = 0; c < GRID; c += 1) {
-      const tone = s.board.cells[r * GRID + c];
+  const grid = s.board.size;
+  const cell = cellForSize(grid);
+  for (let r = 0; r < grid; r += 1) {
+    for (let c = 0; c < grid; c += 1) {
+      const tone = s.board.cells[r * grid + c];
       if (tone < 0) continue;
       const anim = cellAnim(s, r, c);
       if (anim.alpha <= 0.01 || anim.scale <= 0.02) continue;
-      const base = CELL - 2;
+      const base = cell - 2;
       const size = base * anim.scale;
       const off = (base - size) / 2;
       drawBlock(
         ctx,
-        GRID_X + c * CELL + 1 + off,
-        GRID_Y + r * CELL + 1 + off,
+        GRID_X + c * cell + 1 + off,
+        GRID_Y + r * cell + 1 + off,
         size,
         p.tones[tone % p.tones.length],
         { shadow: 0.5, alpha: anim.alpha },
@@ -1788,34 +2058,35 @@ function drawPlaced(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
   if (s.snap) {
     // A ring snapping shut over the footprint: the "it landed" confirmation.
     const k = clamp(s.snap.t / 0.34, 0, 1);
-    const grow = (1 - k) * CELL * 0.5;
+    const grow = (1 - k) * cell * 0.5;
     ctx.strokeStyle = `rgba(255,255,255,${0.55 * (1 - k)})`;
     ctx.lineWidth = 2 + (1 - k) * 2;
     roundRect(
       ctx,
-      GRID_X + s.snap.c * CELL - grow,
-      GRID_Y + s.snap.r * CELL - grow,
-      s.snap.w * CELL + grow * 2,
-      s.snap.h * CELL + grow * 2,
-      CELL * 0.28 + grow,
+      GRID_X + s.snap.c * cell - grow,
+      GRID_Y + s.snap.r * cell - grow,
+      s.snap.w * cell + grow * 2,
+      s.snap.h * cell + grow * 2,
+      cell * 0.28 + grow,
     );
     ctx.stroke();
   }
 }
 
 function drawClearing(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
+  const cell = cellForSize(s.board.size);
   for (const fx of s.clears) {
     const t = s.clearT - fx.delay;
     if (t < 0 || t >= CLEAR_DUR) continue;
     const k = t / CLEAR_DUR;
     // Flare white, swell, then shrink away.
-    const grow = Math.sin(k * Math.PI) * CELL * 0.16;
-    const size = (CELL - 2) * (1 - k * 0.75) + grow;
-    const off = (CELL - size) / 2;
+    const grow = Math.sin(k * Math.PI) * cell * 0.16;
+    const size = (cell - 2) * (1 - k * 0.75) + grow;
+    const off = (cell - size) / 2;
     drawBlock(
       ctx,
-      GRID_X + fx.c * CELL + off,
-      GRID_Y + fx.r * CELL + off,
+      GRID_X + fx.c * cell + off,
+      GRID_Y + fx.r * cell + off,
       size,
       p.tones[fx.tone % p.tones.length],
       { alpha: 1 - k * 0.85, flash: 0.7 * (1 - k) },
@@ -1835,22 +2106,23 @@ function drawGhost(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
   const wash = good ? 'rgba(104,222,132,0.30)' : 'rgba(240,96,96,0.34)';
   const rim = good ? 'rgba(150,255,180,0.95)' : 'rgba(255,140,140,0.95)';
   const pulse = 0.82 + Math.sin(s.time * 11) * 0.18;
+  const cellSize = cellForSize(s.board.size);
 
   for (const cell of piece.shape.cells) {
-    const x = GRID_X + (aim.ac + cell.dc) * CELL;
-    const y = GRID_Y + (aim.ar + cell.dr) * CELL;
+    const x = GRID_X + (aim.ac + cell.dc) * cellSize;
+    const y = GRID_Y + (aim.ar + cell.dr) * cellSize;
     if (good) {
-      drawBlock(ctx, x + 1, y + 1, CELL - 2, p.tones[piece.tone % p.tones.length], {
+      drawBlock(ctx, x + 1, y + 1, cellSize - 2, p.tones[piece.tone % p.tones.length], {
         alpha: 0.4,
       });
     }
     ctx.fillStyle = wash;
-    roundRect(ctx, x + 1, y + 1, CELL - 2, CELL - 2, CELL * 0.22);
+    roundRect(ctx, x + 1, y + 1, cellSize - 2, cellSize - 2, cellSize * 0.22);
     ctx.fill();
     ctx.strokeStyle = rim;
     ctx.globalAlpha = pulse;
     ctx.lineWidth = 1.8;
-    roundRect(ctx, x + 1.9, y + 1.9, CELL - 3.8, CELL - 3.8, CELL * 0.2);
+    roundRect(ctx, x + 1.9, y + 1.9, cellSize - 3.8, cellSize - 3.8, cellSize * 0.2);
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -1919,7 +2191,8 @@ function drawDragged(ctx: CanvasRenderingContext2D, s: State, p: Palette): void 
   if (!d) return;
   const piece = s.tray[d.slot];
   if (!piece) return;
-  const o = dragOrigin(piece.shape, d.x, d.y);
+  const cellSize = cellForSize(s.board.size);
+  const o = dragOrigin(piece.shape, d.x, d.y, s.board.size);
   const tone = p.tones[piece.tone % p.tones.length];
 
   // A pointer line from the fingertip to the piece, so the offset never reads as
@@ -1929,14 +2202,19 @@ function drawDragged(ctx: CanvasRenderingContext2D, s: State, p: Palette): void 
   ctx.setLineDash([3, 4]);
   ctx.beginPath();
   ctx.moveTo(d.x, d.y);
-  ctx.lineTo(o.x + (piece.shape.w * CELL) / 2, o.y + piece.shape.h * CELL);
+  ctx.lineTo(o.x + (piece.shape.w * cellSize) / 2, o.y + piece.shape.h * cellSize);
   ctx.stroke();
   ctx.setLineDash([]);
 
   for (const cell of piece.shape.cells) {
-    drawBlock(ctx, o.x + cell.dc * CELL + 1, o.y + cell.dr * CELL + 1, CELL - 2, tone, {
-      shadow: 1.6,
-    });
+    drawBlock(
+      ctx,
+      o.x + cell.dc * cellSize + 1,
+      o.y + cell.dr * cellSize + 1,
+      cellSize - 2,
+      tone,
+      { shadow: 1.6 },
+    );
   }
 }
 
@@ -1979,7 +2257,7 @@ function drawPops(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
  * faster and brighter the closer the board is to jammed.
  */
 function drawDanger(ctx: CanvasRenderingContext2D, s: State): void {
-  const fill = fillCount(s.board) / (GRID * GRID);
+  const fill = fillCount(s.board) / (s.board.size * s.board.size);
   if (fill < DANGER_FILL) return;
   const heat = clamp((fill - DANGER_FILL) / (1 - DANGER_FILL), 0, 1);
   const beat = 0.5 + 0.5 * Math.sin(s.time * (5 + heat * 7));
@@ -2003,7 +2281,7 @@ function drawHint(ctx: CanvasRenderingContext2D, s: State, p: Palette): void {
   ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
   const width = ctx.measureText(text).width + 18;
   const cx = BOARD_W / 2;
-  const cy = GRID_Y + GRID * CELL - CELL * 1.1;
+  const cy = GRID_Y + PLAY_PIXELS - cellForSize(s.board.size) * 1.1;
   ctx.fillStyle = 'rgba(12,6,2,0.7)';
   roundRect(ctx, cx - width / 2, cy - 10, width, 20, 10);
   ctx.fill();

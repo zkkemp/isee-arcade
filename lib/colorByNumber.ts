@@ -177,18 +177,50 @@ export function progressFor(picture: PictureTemplate, painted: readonly number[]
   return correct / picture.cells.length;
 }
 
+/** Remaining cells for each numbered color. Kept pure so the canvas and tests
+ * agree about when a finished color should disappear from the palette. */
+export function remainingByColor(picture: PictureTemplate, painted: readonly number[]): number[] {
+  const remaining = Array.from({ length: picture.palette.length }, () => 0);
+  for (let index = 0; index < picture.cells.length; index += 1) {
+    const color = picture.cells[index];
+    if (painted[index] !== color) remaining[color] += 1;
+  }
+  return remaining;
+}
+
+export function availableColors(picture: PictureTemplate, painted: readonly number[]): number[] {
+  const remaining = remainingByColor(picture, painted);
+  return remaining.flatMap((count, color) => count > 0 ? [color] : []);
+}
+
+export type PaletteLayout = { perRow: number; size: number; rows: number; top: number; left: number; rowHeight: number };
+export function paletteLayout(width: number, height: number, itemCount: number): PaletteLayout {
+  const perRow = Math.min(8, Math.max(1, itemCount));
+  const size = Math.min(52, (width - 28) / perRow);
+  const rows = Math.max(1, Math.ceil(itemCount / perRow));
+  const rowHeight = 54;
+  return { perRow, size, rows, rowHeight, top: height - rows * rowHeight - 10, left: (width - perRow * size) / 2 };
+}
+
 export type BoardLayout = { x: number; y: number; cell: number; width: number; height: number };
-export function boardLayout(width: number, height: number, picture: PictureTemplate, zoom = 1, panX = 0, panY = 0): BoardLayout {
+export function boardLayout(
+  width: number,
+  height: number,
+  picture: PictureTemplate,
+  zoom = 1,
+  panX = 0,
+  panY = 0,
+  paletteItemCount = picture.palette.length,
+): BoardLayout {
   // Reserve actual room for the one/two-row key. Without this a 16-colour
   // picture could look fine at first and then hide its lower cells beneath the
   // palette on a portrait iPad.
-  const keyRows = Math.ceil(picture.palette.length / 8);
-  const keyTop = height - keyRows * 47 - 8;
-  const usableHeight = Math.max(56, keyTop - 116);
-  const base = Math.min((width - 28) / picture.cols, usableHeight / picture.rows);
-  const cell = Math.max(7, base * zoom);
+  const key = paletteLayout(width, height, paletteItemCount);
+  const usableHeight = Math.max(56, key.top - 112);
+  const base = Math.min((width - 24) / picture.cols, usableHeight / picture.rows);
+  const cell = Math.max(8, base * zoom);
   const boardWidth = cell * picture.cols; const boardHeight = cell * picture.rows;
-  return { x: (width - boardWidth) / 2 + panX, y: 104 + (usableHeight - boardHeight) / 2 + panY, cell, width: boardWidth, height: boardHeight };
+  return { x: (width - boardWidth) / 2 + panX, y: 102 + (usableHeight - boardHeight) / 2 + panY, cell, width: boardWidth, height: boardHeight };
 }
 export function cellAt(layout: BoardLayout, picture: PictureTemplate, x: number, y: number): number | null {
   const col = Math.floor((x - layout.x) / layout.cell); const row = Math.floor((y - layout.y) / layout.cell);

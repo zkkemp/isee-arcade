@@ -46,6 +46,9 @@ const ART_KIND: Record<GameId, ArtKind> = {
   firefly: 'adventure',
   mysteryfaces: 'tabletop',
   colorbynumber: 'candy',
+  hangman: 'words',
+  wordscramble: 'words',
+  diceroyale: 'tabletop',
 };
 
 export default function GameArtwork({

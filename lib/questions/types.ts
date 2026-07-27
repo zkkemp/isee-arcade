@@ -40,6 +40,24 @@ export type QuestionVisual = {
   }[];
 };
 
+/** Official ISEE Lower Level verbal formats. */
+export type VerbalSkill =
+  | 'synonym'
+  | 'sentence_completion_word'
+  | 'sentence_completion_phrase';
+
+/** Official ERB Reading Comprehension strands. */
+export type ReadingSkill =
+  | 'main_idea'
+  | 'supporting_ideas'
+  | 'inference'
+  | 'vocabulary_in_context'
+  | 'organization_logic'
+  | 'tone_style_figurative';
+
+/** Text genres named in the ERB Lower Level guide. */
+export type PassageGenre = 'narrative' | 'expository' | 'persuasive' | 'descriptive';
+
 export type Question = {
   /** Stable unique id, e.g. "vb-001". Never reuse across files. */
   id: string;
@@ -54,6 +72,12 @@ export type Question = {
    * serve a retry of the same shape after a wrong answer.
    */
   topic?: string;
+  /** Format metadata for ISEE Lower Level verbal coverage and auditing. */
+  verbalSkill?: VerbalSkill;
+  /** Strand metadata for ISEE Lower Level reading coverage and auditing. */
+  readingSkill?: ReadingSkill;
+  /** Genre metadata shared by every question belonging to a reading passage. */
+  passageGenre?: PassageGenre;
   prompt: string;
   /** Optional structured, non-text visual placed between prompt and answers. */
   visual?: QuestionVisual;

@@ -181,7 +181,7 @@ export function shouldOfferScratch(question: Question): boolean {
   );
 }
 
-function ScratchPaper() {
+export function ScratchPaper() {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
@@ -223,10 +223,10 @@ function ScratchPaper() {
       </div>
       <canvas
         ref={ref}
-        width={800}
-        height={230}
+        width={1200}
+        height={720}
         aria-label="Finger-drawing scratch paper"
-        className="h-32 w-full touch-none rounded-xl bg-[#fffdf4]"
+        className="h-[min(42vh,30rem)] min-h-56 w-full touch-none rounded-xl bg-[#fffdf4] shadow-inner"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
           drawing.current = true;
@@ -516,7 +516,7 @@ export default function QuestionGate({
                   {narrate && canSpeak && (
                     <button
                       type="button"
-                      onClick={() => toggleSpeech(`choice-${i}`, `${LETTERS[i]}. ${toSpeakable(choice)}`)}
+                      onClick={() => toggleSpeech(`choice-${i}`, `Choice ${LETTERS[i]}. ${toSpeakable(choice)}`)}
                       aria-label={
                         speakingKey === `choice-${i}`
                           ? `Stop reading answer ${LETTERS[i]}`

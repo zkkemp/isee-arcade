@@ -17,6 +17,9 @@ export const JUMP_SPEED = 500;
 export const TAP_JUMP_SPEED = 320;
 export const COYOTE = 0.11;
 export const JUMP_BUFFER = 0.12;
+export const QUEST_VIEW_H = WORLD_H;
+export const MIN_QUEST_VIEW_W = 260;
+export const MAX_QUEST_VIEW_W = 720;
 
 export type Biome = 'meadow' | 'cavern' | 'citadel';
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -58,6 +61,46 @@ export type Hero = Rect & {
 
 export type StepInput = { left: boolean; right: boolean; jumpPressed: boolean; jumpHeld: boolean };
 export type StepResult = { landed: boolean; headHit: boolean };
+
+/** Fill any phone/iPad stage without reserving a second, phantom controls band. */
+export function questViewport(canvasW: number, canvasH: number): { w: number; h: number; scale: number } {
+  const safeW = Math.max(1, canvasW);
+  const safeH = Math.max(1, canvasH);
+  const naturalW = QUEST_VIEW_H * (safeW / safeH);
+  const w = Math.max(MIN_QUEST_VIEW_W, Math.min(MAX_QUEST_VIEW_W, naturalW));
+  return { w, h: QUEST_VIEW_H, scale: Math.min(safeW / w, safeH / QUEST_VIEW_H) };
+}
+
+export function cameraTarget(heroX: number, viewportW: number, worldW: number): number {
+  const lead = viewportW * 0.39;
+  return Math.max(0, Math.min(Math.max(0, worldW - viewportW), heroX - lead));
+}
+
+/** Frame-rate-independent camera easing avoids the stop/start snap seen on iPad. */
+export function dampCamera(current: number, target: number, dt: number): number {
+  return current + (target - current) * (1 - Math.exp(-Math.max(0, dt) * 7.5));
+}
+
+/** Keep simulation slices small enough that a slow frame cannot tunnel through a platform. */
+export function simulationSteps(dt: number): number[] {
+  const safe = Math.max(0, Math.min(dt, 1 / 20));
+  const count = Math.max(1, Math.ceil(safe / (1 / 120)));
+  return Array(count).fill(safe / count);
+}
+
+export function questPace(levelIndex: number, difficultyScale: number): number {
+  return difficultyScale * (1 + Math.max(0, Math.min(5, levelIndex)) * 0.055);
+}
+
+export function portalTouches(hero: Rect, portal: Portal): boolean {
+  return overlaps(hero, { x: portal.x - 8, y: portal.y - 7, w: portal.w + 16, h: portal.h + 14 });
+}
+
+/** Spawn beyond the destination ring so standing still cannot bounce straight back. */
+export function portalExitX(portal: Portal, facing: -1 | 1, worldW: number): number {
+  const x = portal.toX + (facing > 0 ? portal.w + 14 : -HERO_W - 14);
+  return Math.max(0, Math.min(worldW - HERO_W, x));
+}
 
 const ground = (width: number, gaps: Array<[number, number]> = []): Rect[] => {
   const pieces: Rect[] = [];

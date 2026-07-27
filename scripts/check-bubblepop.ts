@@ -30,10 +30,12 @@ import {
   BOARD_W,
   COLS,
   DANGER_ROW,
+  LAUNCHER_X,
   MAX_AIM_FROM_VERTICAL,
   NUM_COLORS,
   POP_MIN,
   ROWS,
+  advanceProjectileFlight,
   applyLandedBubble,
   bottomReached,
   cellAt,
@@ -46,16 +48,19 @@ import {
   inBounds,
   lcg,
   layoutFor,
+  launchProjectile,
   makeGrid,
   makeRandomRow,
   neighborsOf,
   pickColor,
+  pointerToBoard,
   reflectOffWalls,
   seedInitialGrid,
   shiftGridDown,
   snapToGrid,
   type Grid,
 } from '../components/games/BubblePop';
+import { InputController } from '../lib/input';
 
 const errors: string[] = [];
 const fail = (msg: string) => {
@@ -370,6 +375,78 @@ function sameSet(a: Set<number>, b: Set<number>): boolean {
     'a tap directly on the launcher uses the safe straight-up fallback',
     Math.abs(launcherTap.vx) < 1e-9 && launcherTap.vy < -0.999,
     'the zero-length touch vector gets a friendly vertical shot',
+  );
+}
+
+// --- end-to-end iPad tap -> launch -> travel -> land -> pop -----------------
+
+{
+  // TouchOverlay can receive pointerdown and pointerup between animation
+  // frames. Reproduce that exact fast-tap order: the press edge and last
+  // coordinates must remain available when Bubble Pop's next frame runs.
+  const input = new InputController();
+  input.setPointer(0.5, 0.28, true);
+  input.setPointer(0.5, 0.28, false);
+  const pressSurvived = input.consumePointerPress();
+  const coordsSurvived = input.pointerX === 0.5 && input.pointerY === 0.28;
+
+  const canvasW = 768; const canvasH = 1024;
+  const layout = layoutFor(canvasW, canvasH, 0);
+  const aim = pointerToBoard(input.pointerX!, input.pointerY!, canvasW, canvasH, layout);
+  let projectile = launchProjectile(2, aim);
+  const launchY = projectile.y;
+  let minY = launchY;
+  let travelled = 0;
+  let landing: { x: number; y: number; color: number } | null = null;
+
+  // Two ceiling bubbles make a deterministic target. The center shot must
+  // visibly travel upward, collide, snap beside them, and complete a pop of 3.
+  const g = makeGrid();
+  g.cells[idx(0, 3)] = 2;
+  g.cells[idx(0, 4)] = 2;
+  for (let frame = 0; frame < 240 && !landing; frame += 1) {
+    const flight = advanceProjectileFlight(g, projectile, 1 / 60);
+    travelled += flight.travelled;
+    if (flight.projectile) {
+      projectile = flight.projectile;
+      minY = Math.min(minY, projectile.y);
+    } else if (flight.landing) {
+      landing = {
+        x: flight.landing.x,
+        y: flight.landing.y,
+        color: flight.landing.projectile.color,
+      };
+    }
+  }
+  const snapped = landing ? snapToGrid(g, landing.x, landing.y) : null;
+  const resolved = snapped && landing
+    ? applyLandedBubble(g, snapped.r, snapped.c, landing.color, 0)
+    : null;
+
+  selfTest(
+    'a quick iPad tap launches a bubble that visibly travels and resolves a real pop',
+    pressSurvived &&
+      coordsSurvived &&
+      projectile.vy < 0 &&
+      minY < launchY - 100 &&
+      travelled > 100 &&
+      landing !== null &&
+      snapped !== null &&
+      resolved !== null &&
+      resolved.popped.length >= 3,
+    'pointerdown+pointerup before a frame preserves the tap; the shot then moves over 100 board units before colliding, snaps to an empty cell, and pops the intended three-bubble cluster',
+  );
+
+  // This is the exact broken predicate from the previous component. It is true
+  // on the very first normal 60 Hz step, proving why every shot used to stick
+  // beside the launcher before a player could see it move.
+  const firstFrame = launchProjectile(2, { x: LAUNCHER_X, y: 0 });
+  firstFrame.y += firstFrame.vy / 60;
+  const oldBugWouldLandImmediately = firstFrame.y >= launchY - 12;
+  selfTest(
+    'the old near-launcher landing condition is caught as broken',
+    oldBugWouldLandImmediately,
+    'after one ordinary frame the projectile is still within half a cell of the launcher, so the removed predicate would incorrectly settle it immediately',
   );
 }
 

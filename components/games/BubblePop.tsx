@@ -401,8 +401,78 @@ const ROW_INTERVAL_BASE = 13;
 
 // --- game state ----------------------------------------------------------
 
-type Projectile = { x: number; y: number; vx: number; vy: number; color: number };
-type Aim = { x: number; y: number };
+export type Projectile = { x: number; y: number; vx: number; vy: number; color: number };
+export type Aim = { x: number; y: number };
+
+/** Converts the normalized coordinates produced by TouchOverlay's grid surface
+ * back into Bubble Pop's logical board coordinates. Keeping this pure makes the
+ * iPad input path testable instead of only testing the flood-fill rules. */
+export function pointerToBoard(
+  pointerX: number,
+  pointerY: number,
+  canvasW: number,
+  canvasH: number,
+  layout: Layout,
+): Aim {
+  return {
+    x: (pointerX * canvasW - layout.ox) / layout.scale,
+    y: (pointerY * canvasH - layout.oy) / layout.scale,
+  };
+}
+
+export function launchProjectile(color: number, aim: Aim): Projectile {
+  const dir = computeAimDir(aim.x - LAUNCHER_X, aim.y - LAUNCHER_Y);
+  return {
+    x: LAUNCHER_X,
+    y: LAUNCHER_Y,
+    vx: dir.vx * PROJECTILE_SPEED,
+    vy: dir.vy * PROJECTILE_SPEED,
+    color,
+  };
+}
+
+export type FlightResult = {
+  projectile: Projectile | null;
+  landing: { projectile: Projectile; x: number; y: number } | null;
+  travelled: number;
+};
+
+/**
+ * Advances one frame of projectile flight with collision-safe substeps.
+ *
+ * This deliberately has no "still near the launcher" landing condition. A
+ * previous version checked `p.y >= LAUNCHER_Y - CELL / 2` immediately after
+ * launch; every upward shot satisfies that for its first few frames, so taps
+ * appeared to do nothing because the bubble stuck at the bottom instantly.
+ */
+export function advanceProjectileFlight(grid: Grid, projectile: Projectile, dt: number): FlightResult {
+  const p = { ...projectile };
+  const dist = Math.hypot(p.vx, p.vy) * dt;
+  const steps = Math.max(1, Math.ceil(dist / (CELL * 0.4)));
+  const stepDt = dt / steps;
+  let travelled = 0;
+  for (let i = 0; i < steps; i += 1) {
+    const beforeX = p.x; const beforeY = p.y;
+    p.x += p.vx * stepDt; p.y += p.vy * stepDt;
+    travelled += Math.hypot(p.x - beforeX, p.y - beforeY);
+    const bounced = reflectOffWalls(p.x, p.vx, DRAW_R, BOARD_W);
+    p.x = bounced.x; p.vx = bounced.vx;
+
+    if (p.y - DRAW_R <= TOP_Y) {
+      return { projectile: null, landing: { projectile: p, x: p.x, y: TOP_Y + CELL / 2 }, travelled };
+    }
+
+    const near = nearestCell(p.x, p.y);
+    for (const cand of [near, ...neighborsOf(near.r, near.c)]) {
+      if (cellAt(grid, cand.r, cand.c) === null) continue;
+      const cc = cellCenter(cand.r, cand.c);
+      if (Math.hypot(p.x - cc.x, p.y - cc.y) < CELL * 0.92) {
+        return { projectile: null, landing: { projectile: p, x: p.x, y: p.y }, travelled };
+      }
+    }
+  }
+  return { projectile: p, landing: null, travelled };
+}
 
 type Spark = {
   x: number;
@@ -437,6 +507,7 @@ type State = {
   drops: Drop[];
   pops: Pop[];
   time: number;
+  shotPulse: number;
   dimAt: { w: number; h: number } | null;
 };
 
@@ -465,6 +536,7 @@ function freshState(difficulty: Difficulty, seed: number): State {
     drops: [],
     pops: [],
     time: 0,
+    shotPulse: 0,
     dimAt: null,
   };
 }
@@ -510,16 +582,10 @@ function triggerDeath(s: State, api: GameApi): void {
 
 function fireShot(s: State): void {
   if (s.projectile || !s.aim) return;
-  const dir = computeAimDir(s.aim.x - LAUNCHER_X, s.aim.y - LAUNCHER_Y);
-  s.projectile = {
-    x: LAUNCHER_X,
-    y: LAUNCHER_Y,
-    vx: dir.vx * PROJECTILE_SPEED,
-    vy: dir.vy * PROJECTILE_SPEED,
-    color: s.current,
-  };
+  s.projectile = launchProjectile(s.current, s.aim);
   s.current = s.next;
   s.next = pickColor(s.rng, s.grid);
+  s.shotPulse = 0.18;
   playSound('click');
 }
 
@@ -635,6 +701,7 @@ export default function BubblePop({
       s.time += dt;
       if (s.shake > 0) s.shake = Math.max(0, s.shake - dt * 4);
       if (s.flash > 0) s.flash = Math.max(0, s.flash - dt * 2);
+      if (s.shotPulse > 0) s.shotPulse = Math.max(0, s.shotPulse - dt);
       advanceFx(s, dt);
 
       // --- input: touch fires on press, not release --------------------------
@@ -647,12 +714,11 @@ export default function BubblePop({
       input.consumePointerRelease();
       const px = input.pointerX;
       const py = input.pointerY;
-      const bx = px === null ? null : (px * cw - layout.ox) / layout.scale;
-      const by = py === null ? null : (py * ch - layout.oy) / layout.scale;
+      const pointer = px === null || py === null ? null : pointerToBoard(px, py, cw, ch, layout);
 
       if (!s.projectile) {
-        if ((input.pointerDown || pressed) && bx !== null && by !== null) {
-          s.aim = { x: bx, y: by };
+        if ((input.pointerDown || pressed) && pointer) {
+          s.aim = pointer;
         }
         if (input.held.left || input.held.right) {
           const current = s.aim ?? { x: LAUNCHER_X, y: LAUNCHER_Y - 120 };
@@ -670,40 +736,10 @@ export default function BubblePop({
 
       // --- projectile flight, substepped so a fast shot cannot tunnel ---
       if (s.projectile) {
-        const dist = Math.hypot(s.projectile.vx, s.projectile.vy) * dt;
-        const steps = Math.max(1, Math.ceil(dist / (CELL * 0.4)));
-        const stepDt = dt / steps;
-        for (let i = 0; i < steps && s.projectile; i += 1) {
-          const p = s.projectile;
-          p.x += p.vx * stepDt;
-          p.y += p.vy * stepDt;
-          const bounced = reflectOffWalls(p.x, p.vx, DRAW_R, BOARD_W);
-          p.x = bounced.x;
-          p.vx = bounced.vx;
-
-          if (p.y - DRAW_R <= TOP_Y) {
-            stick(s, api, p, p.x, TOP_Y + CELL / 2);
-            break;
-          }
-          if (p.y >= LAUNCHER_Y - CELL * 0.5) {
-            stick(s, api, p, p.x, p.y);
-            break;
-          }
-
-          const near = nearestCell(p.x, p.y);
-          let hit = false;
-          for (const cand of [near, ...neighborsOf(near.r, near.c)]) {
-            if (cellAt(s.grid, cand.r, cand.c) === null) continue;
-            const cc = cellCenter(cand.r, cand.c);
-            if (Math.hypot(p.x - cc.x, p.y - cc.y) < CELL * 0.92) {
-              hit = true;
-              break;
-            }
-          }
-          if (hit) {
-            stick(s, api, p, p.x, p.y);
-            break;
-          }
+        const flight = advanceProjectileFlight(s.grid, s.projectile, dt);
+        s.projectile = flight.projectile;
+        if (flight.landing) {
+          stick(s, api, flight.landing.projectile, flight.landing.x, flight.landing.y);
         }
       }
 
@@ -839,14 +875,19 @@ function draw(
   // aim guide
   if (s.aim && !s.projectile) {
     const dir = computeAimDir(s.aim.x - LAUNCHER_X, s.aim.y - LAUNCHER_Y);
-    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 6]);
-    ctx.beginPath();
-    ctx.moveTo(LAUNCHER_X, LAUNCHER_Y);
-    ctx.lineTo(LAUNCHER_X + dir.vx * 200, LAUNCHER_Y + dir.vy * 200);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // Large luminous beads read much more clearly than the old faint dashed
+    // line on an iPad. The path previews the first wall bounce too.
+    let gx = LAUNCHER_X; let gy = LAUNCHER_Y;
+    let gvx = dir.vx; const gvy = dir.vy;
+    for (let dot = 1; dot <= 13; dot += 1) {
+      gx += gvx * 15; gy += gvy * 15;
+      const bounce = reflectOffWalls(gx, gvx, 3, BOARD_W);
+      gx = bounce.x; gvx = bounce.vx;
+      ctx.globalAlpha = 0.82 - dot * 0.045;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(gx, gy, dot % 3 === 0 ? 2.5 : 1.7, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // launcher + current/next preview
@@ -854,12 +895,25 @@ function draw(
   ctx.beginPath();
   ctx.arc(LAUNCHER_X, LAUNCHER_Y, DRAW_R * 1.6, 0, Math.PI * 2);
   ctx.fill();
+  if (s.shotPulse > 0) {
+    const pulse = 1 - s.shotPulse / 0.18;
+    ctx.globalAlpha = 1 - pulse;
+    ctx.strokeStyle = '#fff4a8'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(LAUNCHER_X, LAUNCHER_Y, DRAW_R * (1.3 + pulse * 1.7), 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   drawBubble(ctx, LAUNCHER_X, LAUNCHER_Y, s.current, DRAW_R);
   drawBubble(ctx, LAUNCHER_X + CELL * 1.6, LAUNCHER_Y, s.next, DRAW_R * 0.7);
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.font = `${10}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.fillText('next', LAUNCHER_X + CELL * 1.6, LAUNCHER_Y + DRAW_R + 12);
+  if (!s.projectile && s.time < 8) {
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('TAP WHERE YOU WANT TO SHOOT', LAUNCHER_X, LAUNCHER_Y + 29);
+  }
 
   // travelling bubble
   if (s.projectile) drawBubble(ctx, s.projectile.x, s.projectile.y, s.projectile.color, DRAW_R);

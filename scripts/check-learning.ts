@@ -1,6 +1,6 @@
 import { shouldOfferScratch } from '../components/QuestionGate';
 import { emptyProgress, recordAnswer } from '../lib/progress';
-import { ALL_TEMPLATES, STATIC_QUESTIONS, pickQuestion, type Question } from '../lib/questions';
+import { ALL_TEMPLATES, STATIC_QUESTIONS, familyIdsForBand, pickQuestion, type Question } from '../lib/questions';
 import { instantiate, mulberry32 } from '../lib/questions/templates';
 import { GRADE_K_TEMPLATES } from '../lib/questions/gradeK';
 import { GRADE_1_TEMPLATES } from '../lib/questions/grade1';
@@ -16,10 +16,6 @@ assert(shouldOfferScratch({ ...all.find((q) => q.subject === 'quantitative')!, d
 assert(!shouldOfferScratch({ ...STATIC_QUESTIONS[0], subject: 'verbal', difficulty: 3 }), 'verbal question must not show math scratch paper');
 const equalGroupSteps = all.filter((q) => q.id === 'mt3-003' || q.id === 'mt3-004');
 assert(equalGroupSteps.length > 0 && equalGroupSteps.every((q) => q.explain.split('\n').length === 3), 'fraction-of-whole walkthroughs must render as three visible steps');
-for (const question of all.filter((q) => q.id === 'mt3-003')) {
-  const match = question.prompt.match(/(\d+)\/(\d+)/);
-  assert(match && gcdForCheck(Number(match[1]), Number(match[2])) === 1, `${question.prompt} must use a reduced fraction`);
-}
 
 let p = emptyProgress(); p = recordAnswer(p, { id: 'vc-demo', subject: 'verbal', correct: true, vocabulary: true }); p = recordAnswer(p, { id: 'vc-demo', subject: 'verbal', correct: true, vocabulary: true });
 assert(p.vocabulary['vc-demo'].correctStreak === 2 && p.vocabulary['vc-demo'].dueAt > p.totalSeen, 'two correct vocabulary answers must create a long delay');
@@ -28,9 +24,15 @@ assert(p.vocabulary['vc-demo'].misses === 1 && p.vocabulary['vc-demo'].dueAt ===
 const oldRandom = Math.random; Math.random = () => .01;
 const picked = pickQuestion({ vocabulary: { 'vc-ab-001': { correctStreak: 0, misses: 2, dueAt: 0 } }, vocabularyClock: 0 }); Math.random = oldRandom;
 assert(picked.id === 'vc-ab-001', 'a missed vocabulary word must be prioritized');
-console.log(`Learning audit: ${all.length} explanations, ${fractions.length} fraction walkthroughs, scratch criteria, and vocabulary spacing passed.`);
-
-function gcdForCheck(a: number, b: number): number {
-  while (b !== 0) [a, b] = [b, a % b];
-  return Math.abs(a);
+const iseeIds = familyIdsForBand('isee');
+assert(
+  iseeIds.every((id) => !/^gk-|^g1-|^g3-/.test(id)),
+  'a younger-grade question leaked into the ISEE bank',
+);
+for (const band of ['k', 'grade1', 'grade3'] as const) {
+  assert(
+    familyIdsForBand(band).every((id) => id.startsWith(band === 'k' ? 'gk-' : band === 'grade1' ? 'g1-' : 'g3-')),
+    `${band} contains an out-of-band question`,
+  );
 }
+console.log(`Learning audit: ${all.length} explanations, ${fractions.length} fraction walkthroughs, scratch criteria, and vocabulary spacing passed.`);

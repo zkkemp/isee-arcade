@@ -927,22 +927,30 @@ export const MATH_TEMPLATES_2: QuestionTemplate[] = [
     difficulty: 2,
     topic: 'true comparison statement',
     generate: (rng) => {
-      const dc = pick(rng, [3, 4, 5]);
-      const lo = 10 ** (dc - 1);
-      const hi = 10 ** dc - 1;
-      const [A, B] = distinctInts(rng, 2, lo, hi);
-      const bigger = A > B;
-      const correct = bigger ? `${commas(A)} > ${commas(B)}` : `${commas(A)} < ${commas(B)}`;
+      // The symbols themselves are foundational, but an on-level ISEE item
+      // should require work before comparing. Each side is an expression rather
+      // than a pair of bare numbers a younger learner could answer by inspection.
+      const a = randInt(rng, 4, 12);
+      const b = randInt(rng, 3, 9);
+      const c = randInt(rng, 4, 12);
+      let d = randInt(rng, 3, 9);
+      if (a * b === c * d) d = d === 9 ? d - 1 : d + 1;
+      const left = a * b;
+      const right = c * d;
+      const bigger = left > right;
+      const leftText = `${a} x ${b}`;
+      const rightText = `${c} x ${d}`;
+      const correct = bigger ? `${leftText} > ${rightText}` : `${leftText} < ${rightText}`;
       const { choices, answer } = buildChoices(rng, correct, [
-        bigger ? `${commas(A)} < ${commas(B)}` : `${commas(A)} > ${commas(B)}`,
-        `${commas(A)} = ${commas(B)}`,
-        bigger ? `${commas(B)} > ${commas(A)}` : `${commas(B)} < ${commas(A)}`,
+        bigger ? `${leftText} < ${rightText}` : `${leftText} > ${rightText}`,
+        `${leftText} = ${rightText}`,
+        bigger ? `${rightText} > ${leftText}` : `${rightText} < ${leftText}`,
       ]);
       return {
         prompt: `Which statement is true?`,
         choices,
         answer,
-        explain: `${commas(A)} is ${bigger ? 'greater' : 'less'} than ${commas(B)}, so the true statement is ${correct}.`,
+        explain: `Work out both sides first: ${leftText} = ${left}, and ${rightText} = ${right}. Since ${left} is ${bigger ? 'greater' : 'less'} than ${right}, the true statement is ${correct}.`,
       };
     },
   },

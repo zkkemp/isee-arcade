@@ -51,7 +51,7 @@ export const MAX_BONUS_MS = 5 * 60_000;
  * One reading passage turns up per block (about one draw in eight, never twice).
  * It counts as a single question like any other - there is no shortcut for
  * getting it right. The incentive to actually read is a penalty instead of a
- * reward: MISSING the reading question adds two more questions to the block (see
+ * reward: MISSING the reading question adds five more questions to the block (see
  * READING_MISS_PENALTY in GameShell). A wrong guess on a passage therefore costs
  * more than a wrong guess on a synonym, which is the whole point - it makes
  * skimming the passage the expensive move. The added questions do not have to be

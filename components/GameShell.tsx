@@ -52,7 +52,7 @@ const WRONG_STREAK_PENALTY = 3;
  * incentive to actually read is that skimming it and guessing wrong costs two
  * extra questions, more than any other miss.
  */
-const READING_MISS_PENALTY = 2;
+const READING_MISS_PENALTY = 5;
 
 /**
  * Odds that a freshly drawn question is a reading passage. About one in eight, on

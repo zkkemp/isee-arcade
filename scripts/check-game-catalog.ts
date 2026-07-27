@@ -47,8 +47,13 @@ for (const [, , componentName] of mappedIds) {
   const fileName = imports.get(componentName);
   if (!fileName) fail(`missing game import for ${componentName}`);
   const source = readFileSync(resolve(`components/games/${fileName}.tsx`), 'utf8');
-  if (!source.includes('<canvas')) fail(`${fileName} has no game canvas`);
-  if (!source.includes('h-full') || !source.includes('w-full') || !source.includes('touch-none')) {
+  const canvasGame = source.includes('<canvas');
+  const fullDomGame = source.includes('className="absolute inset-0');
+  if (!canvasGame && !fullDomGame) fail(`${fileName} has no full-stage game surface`);
+  if (
+    canvasGame &&
+    (!source.includes('h-full') || !source.includes('w-full') || !source.includes('touch-none'))
+  ) {
     fail(`${fileName} canvas does not fill the touch stage`);
   }
 }
@@ -62,4 +67,4 @@ if (recent[0] === newest || new Set(recent).size !== recent.length) {
   fail('replaying a game must move it to the front without duplication');
 }
 
-console.log(`Game catalog verified: ${allIds.length} routed, categorized, full-canvas games; recent shelf capped at 6.`);
+console.log(`Game catalog verified: ${allIds.length} routed, categorized, full-stage games; recent shelf capped at 6.`);

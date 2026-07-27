@@ -171,15 +171,10 @@ export const MATH_TEMPLATES_3: QuestionTemplate[] = [
       const d = pick(rng, [3, 4, 5, 6]);
       const k = randInt(rng, 2, 3);
       const w = d * k;
-      // This family teaches "a fraction of a whole," not simplification. Keep
-      // the prompt fraction reduced so 3/6 does not look like an accidental
-      // trick; equivalent-fraction practice belongs in its own clearly named
-      // question family.
-      const reducedNumerators = Array.from(
-        { length: d - 2 },
-        (_, index) => index + 2,
-      ).filter((candidate) => gcd(candidate, d) === 1);
-      const n = pick(rng, reducedNumerators);
+      // Equivalent fractions are fair game on the Lower Level ISEE. Leaving
+      // forms such as 3/6 unreduced checks whether the learner understands the
+      // fraction's value instead of relying on a familiar-looking form.
+      const n = randInt(rng, 2, d - 1);
       const result = n * k;
       const correct = num(result);
       const { choices, answer } = buildChoices(rng, correct, [

@@ -45,6 +45,9 @@ import StarfallSquadron from './games/StarfallSquadron';
 import FireflyOrbit from './games/FireflyOrbit';
 import MysteryFaces from './games/MysteryFaces';
 import ColorByNumber from './games/ColorByNumber';
+import Hangman from './games/Hangman';
+import WordScramble from './games/WordScramble';
+import DiceRoyale from './games/DiceRoyale';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 import { recordRecentlyPlayed } from '@/lib/recentGames';
 
@@ -96,6 +99,9 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   firefly: FireflyOrbit,
   mysteryfaces: MysteryFaces,
   colorbynumber: ColorByNumber,
+  hangman: Hangman,
+  wordscramble: WordScramble,
+  diceroyale: DiceRoyale,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {
