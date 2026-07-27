@@ -105,6 +105,20 @@ body {
   transform: scale(1.08);
 }
 
+.recent-games-grid {
+  scrollbar-color: rgba(103, 232, 249, 0.28) transparent;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+}
+
+.recent-game-card {
+  scroll-snap-align: start;
+}
+
+.recent-game-card .game-art {
+  height: 5.5rem;
+}
+
 .game-category {
   --category-accent: #a78bfa;
   box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.12);

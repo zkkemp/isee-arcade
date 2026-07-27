@@ -20,6 +20,8 @@ export type Attempt = {
   subject: Subject;
   correct: boolean;
 };
+/** Per-profile spaced vocabulary state. `dueAt` is measured in later attempts. */
+export type VocabularyMastery = { correctStreak: number; misses: number; dueAt: number };
 
 export type Progress = {
   bySubject: Record<Subject, SubjectStat>;
@@ -34,6 +36,7 @@ export type Progress = {
   streak: number;
   bestStreak: number;
   history: Attempt[];
+  vocabulary: Record<string, VocabularyMastery>;
 };
 
 const EMPTY_SUBJECTS: Record<Subject, SubjectStat> = {
@@ -54,6 +57,7 @@ export function emptyProgress(): Progress {
     streak: 0,
     bestStreak: 0,
     history: [],
+    vocabulary: {},
   };
 }
 
@@ -70,6 +74,7 @@ function hydrate(raw: unknown): Progress {
     mastered: [...(p.mastered ?? [])],
     highScores: { ...(p.highScores ?? {}) },
     history: [...(p.history ?? [])],
+    vocabulary: { ...(p.vocabulary ?? {}) },
   };
 }
 
@@ -104,15 +109,16 @@ export function resetProgress(): void {
 /** Records one answered question and returns the updated progress. */
 export function recordAnswer(
   prev: Progress,
-  args: { id: string; subject: Subject; correct: boolean },
+  args: { id: string; subject: Subject; correct: boolean; vocabulary?: boolean },
 ): Progress {
-  const { id, subject, correct } = args;
+  const { id, subject, correct, vocabulary = false } = args;
   const next: Progress = {
     ...prev,
     bySubject: { ...prev.bySubject },
     missed: { ...prev.missed },
     mastered: [...prev.mastered],
     history: [...prev.history],
+    vocabulary: { ...prev.vocabulary },
   };
 
   const stat = next.bySubject[subject] ?? { seen: 0, correct: 0 };
@@ -146,6 +152,17 @@ export function recordAnswer(
   next.history.push({ t: Date.now(), id, subject, correct });
   if (next.history.length > HISTORY_CAP) {
     next.history = next.history.slice(-HISTORY_CAP);
+  }
+  if (vocabulary) {
+    const prior = next.vocabulary[id] ?? { correctStreak: 0, misses: 0, dueAt: 0 };
+    if (correct) {
+      const correctStreak = prior.correctStreak + 1;
+      // Two correct encounters graduate a word for a long interval. It remains
+      // available later, but stops crowding out words that need attention now.
+      next.vocabulary[id] = { correctStreak, misses: Math.max(0, prior.misses - 1), dueAt: correctStreak >= 2 ? next.totalSeen + 28 : next.totalSeen + 5 };
+    } else {
+      next.vocabulary[id] = { correctStreak: 0, misses: Math.min(4, prior.misses + 1), dueAt: next.totalSeen };
+    }
   }
   return next;
 }

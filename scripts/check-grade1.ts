@@ -69,11 +69,10 @@ const SHAPE_SIDES: Record<string, number> = {
 };
 
 const independentChecks: Record<string, (g: GeneratedQuestion, at: string) => void> = {
-  // Independent of the template's own `n`: count the marks in the rendered
-  // prompt with a plain regex match, and check that count against the
-  // answer choice.
-  'g1-001': (g, at) => checkMarkCount(g, at),
-  'g1-002': (g, at) => checkMarkCount(g, at),
+  // Independent of the template's own `n`: count the structured picture
+  // objects and check that count against the answer choice.
+  'g1-001': (g, at) => checkPictureCount(g, at),
+  'g1-002': (g, at) => checkPictureCount(g, at),
   'g1-003': (g, at) => checkArith(g, at, /What is (\d+) plus (\d+)\?/, (a, b) => a + b),
   'g1-004': (g, at) => checkArith(g, at, /What is (\d+) plus (\d+)\?/, (a, b) => a + b),
   'g1-005': (g, at) =>
@@ -249,10 +248,11 @@ function checkArith3(
   assertAnswer(g, at, fn(Number(m[1]), Number(m[2]), Number(m[3])));
 }
 
-function checkMarkCount(g: GeneratedQuestion, at: string) {
-  const marks = g.prompt.match(/\*/g);
-  if (!marks) return fail(`${at}: expected "*" marks in the prompt, found none: ${g.prompt}`);
-  assertAnswer(g, at, marks.length);
+function checkPictureCount(g: GeneratedQuestion, at: string) {
+  if (g.visual?.kind !== 'counting' || g.visual.groups.length !== 1) {
+    return fail(`${at}: expected one structured counting-picture group`);
+  }
+  assertAnswer(g, at, g.visual.groups[0].count);
 }
 
 let instancesChecked = 0;

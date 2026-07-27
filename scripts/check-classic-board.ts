@@ -1,5 +1,5 @@
 import { newReversi, flipsFor, legalReversiMoves, playReversi } from '../components/games/Reversi';
-import { allCheckersHome, newBackgammon, bgLegalMoves, playBg } from '../components/games/Backgammon';
+import { allCheckersHome, canBearOff, newBackgammon, bgLegalMoves, playBg } from '../components/games/Backgammon';
 import { seaBoard, seaCpuShot, seaWon, shootSea } from '../components/games/SeaBattle';
 function ok(v:boolean,m:string){if(!v)throw new Error(m)}
 const r=newReversi();ok(legalReversiMoves(r,1).length===4,'Reversi opening moves');const f=flipsFor(r,1,19);ok(f.length===1,'Reversi flip');ok(playReversi(r,1,19)[27]===1,'Reversi applies flip');
@@ -8,4 +8,18 @@ ok(!allCheckersHome(b,0),'Backgammon cannot bear off from the opening setup');
 const home={...newBackgammon(),points:Array(12).fill(0),bar:[0,0] as [number,number]};home.points[11]=5;
 ok(allCheckersHome(home,0),'Backgammon recognizes a complete home board');
 ok(bgLegalMoves(home,0,1).some(([,to])=>to>11),'Backgammon allows bearing off from home');
+const blocked={...newBackgammon(),points:Array(12).fill(0),bar:[0,0] as [number,number]};blocked.points[0]=1;blocked.points[1]=-2;
+ok(bgLegalMoves(blocked,0,1).length===0,'Backgammon blocks a point with two opponents');
+const blot={...newBackgammon(),points:Array(12).fill(0),bar:[0,0] as [number,number]};blot.points[0]=1;blot.points[1]=-1;
+const hit=playBg(blot,0,0,1);ok(hit.points[1]===1&&hit.bar[1]===1,'Backgammon hits a lone opposing checker to the bar');
+const barFirst={...newBackgammon(),bar:[1,0] as [number,number]};
+ok(bgLegalMoves(barFirst,0,1).every(([from])=>from===-1),'Backgammon forces bar entry before any board checker');
+const blockedEntry={...barFirst,points:[...barFirst.points]};blockedEntry.points[0]=-2;
+ok(bgLegalMoves(blockedEntry,0,1).length===0,'Backgammon prevents bar entry onto a blocked point');
+const overshoot={...newBackgammon(),points:Array(12).fill(0),bar:[0,0] as [number,number]};overshoot.points[9]=1;overshoot.points[10]=1;
+ok(canBearOff(overshoot,0,9,3)&&!canBearOff(overshoot,0,10,3),'Backgammon only permits the furthest checker to overshoot');
+const exactWhite={...newBackgammon(),points:Array(12).fill(0),bar:[0,0] as [number,number]};exactWhite.points[9]=1;exactWhite.points[11]=1;
+ok(canBearOff(exactWhite,0,9,3),'Backgammon always permits an exact white bear-off even with a farther checker');
+const exactInk={...newBackgammon(),points:Array(12).fill(0),bar:[0,0] as [number,number]};exactInk.points[0]=-1;exactInk.points[2]=-1;
+ok(canBearOff(exactInk,1,2,3),'Backgammon always permits an exact ink bear-off even with a farther checker');
 const s=seaBoard([[0,1],[7]]);ok(shootSea(s,0).hit,'Sea hit');ok(!shootSea(shootSea(s,0).board,0).legal,'Sea prevents repeat');ok(seaCpuShot(s)!==null,'Sea CPU chooses an unknown square');let q=s;[0,1,7].forEach(i=>q=shootSea(q,i).board);ok(seaWon(q),'Sea win');console.log('Classic board rules passed.');

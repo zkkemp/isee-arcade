@@ -200,6 +200,8 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       recentPassageIds: seenPassagesRef.current,
       missed: p.missed,
       recentAccuracy: recentAccuracy(p),
+      vocabulary: p.vocabulary,
+      vocabularyClock: p.totalSeen,
       sameKindAs: retryOf,
       forceKind: wantReading ? 'reading' : null,
       avoidKind: avoid.length > 0 ? avoid : null,
@@ -396,6 +398,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         id: g.question.id,
         subject: g.question.subject,
         correct,
+        vocabulary: g.question.kind === 'synonym',
       });
       progressRef.current = updated;
       setProgress(updated);

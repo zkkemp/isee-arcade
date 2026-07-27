@@ -13,7 +13,7 @@ type Rock = { x: number; y: number; vx: number; vy: number; r: number; spin: num
 type Shot = { x: number; y: number; vx: number; vy: number; life: number };
 type State = {
   x: number; y: number; vx: number; vy: number; angle: number;
-  rocks: Rock[]; shots: Shot[]; wave: number; lives: number; fire: number; inv: number; time: number;
+  rocks: Rock[]; shots: Shot[]; wave: number; lives: number; fire: number; inv: number; time: number; thrust: number;
 };
 
 const ROCK_SPEED: Record<Difficulty, number> = { easy: 0.72, normal: 1, hard: 1.3 };
@@ -34,15 +34,19 @@ export function splitRock(rock: Rock): Rock[] {
   }));
 }
 
-function makeWave(wave: number): Rock[] {
-  const count = Math.min(10, 3 + wave);
+export function makeWave(wave: number): Rock[] {
+  // Waves rise in variety rather than ballooning into thirty tiny rocks. This
+  // keeps a field clearable with the large, forgiving iPad controls.
+  const count = Math.min(7, 2 + Math.ceil(wave * 0.65));
   return Array.from({ length: count }, (_, i) => {
     const side = i % 4;
+    const rawX = ((i * 37) % 75) - 37;
+    const rawY = ((i * 53) % 75) - 37;
     return {
       x: side === 0 ? 12 : side === 1 ? W - 12 : 45 + ((i * 83) % (W - 90)),
       y: side === 2 ? 18 : side === 3 ? H - 18 : 55 + ((i * 117) % (H - 110)),
-      vx: ((i * 37) % 75) - 37,
-      vy: ((i * 53) % 75) - 37,
+      vx: rawX === 0 ? 32 : rawX,
+      vy: rawY === 0 ? -29 : rawY,
       r: 22 + (i % 3) * 5,
       spin: i * 0.7,
     };
@@ -50,7 +54,7 @@ function makeWave(wave: number): Rock[] {
 }
 
 function fresh(): State {
-  return { x: W / 2, y: H / 2, vx: 0, vy: 0, angle: -Math.PI / 2, rocks: makeWave(1), shots: [], wave: 1, lives: 3, fire: 0, inv: 1.5, time: 0 };
+  return { x: W / 2, y: H / 2, vx: 0, vy: 0, angle: -Math.PI / 2, rocks: makeWave(1), shots: [], wave: 1, lives: 3, fire: 0, inv: 1.5, time: 0, thrust: 0 };
 }
 
 function near(a: { x: number; y: number }, b: { x: number; y: number }, d: number) {
@@ -69,18 +73,37 @@ export default function AsteroidPatrol({ paused, input, api, restartToken, diffi
       const playH = Math.max(180, ch - controlsInset);
       s.time += dt;
       s.inv = Math.max(0, s.inv - dt);
+      s.thrust = Math.max(0, s.thrust - dt);
       s.fire -= dt;
+      // Desktop holds a key, while the shared iPad D-pad intentionally sends
+      // discrete taps. Supporting both makes every labelled control real.
+      const tap = input.consumeTap();
+      const jump = input.consumeJump();
       if (input.held.left) s.angle -= 3.5 * dt;
       if (input.held.right) s.angle += 3.5 * dt;
-      if (input.held.up) {
+      if (tap === 'left') s.angle -= 0.34;
+      if (tap === 'right') s.angle += 0.34;
+      const wantsThrust = input.held.up || tap === 'up';
+      const wantsBrake = input.held.down || tap === 'down';
+      if (wantsThrust) {
         s.vx += Math.cos(s.angle) * 105 * dt;
         s.vy += Math.sin(s.angle) * 105 * dt;
+        // A tap is deliberately a small engine burst rather than a one-frame
+        // sample, otherwise the touch pad could never steer the ship far enough.
+        if (tap === 'up') {
+          s.vx += Math.cos(s.angle) * 18;
+          s.vy += Math.sin(s.angle) * 18;
+        }
+        s.thrust = 0.12;
       }
-      if (input.held.down) {
+      if (wantsBrake) {
         s.vx *= Math.pow(0.12, dt);
         s.vy *= Math.pow(0.12, dt);
+        if (tap === 'down') { s.vx *= 0.62; s.vy *= 0.62; }
       }
-      if ((input.held.up || input.consumeJump()) && s.fire <= 0) {
+      // Thrust doubles as friendly auto-fire. Keyboard Space/Z still fires
+      // directly, so neither control scheme needs a tiny extra button.
+      if ((wantsThrust || jump) && s.fire <= 0) {
         s.fire = 0.22;
         s.shots.push({ x: s.x + Math.cos(s.angle) * 16, y: s.y + Math.sin(s.angle) * 16, vx: s.vx + Math.cos(s.angle) * 300, vy: s.vy + Math.sin(s.angle) * 300, life: 1.15 });
         playSound('click');
@@ -101,7 +124,7 @@ export default function AsteroidPatrol({ paused, input, api, restartToken, diffi
       }
       const spawned: Rock[] = [];
       for (const shot of s.shots) {
-        const rock = s.rocks.find((candidate) => near(shot, candidate, candidate.r + 3));
+        const rock = s.rocks.find((candidate) => candidate.r > 0 && near(shot, candidate, candidate.r + 3));
         if (!rock) continue;
         shot.life = 0;
         const wasLarge = rock.r > 18;
@@ -158,6 +181,8 @@ function draw(ctx: CanvasRenderingContext2D, s: State, cw: number, ch: number, p
   ctx.fillStyle = '#8cf5ff'; ctx.textAlign = 'left'; ctx.fillText(`FIELD ${s.wave}`, 25, 32);
   ctx.fillStyle = '#fff4b4'; ctx.textAlign = 'center'; ctx.fillText(`${s.rocks.length} ROCKS`, W / 2, 32);
   ctx.fillStyle = '#ff8da8'; ctx.textAlign = 'right'; ctx.fillText('♥'.repeat(s.lives), W - 24, 32);
+  ctx.textAlign = 'center'; ctx.font = '800 11px ui-rounded, system-ui, sans-serif'; ctx.fillStyle = 'rgba(225,244,255,.88)';
+  ctx.fillText('◀ ▶ TURN   •   ▲ THRUST + AUTO-FIRE   •   ▼ BRAKE', W / 2, H - 18);
   ctx.restore();
   ctx.fillStyle = '#030512'; ctx.fillRect(0, playH, cw, Math.max(0, ch - playH));
 }
@@ -182,5 +207,8 @@ function drawShip(ctx: CanvasRenderingContext2D, s: State) {
   ctx.shadowColor = '#74e9ff'; ctx.shadowBlur = 12; ctx.fillStyle = '#e8fbff';
   ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-12, -11); ctx.lineTo(-7, 0); ctx.lineTo(-12, 11); ctx.closePath(); ctx.fill();
   ctx.shadowBlur = 0; ctx.fillStyle = '#57bde9'; ctx.beginPath(); ctx.arc(1, 0, 4, 0, TAU); ctx.fill();
+  if (s.thrust > 0) {
+    ctx.fillStyle = '#ffd56b'; ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(-23 - Math.sin(s.time * 35) * 4, 0); ctx.lineTo(-10, 5); ctx.closePath(); ctx.fill();
+  }
   ctx.restore();
 }

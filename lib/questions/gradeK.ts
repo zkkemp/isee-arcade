@@ -6,15 +6,16 @@ import {
   type QuestionTemplate,
   type Rng,
 } from './templates';
+import type { CountingPictureItem } from './types';
 
 /**
  * Kindergarten question bank, rewritten for a child ENTERING kindergarten who
  * cannot read yet (~5 years old).
  *
  * The player app reads every prompt and every choice ALOUD (text-to-speech)
- * for this profile, and shows any "* * *"-style marks on screen. So a
+ * for this profile, and shows large structured picture groups on screen. So a
  * non-reader answers by LISTENING to the question and the choices, and/or by
- * LOOKING at the marks, then tapping the numbered choice they heard. That
+ * LOOKING at the pictures, then tapping the numbered choice they heard. That
  * drives every design rule below:
  *
  *   - Prompts are natural spoken sentences a grown-up would say out loud —
@@ -22,9 +23,9 @@ import {
  *   - Choices are always SHORT: a single number, a single color word, a
  *     single shape word, or one other short word. Long phrases are hard to
  *     tell apart by ear, so none are used as choices here.
- *   - Anything that needs a visible count puts the countable marks directly
- *     in the prompt (e.g. "How many stars? * * * *") — those marks render on
- *     screen; everything else is answerable purely by ear.
+ *   - Anything that needs a visible count carries structured `visual` data.
+ *     QuestionGate renders those objects as large, spaced pictures; everything
+ *     else is answerable purely by ear.
  *   - Nothing requires reading a word's letters to answer. Rhyming and
  *     first-sound questions are about SOUND, not letter shapes.
  *
@@ -110,10 +111,25 @@ const FIRST_SOUND_GROUPS: string[][] = [
   ['zip', 'zoo'],
 ];
 
-/** "* * * *" — n copies of mark, space separated, for things a kid can count on screen. */
-function repeatMark(mark: string, n: number): string {
-  return Array.from({ length: n }, () => mark).join(' ');
-}
+const GROUP_PICTURES: Record<(typeof GROUP_ITEMS)[number], CountingPictureItem> = {
+  pigs: 'pig',
+  ducks: 'duck',
+  frogs: 'frog',
+  bees: 'bee',
+  cats: 'cat',
+  dogs: 'dog',
+  birds: 'bird',
+  fish: 'fish',
+};
+
+const ADD_PICTURES: Record<(typeof ADD_ITEMS)[number], CountingPictureItem> = {
+  apples: 'apple',
+  balloons: 'balloon',
+  ducks: 'duck',
+  blocks: 'block',
+  crayons: 'crayon',
+  cookies: 'cookie',
+};
 
 /** Fisher-Yates on a copy, so the source array is never mutated. */
 function shuffle<T>(rng: Rng, items: readonly T[]): T[] {
@@ -142,7 +158,6 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     topic: 'count small groups',
     generate: (rng) => {
       const n = randInt(rng, 3, 6);
-      const marks = repeatMark('*', n);
       const correct = num(n);
       // n-2, n-1, n+1, n+2 are four offsets from n that are pairwise distinct
       // for every n in [3,6] and never negative (smallest is n-2 >= 1).
@@ -153,10 +168,11 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         num(n - 2),
       ]);
       return {
-        prompt: `How many stars are there? ${marks}`,
+        prompt: 'How many stars are in the picture?',
+        visual: { kind: 'counting', groups: [{ item: 'star', count: n }] },
         choices,
         answer,
-        explain: `Count each star one at a time: ${marks} is ${n} stars.`,
+        explain: `Touch each star with your eyes and count one at a time. There are ${n} stars.`,
       };
     },
   },
@@ -168,7 +184,6 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
     topic: 'count groups to ten',
     generate: (rng) => {
       const n = randInt(rng, 5, 10);
-      const marks = repeatMark('o', n);
       const correct = num(n);
       const { choices, answer } = buildChoices(rng, correct, [
         num(n - 1),
@@ -177,10 +192,11 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         num(n + 2),
       ]);
       return {
-        prompt: `How many circles are there? ${marks}`,
+        prompt: 'How many bright circles are in the picture?',
+        visual: { kind: 'counting', groups: [{ item: 'circle', count: n }] },
         choices,
         answer,
-        explain: `Counting one by one, there are ${n} circles.`,
+        explain: `Point to each circle and count it once. There are ${n} circles.`,
       };
     },
   },
@@ -349,8 +365,6 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
       const b = randInt(rng, 1, 5 - a);
       const sum = a + b;
       const item = pick(rng, ADD_ITEMS);
-      const marksA = repeatMark('*', a);
-      const marksB = repeatMark('*', b);
       const correct = num(sum);
       const { choices, answer } = buildChoices(rng, correct, [
         num(sum + 1),
@@ -358,7 +372,14 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         num(Math.abs(a - b)),
       ]);
       return {
-        prompt: `Here are ${a} ${item}: ${marksA}. Here are ${b} more ${item}: ${marksB}. How many ${item} are there in all?`,
+        prompt: `Count both groups of ${item}. How many ${item} are there in all?`,
+        visual: {
+          kind: 'counting',
+          groups: [
+            { label: 'First group', item: ADD_PICTURES[item], count: a },
+            { label: 'Second group', item: ADD_PICTURES[item], count: b },
+          ],
+        },
         choices,
         answer,
         explain: `${a} ${item} and ${b} more ${item} make ${sum} ${item} in all.`,
@@ -389,7 +410,14 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
       // GROUP_ITEMS, so all four are pairwise distinct.
       const { choices, answer } = buildChoices(rng, correct, [loser, extra1, extra2]);
       return {
-        prompt: `Here are ${itemA}: ${repeatMark('*', countA)}. Here are ${itemB}: ${repeatMark('*', countB)}. Which has ${askMore ? 'more' : 'fewer'} -- the ${itemA} or the ${itemB}?`,
+        prompt: `Which picture has ${askMore ? 'more' : 'fewer'} animals: the ${itemA} or the ${itemB}?`,
+        visual: {
+          kind: 'counting',
+          groups: [
+            { label: itemA, item: GROUP_PICTURES[itemA], count: countA },
+            { label: itemB, item: GROUP_PICTURES[itemB], count: countB },
+          ],
+        },
         choices,
         answer,
         explain: `There are ${countA} ${itemA} and ${countB} ${itemB}, so the ${correct} have ${askMore ? 'more' : 'fewer'}.`,
@@ -416,7 +444,14 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         OPTIONS.filter((o) => o !== correct),
       );
       return {
-        prompt: `Look at these two groups: ${repeatMark('*', countA)} and ${repeatMark('*', countB)}. Is that the same number of stars, or a different number?`,
+        prompt: 'Do these two pictures have the same number of stars, or different numbers?',
+        visual: {
+          kind: 'counting',
+          groups: [
+            { label: 'First group', item: 'star', count: countA },
+            { label: 'Second group', item: 'star', count: countB },
+          ],
+        },
         choices,
         answer,
         explain:
@@ -753,7 +788,14 @@ export const GRADE_K_TEMPLATES: QuestionTemplate[] = [
         num(a),
       ]);
       return {
-        prompt: `Count the two groups of stars: ${repeatMark('*', a)} and ${repeatMark('*', b)}. How many stars are there altogether?`,
+        prompt: 'Count both groups of stars. How many stars are there altogether?',
+        visual: {
+          kind: 'counting',
+          groups: [
+            { label: 'First group', item: 'star', count: a },
+            { label: 'Second group', item: 'star', count: b },
+          ],
+        },
         choices,
         answer,
         explain: `Count both groups: ${a} stars and ${b} stars make ${total} stars.`,

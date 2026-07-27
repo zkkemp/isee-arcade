@@ -1,4 +1,4 @@
-import type { Question, QuestionKind, Subject } from './types';
+import type { Question, QuestionKind, QuestionVisual, Subject } from './types';
 
 /**
  * Templated questions.
@@ -17,6 +17,7 @@ export type Rng = () => number;
 
 export type GeneratedQuestion = {
   prompt: string;
+  visual?: QuestionVisual;
   choices: [string, string, string, string];
   answer: 0 | 1 | 2 | 3;
   explain: string;
@@ -105,6 +106,7 @@ export function instantiate(template: QuestionTemplate, rng: Rng = Math.random):
     kind: template.kind,
     topic: template.topic,
     prompt: g.prompt,
+    visual: g.visual,
     choices: g.choices,
     answer: g.answer,
     explain: g.explain,

@@ -44,6 +44,8 @@ const ART_KIND: Record<GameId, ArtKind> = {
   skystack: 'blocks',
   starfall: 'arena',
   firefly: 'adventure',
+  mysteryfaces: 'tabletop',
+  colorbynumber: 'candy',
 };
 
 export default function GameArtwork({

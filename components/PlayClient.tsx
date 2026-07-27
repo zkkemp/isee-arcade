@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import GameShell from './GameShell';
 import Frogger from './games/Frogger';
 import SnakeV2 from './games/SnakeV2';
@@ -42,7 +43,10 @@ import SpellingZap from './games/SpellingZap';
 import SkyStack from './games/SkyStack';
 import StarfallSquadron from './games/StarfallSquadron';
 import FireflyOrbit from './games/FireflyOrbit';
+import MysteryFaces from './games/MysteryFaces';
+import ColorByNumber from './games/ColorByNumber';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
+import { recordRecentlyPlayed } from '@/lib/recentGames';
 
 /**
  * Maps a game id to its canvas component. Lives on the client because a
@@ -90,8 +94,14 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   skystack: SkyStack,
   starfall: StarfallSquadron,
   firefly: FireflyOrbit,
+  mysteryfaces: MysteryFaces,
+  colorbynumber: ColorByNumber,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {
+  useEffect(() => {
+    recordRecentlyPlayed(game);
+  }, [game]);
+
   return <GameShell meta={GAMES[game]} Game={COMPONENTS[game]} />;
 }

@@ -168,7 +168,8 @@ for (const t of ALL_TEMPLATES) {
     if (/undefined|NaN|Infinity/.test(rendered)) {
       fail(`${at}: rendered "${rendered.slice(0, 120)}"`);
     }
-    if (/[^\x20-\x7E]/.test(rendered)) fail(`${at}: non-ASCII in rendered text`);
+    // Newlines intentionally separate child-friendly explanation steps.
+    if (/[^\x0A\x20-\x7E]/.test(rendered)) fail(`${at}: non-ASCII in rendered text`);
   }
 
   // Regenerating must actually change the numbers, or memorization still works.

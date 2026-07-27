@@ -833,7 +833,7 @@ export const GRADE_3_TEMPLATES: QuestionTemplate[] = [
         prompt: `${line} How many more kids picked ${fruits[maxIdx]} than ${fruits[minIdx]}?`,
         choices,
         answer,
-        explain: `${counts[maxIdx]} - ${counts[minIdx]} = ${correct}.`,
+        explain: `Find the tallest bar (${counts[maxIdx]}) and the shortest bar (${counts[minIdx]}). Subtract: ${counts[maxIdx]} - ${counts[minIdx]} = ${correct}.`,
       };
     },
   },

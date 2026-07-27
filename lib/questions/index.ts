@@ -1,4 +1,5 @@
 import type { Question, QuestionKind, Subject } from './types';
+import type { VocabularyMastery } from '../progress';
 import { instantiate, type QuestionTemplate } from './templates';
 import { VERBAL_QUESTIONS } from './verbal';
 import { READING_QUESTIONS } from './reading';
@@ -165,6 +166,10 @@ export type PickArgs = {
   missed?: Record<string, number>;
   /** Recent accuracy 0..1, or null when there is not enough data yet. */
   recentAccuracy?: number | null;
+  /** Per-profile vocabulary spacing. Missed words are urgent; twice-correct words wait. */
+  vocabulary?: Record<string, VocabularyMastery>;
+  /** Attempt count used as the vocabulary spacing clock. */
+  vocabularyClock?: number;
   /**
    * Set when the player just got a question wrong. The next question must be of
    * the same kind so they practice the thing they missed rather than skating to
@@ -199,6 +204,8 @@ export function pickQuestion(args: PickArgs = {}): Question {
     recentPassageIds = [],
     missed = {},
     recentAccuracy = null,
+    vocabulary = {},
+    vocabularyClock = 0,
     sameKindAs = null,
     avoidKind = null,
     forceKind = null,
@@ -266,7 +273,14 @@ export function pickQuestion(args: PickArgs = {}): Question {
   // A re-read passage is worse than a repeated family, so drop already-read
   // passages first when that still leaves something to serve.
   const passageOk = inScope.filter((c) => !c.passageId || !usedPassages.has(c.passageId));
-  const scope = passageOk.length > 0 ? passageOk : inScope;
+  let scope = passageOk.length > 0 ? passageOk : inScope;
+  // Vocabulary is a separate spacing lane: a missed synonym comes back before
+  // unfamiliar words, while a word answered twice stays at the bottom until its
+  // long delay has elapsed. This is per profile because Progress is namespaced.
+  const urgentWords = scope.filter((c) => c.kind === 'synonym' && (vocabulary[c.id]?.misses ?? 0) > 0);
+  if (urgentWords.length > 0 && Math.random() < 0.6) return pickRandom(urgentWords).materialize();
+  const notDelayed = scope.filter((c) => !(c.kind === 'synonym' && (vocabulary[c.id]?.correctStreak ?? 0) >= 2 && (vocabulary[c.id]?.dueAt ?? 0) > vocabularyClock));
+  if (notDelayed.length > 0) scope = notDelayed;
 
   // The least-recently-used subset: everything tied for the oldest last-seen rank
   // (all never-served families when any exist).

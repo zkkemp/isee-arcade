@@ -44,7 +44,9 @@ export type GameId =
   | 'spelling'
   | 'skystack'
   | 'starfall'
-  | 'firefly';
+  | 'firefly'
+  | 'mysteryfaces'
+  | 'colorbynumber';
 
 /**
  * How a game is driven on touch.
@@ -221,13 +223,13 @@ export const GAMES: Record<GameId, GameMeta> = {
     aspect: 4 / 3,
   },
   platformer3: { id: 'platformer3', name: 'Coin Runner 3: Kingdom Quest', tagline: 'Cross six handcrafted realms, master magical powers, uncover secrets, and restore the kingdom.', gateNote: 'Study time buys play time.', icon: '🏰', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
-  diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Read the pitch, work the count, drive in runners, and play full innings.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4 },
+  diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Pitch, field, bat, run the bases, and win a three-inning harbor cup.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4 },
   paperroute: { id: 'paperroute', name: 'Paper Route', tagline: 'Zip down the street, dodge trouble, and deliver every paper.', gateNote: 'Study time buys play time.', icon: '📰', accent: '#ffbd5a', controls: 'lanes', aspect: 3 / 4 },
   pyramidhop: { id: 'pyramidhop', name: 'Pyramid Hop', tagline: 'Hop through sunny ruins and uncover the golden path.', gateNote: 'Study time buys play time.', icon: '🔺', accent: '#efb24e', controls: 'dpad', aspect: 3 / 4 },
   reversi: { id: 'reversi', name: 'Reversi', tagline: 'Trap the discs, flip the board, and claim the most.', gateNote: 'Study time buys play time.', icon: '⚫', accent: '#5ed6a0', controls: 'board', aspect: 1 },
   backgammon: { id: 'backgammon', name: 'Backgammon', tagline: 'Roll, race home, and bump lone checkers from the path.', gateNote: 'Study time buys play time.', icon: '🎲', accent: '#e7b978', controls: 'board', aspect: 3 / 4 },
   seabattle: { id: 'seabattle', name: 'Sea Battle', tagline: 'Scan the waves, find the fleet, and win the naval duel.', gateNote: 'Study time buys play time.', icon: '⚓', accent: '#58b9e8', controls: 'board', aspect: 1 },
-  paddleduel: { id: 'paddleduel', name: 'Paddle Duel', tagline: 'Guard your goal, return the ball, and outscore your rival.', gateNote: 'Study time buys play time.', icon: '🏓', accent: '#ff7d8e', controls: 'paddle', aspect: 3 / 4 },
+  paddleduel: { id: 'paddleduel', name: 'Paddle Duel', tagline: 'Challenge the computer or put two players on one iPad.', gateNote: 'Study time buys play time.', icon: '🏓', accent: '#ff7d8e', controls: 'paddle', aspect: 3 / 4 },
   asteroids: { id: 'asteroids', name: 'Asteroid Patrol', tagline: 'Steer through the starfield and clear a safe space lane.', gateNote: 'Study time buys play time.', icon: '☄️', accent: '#b49aff', controls: 'dpad', aspect: 3 / 4 },
   stardefender: { id: 'stardefender', name: 'Star Defender', tagline: 'Slide your starship, fire bright bolts, and stop the descending swarm.', gateNote: 'Study time buys play time.', icon: '🌟', accent: '#ffdc63', controls: 'paddle', aspect: 3 / 4 },
   lunarlander: { id: 'lunarlander', name: 'Lunar Lander', tagline: 'Guide your lander gently onto the moon base.', gateNote: 'Study time buys play time.', icon: '🌙', accent: '#b6d4ee', controls: 'dpad', aspect: 3 / 4 },
@@ -421,6 +423,26 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'grid',
     aspect: 2 / 3,
   },
+  mysteryfaces: {
+    id: 'mysteryfaces',
+    name: 'Mystery Faces',
+    tagline: 'Ask smart questions, cross off suspects, and solve each friendly mystery.',
+    gateNote: 'Study time buys play time.',
+    icon: '🕵️',
+    accent: '#f6d56b',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
+  colorbynumber: {
+    id: 'colorbynumber',
+    name: 'Color by Number Studio',
+    tagline: 'Bring 42 intricate, original pictures to life one rich color at a time.',
+    gateNote: 'Study time buys play time.',
+    icon: '🎨',
+    accent: '#ff79b8',
+    controls: 'grid',
+    aspect: 3 / 4,
+  },
 };
 
 /**
@@ -446,16 +468,16 @@ export const HOW_TO: Record<GameId, string> = {
   platformer3:
     'Choose a realm from the kingdom map, then run and jump to its beacon. Build speed smoothly, stomp creatures, cross pits, collect coins and hidden runes, light checkpoints, and step into glowing portals to find secret routes. Sunblooms give you a shield and comet stars let you charge through danger. Restore all six realms, then defeat the Aurora Sentinel with four careful stomps.',
   diamond:
-    'Step up for a full inning. Move the yellow aim marker with Left and Right, then tap or press Space as the pitch reaches the bright strike zone. Take wild pitches for balls, protect the plate with two strikes, and drive fair balls past the fielders. Singles, doubles, triples, homers, walks, base runners, runs, outs, and three-out innings all count.',
+    'Play both sides of a three-inning Harbor Cup. On defense, choose Breeze, Curve, or Zip, then tap a square in the catcher target to place the pitch. On offense, move the yellow aim marker and tap as the ball reaches the strike zone. Balls, strikes, walks, fielded outs, hits, runners, runs, innings, extra innings, wins, and losses all count.',
   paperroute: 'Move left and right along the street. Deliver papers to the mailboxes, dodge obstacles, and keep your route rolling.',
-  pyramidhop: 'Use the arrows to hop across the pyramid. Every jewel tile changes color when you land on it. Light every tile to clear the pyramid, and avoid the roaming dust bug.',
+  pyramidhop: 'Light every jewel while avoiding the dust bug. Left and Right descend the two visible slopes; Up climbs the left slope and Down climbs the right slope. The top jewel starts lit, invalid moves stay safely on the pyramid, and each completed pyramid begins a faster level.',
   reversi: 'Place a disc so it traps the other color in a straight line. Every trapped disc flips to your color. When the board is full, the most discs wins.',
   backgammon: 'This quick 12-point version keeps the classic race: move with the die, bump a lone opponent checker to the bar, bring every checker into your home area, then bear all five off to win.',
   seabattle: 'Tap squares in the enemy ocean to fire. Hits find ships and misses mark empty water. Find every ship before the other fleet finds yours.',
-  paddleduel: 'Drag your paddle to return the ball. Protect your goal, aim for open space, and score more points than your rival.',
-  asteroids: 'Steer your patrol ship around the starfield. Dodge rocks, clear the dangerous path, and keep your ship safe.',
+  paddleduel: 'Choose 1P vs CPU or 2P Local at the top. In 1P, drag the blue bottom paddle. In 2P, one player drags anywhere in the top half for pink while the other simultaneously drags in the bottom half for blue. First to seven wins the round.',
+  asteroids: 'Use Left and Right to turn, Up to thrust and auto-fire, and Down to brake. Clear every moving rock to open the next patrol field. Large rocks split into smaller pieces, so keep moving and use your three lives carefully.',
   stardefender: 'Slide your starship left and right; it fires automatically. Dodge enemy bolts and shoot every colorful invader before the formation reaches your defense line.',
-  lunarlander: 'Use the arrows for gentle thrust. Slow down, line up with the landing pad, and touch down softly on the moon.',
+  lunarlander: 'Use Left and Right for side thrust, Up for lift, and Down to brake. Watch both velocity numbers: they turn green when your sideways and downward speeds are safe. Land with both feet inside the glowing pad before fuel runs out.',
   runner:
     'You run automatically and the road never ends. Tap anywhere to jump over gaps and obstacles - tap again in the air for a double jump. See how far you can go!',
   breakout:
@@ -502,6 +524,10 @@ export const HOW_TO: Record<GameId, string> = {
     'Drag your ship around the galaxy or use the arrow keys. Your ship fires automatically. Dodge the visitors, clear every colorful wave, and protect all three hearts.',
   firefly:
     'The blue firefly circles the moonlit garden. Tap or press Space when it reaches the golden firefly. Light six meetings to open the next garden, and watch closely as the orbit speeds up!',
+  mysteryfaces:
+    'A secret member of the Mystery Crew has been chosen. Ask yes-or-no questions, use each answer to cross off faces that cannot be the secret, then tap MAKE GUESS and choose the one face left. Easy mode helps cross off impossible faces for you.',
+  colorbynumber:
+    'Choose one of 42 original pictures, then pick a numbered color and paint every cell with that same number. Drag your finger to fill a run of cells. Wrong colors do not stick. Use the arrows and plus or minus buttons to pan and zoom, and come back later to resume right where you stopped.',
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -546,6 +572,8 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.skystack,
   GAMES.starfall,
   GAMES.firefly,
+  GAMES.mysteryfaces,
+  GAMES.colorbynumber,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

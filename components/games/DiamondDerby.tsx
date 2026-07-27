@@ -188,12 +188,34 @@ export function judgeSwing(
   return 'single';
 }
 
-type Phase = 'ready' | 'windup' | 'pitch' | 'in-play' | 'result';
+/** The computer batter reads your pitch selection; corners and changing speed matter. */
+export function judgeOpponentAtBat(plan: PitchPlan, difficulty: Difficulty, level: number, roll: number): PlateOutcome {
+  const pitcherCommand = plan.kind === 'ZIP' ? 0.72 : plan.kind === 'CURVE' ? 0.66 : 0.58;
+  const corner = Math.max(Math.abs(plan.targetX), Math.abs(plan.targetY));
+  const rivalSkill: Record<Difficulty, number> = { easy: 0.06, normal: 0.14, hard: 0.23 };
+  const strikeBand = clamp(0.24 + pitcherCommand * 0.31 + corner * 0.13 - rivalSkill[difficulty] - level * 0.008, 0.16, 0.52);
+  if (roll < strikeBand) return 'strike';
+  const ballBand = clamp(strikeBand + 0.17 - corner * 0.1, 0.35, 0.64);
+  if (roll < ballBand) return 'ball';
+  // Once a rival makes contact, a well-placed curve or corner is more likely to
+  // be a routine play; centre-cut breeze pitches invite extra-base damage.
+  const outBand = clamp(ballBand + 0.24 + corner * 0.12 + (plan.kind === 'CURVE' ? 0.08 : 0) - rivalSkill[difficulty] * 0.35, 0.58, 0.91);
+  if (roll < outBand) return 'out';
+  if (roll > 0.965 - rivalSkill[difficulty] * 0.12) return 'homer';
+  if (roll > 0.91) return 'triple';
+  if (roll > 0.82) return 'double';
+  return 'single';
+}
+
+type Phase = 'ready' | 'windup' | 'pitch' | 'in-play' | 'result' | 'pitch-select' | 'target-select' | 'defend-pitch' | 'series';
 type State = {
   count: CountState;
   inning: number;
   level: number;
   score: number;
+  playerScore: number;
+  rivalScore: number;
+  defending: boolean;
   phase: Phase;
   phaseT: number;
   pitch: PitchPlan;
@@ -207,15 +229,18 @@ type State = {
   seed: number;
   lastHit: HitKind | null;
   pendingOut: PlateResult | null;
+  selectedPitch: PitchKind;
+  targetIndex: number;
+  halfOver: boolean;
 };
 
 function fresh(difficulty: Difficulty): State {
   const first = makePitch(1, difficulty, 714025);
   return {
-    count: emptyCount(), inning: 1, level: 1, score: 0, phase: 'ready', phaseT: 0.75,
+    count: emptyCount(), inning: 1, level: 1, score: 0, playerScore: 0, rivalScore: 0, defending: true, phase: 'pitch-select', phaseT: 0.75,
     pitch: first, pitchProgress: 0, aimX: 0, ball: { x: 0, y: 0, flight: 0, direction: 0 },
-    runners: [], message: 'STEP UP TO THE PLATE!', detail: 'Tap or press Space to call for a pitch.',
-    flash: 0, seed: first.seed, lastHit: null, pendingOut: null,
+    runners: [], message: 'TOP 1 — TAKE THE MOUND!', detail: 'Pick a pitch, then paint a target.',
+    flash: 0, seed: first.seed, lastHit: null, pendingOut: null, selectedPitch: 'BREEZE', targetIndex: 4, halfOver: false,
   };
 }
 
@@ -230,31 +255,75 @@ function newPitch(s: State, difficulty: Difficulty): void {
   s.detail = plan.inZone ? 'Watch the plate and swing on time!' : 'It may miss the zone — be patient.';
 }
 
+function targetFor(index: number): { x: number; y: number } {
+  return { x: (index % 3 - 1) * 0.46, y: (Math.floor(index / 3) - 1) * 0.38 };
+}
+
+function newDefensePitch(s: State, difficulty: Difficulty): void {
+  const target = targetFor(s.targetIndex);
+  const base = s.selectedPitch === 'ZIP' ? 0.78 : s.selectedPitch === 'CURVE' ? 0.96 : 0.88;
+  s.pitch = { kind: s.selectedPitch, targetX: target.x, targetY: target.y, inZone: true, speed: base * SPEED_SCALE[difficulty] * (1 + (s.level - 1) * 0.035), seed: s.seed };
+  s.pitchProgress = 0;
+  s.phase = 'defend-pitch';
+  s.message = `${s.selectedPitch} TO THE ${['LOW', 'MIDDLE', 'HIGH'][Math.floor(s.targetIndex / 3)]} ${['LEFT', 'MIDDLE', 'RIGHT'][s.targetIndex % 3]}`;
+  s.detail = 'Your catcher sets the target...';
+}
+
 function countText(count: CountState): string {
   return `${'●'.repeat(count.balls)}${'○'.repeat(4 - count.balls)}  /  ${'●'.repeat(count.strikes)}${'○'.repeat(3 - count.strikes)}`;
 }
 
 function resolvePlate(s: State, result: PlateResult, label: string, detail: string, api: GameCanvasProps['api']): void {
   s.count = result.state;
-  s.score += result.points;
-  if (result.points) api.addScore(result.points);
+  if (s.defending) s.rivalScore += result.runsScored;
+  else {
+    s.playerScore += result.runsScored;
+    s.score += result.points;
+    if (result.points) api.addScore(result.points);
+  }
   s.message = label;
   s.detail = detail;
   s.flash = 0.5;
   s.phase = 'result';
-  s.phaseT = result.inningOver ? 1.35 : 1.05;
+  s.phaseT = result.inningOver ? 1.3 : 0.85;
+  s.halfOver = result.inningOver;
   if (result.inningOver) {
     playSound('levelClear');
-    s.message = `THREE OUTS — INNING ${s.inning} COMPLETE!`;
-    s.detail = `${s.count.runs} run${s.count.runs === 1 ? '' : 's'} plated. Time for a quick brain break!`;
-    api.requestGate(`Diamond Derby inning ${s.inning} complete — ${s.count.runs} runs scored!`);
-    // The shell pauses immediately. Set up the next inning now, so the answer returns
-    // to a clean pitcher-ready state instead of replaying an old result frame.
-    s.inning += 1;
-    s.level += 1;
-    s.count = emptyCount();
+    s.message = s.defending ? 'SIDE RETIRED!' : 'THREE OUTS!';
+    s.detail = s.defending ? 'Your defence gets the job done.' : 'Jog back out to the field.';
   } else if (label.includes('OUT') || label.includes('STRIKE')) playSound('wrong');
   else if (label.includes('HIT') || label.includes('RUN') || label.includes('WALK')) playSound('coin', s.level);
+}
+
+function startNextHalf(s: State, api: GameCanvasProps['api']): void {
+  s.count = emptyCount();
+  s.runners = [];
+  s.ball.flight = 0;
+  s.halfOver = false;
+  if (s.defending) {
+    s.defending = false;
+    s.phase = 'ready';
+    s.phaseT = 0.35;
+    s.message = `BOTTOM ${s.inning} — YOUR BATS`;
+    s.detail = 'Tap to see a pitch. Aim left or right, then swing on time.';
+    return;
+  }
+  // A three-inning cup gives a complete win/loss arc, while a tie earns an
+  // extra inning instead of an arbitrary draw.
+  if (s.inning >= 3 && s.playerScore !== s.rivalScore) {
+    s.phase = 'series';
+    s.message = s.playerScore > s.rivalScore ? 'HARBOR CUP WON!' : 'COMETS TAKE THE CUP';
+    s.detail = `${s.playerScore}–${s.rivalScore}. Tap after your question to start a fresh cup.`;
+    api.requestGate(`Diamond Derby final: Harbor ${s.playerScore}, Comets ${s.rivalScore}.`);
+    return;
+  }
+  s.inning += 1;
+  s.level += 1;
+  s.defending = true;
+  s.phase = 'pitch-select';
+  s.message = s.inning > 3 ? `EXTRA INNING ${s.inning}!` : `TOP ${s.inning} — DEFEND THE LEAD`;
+  s.detail = 'Pick a pitch and target after the quick question.';
+  api.requestGate(`Diamond Derby: inning ${s.inning - 1} complete. Harbor ${s.playerScore}, Comets ${s.rivalScore}.`);
 }
 
 export default function DiamondDerby({ paused, input, api, restartToken, difficulty, controlsInset }: GameCanvasProps) {
@@ -268,21 +337,59 @@ export default function DiamondDerby({ paused, input, api, restartToken, difficu
       const h = Math.max(220, ch - controlsInset);
       s.flash = Math.max(0, s.flash - dt);
 
-      // Arrows nudge aim; a grid touch chooses aim directly and also swings.
       const dir = input.consumeTap();
-      if (dir === 'left') s.aimX = clamp(s.aimX - 0.11, -0.8, 0.8);
-      if (dir === 'right') s.aimX = clamp(s.aimX + 0.11, -0.8, 0.8);
       const tapped = input.consumePointerPress();
-      if (tapped && input.pointerX !== null) s.aimX = clamp((input.pointerX - 0.5) * 1.7, -0.8, 0.8);
-      const action = input.consumeJump() || tapped;
-
-      if (s.phase === 'ready') {
+      // Up is both a legacy jump key and a directional key. A directional tap
+      // must move the pitch target, not accidentally throw the ball.
+      const action = (input.consumeJump() || tapped) && dir === null;
+      if (s.phase === 'series') {
+        if (action) state.current = fresh(difficulty);
+      } else if (s.phase === 'pitch-select') {
+        if (dir === 'left') s.selectedPitch = s.selectedPitch === 'BREEZE' ? 'ZIP' : s.selectedPitch === 'CURVE' ? 'BREEZE' : 'CURVE';
+        if (dir === 'right') s.selectedPitch = s.selectedPitch === 'BREEZE' ? 'CURVE' : s.selectedPitch === 'CURVE' ? 'ZIP' : 'BREEZE';
+        if (tapped && input.pointerX !== null) {
+          s.selectedPitch = input.pointerX < 1 / 3 ? 'BREEZE' : input.pointerX < 2 / 3 ? 'CURVE' : 'ZIP';
+          s.phase = 'target-select'; s.message = `${s.selectedPitch} READY — PICK A TARGET`; s.detail = 'Tap a square in the glowing 3×3 strike zone.';
+        } else if (action) { s.phase = 'target-select'; s.message = `${s.selectedPitch} READY — PICK A TARGET`; s.detail = 'Use arrows, then Space, or tap a target square.'; }
+      } else if (s.phase === 'target-select') {
+        if (dir === 'left') s.targetIndex = s.targetIndex % 3 === 0 ? s.targetIndex + 2 : s.targetIndex - 1;
+        if (dir === 'right') s.targetIndex = s.targetIndex % 3 === 2 ? s.targetIndex - 2 : s.targetIndex + 1;
+        if (dir === 'up') s.targetIndex = s.targetIndex < 3 ? s.targetIndex + 6 : s.targetIndex - 3;
+        if (dir === 'down') s.targetIndex = s.targetIndex > 5 ? s.targetIndex - 6 : s.targetIndex + 3;
+        if (tapped && input.pointerX !== null && input.pointerY !== null) {
+          const cell = Math.min(cw * 0.16, h * 0.075); const left = 0.5 - cell * 1.5 / cw; const top = 0.69;
+          s.targetIndex = clamp(Math.floor((input.pointerX - left) / (cell / cw)), 0, 2) + clamp(Math.floor((input.pointerY - top) / (cell / h)), 0, 2) * 3;
+          newDefensePitch(s, difficulty);
+        } else if (action) newDefensePitch(s, difficulty);
+      } else if (s.phase === 'defend-pitch') {
+        s.pitchProgress += dt * s.pitch.speed;
+        if (s.pitchProgress >= 1.04) {
+          let roll: number; [s.seed, roll] = nextRandom(s.seed);
+          const outcome = judgeOpponentAtBat(s.pitch, difficulty, s.level, roll);
+          if (outcome === 'out') {
+            s.pendingOut = applyPlateOutcome(s.count, 'out'); s.ball = { x: 0, y: 0, flight: 0, direction: clamp(s.pitch.targetX + roll - 0.5, -0.8, 0.8) };
+            s.message = Math.abs(s.ball.direction) < 0.22 ? 'POP-UP! CATCH IT!' : 'GROUND BALL! THROW TO FIRST!'; s.detail = 'Your fielder closes in.'; s.phase = 'in-play'; s.phaseT = 1.05; playSound('click');
+          } else if (outcome === 'single' || outcome === 'double' || outcome === 'triple' || outcome === 'homer') {
+            const taken = outcome === 'single' ? 1 : outcome === 'double' ? 2 : outcome === 'triple' ? 3 : 4; const before = s.count.bases; const r = applyPlateOutcome(s.count, outcome);
+            s.count = r.state; s.rivalScore += r.runsScored; s.runners = runnerMotions(before, taken); s.ball = { x: 0, y: 0, flight: 0, direction: clamp(s.pitch.targetX + roll - 0.5, -0.8, 0.8) };
+            s.message = outcome === 'homer' ? 'RIVAL HOME RUN!' : `RIVAL ${outcome.toUpperCase()}!`; s.detail = r.runsScored ? `${r.runsScored} run${r.runsScored === 1 ? '' : 's'} score.` : 'Get the ball back to the infield!'; s.phase = 'in-play'; s.phaseT = outcome === 'homer' ? 1.45 : 1.05; playSound('wrong');
+          } else {
+            const r = applyPlateOutcome(s.count, outcome); resolvePlate(s, r, outcome === 'ball' && r.state.balls === 0 ? 'WALKED A BATTER' : outcome === 'ball' ? `BALL ${r.state.balls}` : r.inningOver ? 'STRIKEOUT — SIDE RETIRED!' : `STRIKE ${r.state.strikes}`, outcome === 'ball' ? 'Try a corner or a curve.' : 'Great pitch!', api);
+          }
+        }
+      } else if (s.phase === 'ready') {
+        if (dir === 'left') s.aimX = clamp(s.aimX - 0.11, -0.8, 0.8);
+        if (dir === 'right') s.aimX = clamp(s.aimX + 0.11, -0.8, 0.8);
+        if (tapped && input.pointerX !== null) s.aimX = clamp((input.pointerX - 0.5) * 1.7, -0.8, 0.8);
         s.phaseT -= dt;
         if (action || s.phaseT <= 0) newPitch(s, difficulty);
       } else if (s.phase === 'windup') {
         s.phaseT -= dt;
         if (s.phaseT <= 0) { s.phase = 'pitch'; s.phaseT = 0; s.message = 'HERE IT COMES!'; s.detail = 'Swing as the ball reaches the bright plate.'; }
       } else if (s.phase === 'pitch') {
+        if (dir === 'left') s.aimX = clamp(s.aimX - 0.11, -0.8, 0.8);
+        if (dir === 'right') s.aimX = clamp(s.aimX + 0.11, -0.8, 0.8);
+        if (tapped && input.pointerX !== null) s.aimX = clamp((input.pointerX - 0.5) * 1.7, -0.8, 0.8);
         s.pitchProgress += dt * s.pitch.speed;
         if (action && s.pitchProgress > 0.16) {
           let roll: number;
@@ -310,7 +417,7 @@ export default function DiamondDerby({ paused, input, api, restartToken, difficu
             s.runners = runnerMotions(before, taken as 1 | 2 | 3 | 4);
             s.lastHit = judged;
             s.ball = { x: 0, y: 0, flight: 0, direction: clamp((s.aimX - s.pitch.targetX) * 0.75 + roll - 0.5, -0.8, 0.8) };
-            s.score += r.points;
+            s.playerScore += r.runsScored; s.score += r.points;
             if (r.points) api.addScore(r.points);
             s.message = HIT_LABEL[judged];
             s.detail = r.runsScored ? `${r.runsScored} RUN${r.runsScored === 1 ? '' : 'S'} SCORE!` : 'Send those runners flying!';
@@ -335,17 +442,15 @@ export default function DiamondDerby({ paused, input, api, restartToken, difficu
             resolvePlate(s, pending, pending.inningOver ? 'CAUGHT! THREE OUTS!' : 'CAUGHT — THAT\'S AN OUT!', pending.inningOver ? 'The inning is over.' : 'Find a gap on the next swing.', api);
           } else { s.phase = 'result'; s.phaseT = 0.7; }
         }
-      } else {
+      } else if (s.phase === 'result') {
         s.phaseT -= dt;
         if (s.phaseT <= 0) {
           s.runners = [];
           s.ball.flight = 0;
           s.lastHit = null;
           s.pendingOut = null;
-          s.phase = 'ready';
-          s.phaseT = 0.45;
-          s.message = `INNING ${s.inning} · BATTER UP`;
-          s.detail = 'Tap to call the next pitch.';
+          if (s.halfOver) startNextHalf(s, api);
+          else { s.phase = s.defending ? 'pitch-select' : 'ready'; s.phaseT = 0.45; s.message = s.defending ? 'PICK YOUR NEXT PITCH' : `BOTTOM ${s.inning} · BATTER UP`; s.detail = s.defending ? 'Choose a pitch card, then a target.' : 'Tap to call the next pitch.'; }
         }
       }
       draw(ctx, s, cw, h);
@@ -395,14 +500,15 @@ function draw(ctx: CanvasRenderingContext2D, s: State, w: number, h: number): vo
   [home, first, second, third].forEach((p) => { ctx.fillStyle = '#fffbe6'; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.PI / 4); ctx.fillRect(-7, -7, 14, 14); ctx.restore(); });
   // Fielders move toward a hit's direction; otherwise they form a real defensive shape.
   const fielders = [ { x: cx - size * 0.24, y: cy + size * 0.04 }, { x: cx + size * 0.25, y: cy + size * 0.04 }, { x: cx, y: cy - size * 0.06 }, { x: cx - size * 0.35, y: cy - size * 0.22 }, { x: cx, y: cy - size * 0.32 }, { x: cx + size * 0.35, y: cy - size * 0.22 } ];
-  fielders.forEach((p, i) => { const chase = s.phase === 'in-play' && i === (s.ball.direction < -0.25 ? 3 : s.ball.direction > 0.25 ? 5 : 4); person(ctx, p.x + (chase ? s.ball.direction * size * 0.11 * s.ball.flight : 0), p.y - (chase ? size * 0.05 * s.ball.flight : 0), 0.78, '#e65855', -1); });
-  person(ctx, cx, cy - size * 0.015, 1.04, '#5b67bd', 1); // pitcher
-  person(ctx, home.x - 18, home.y - 5, 1.08, '#f3aa37', 1, s.phase === 'pitch' && s.pitchProgress > 0.73 ? 1 : 0);
+  const fieldColor = s.defending ? '#5b67bd' : '#e65855'; const runnerColor = s.defending ? '#e65855' : '#f3aa37';
+  fielders.forEach((p, i) => { const chase = s.phase === 'in-play' && i === (s.ball.direction < -0.25 ? 3 : s.ball.direction > 0.25 ? 5 : 4); person(ctx, p.x + (chase ? s.ball.direction * size * 0.11 * s.ball.flight : 0), p.y - (chase ? size * 0.05 * s.ball.flight : 0), 0.78, fieldColor, -1); });
+  person(ctx, cx, cy - size * 0.015, 1.04, s.defending ? '#5b67bd' : '#e65855', 1);
+  person(ctx, home.x - 18, home.y - 5, 1.08, runnerColor, 1, s.phase === 'pitch' && s.pitchProgress > 0.73 ? 1 : 0);
   // Existing runners plus animated runners during a play.
-  if (s.runners.length === 0) s.count.bases.forEach((occupied, i) => { if (occupied) { const p = diamondPoint(cx, cy, size, i + 1); person(ctx, p.x, p.y - 4, 0.72, '#f3aa37', 1); } });
-  s.runners.forEach((runner) => { const p = diamondPoint(cx, cy, size, runner.from + (runner.to - runner.from) * runner.t); person(ctx, p.x, p.y - 5, 0.72, '#f3aa37', 1); });
+  if (s.runners.length === 0) s.count.bases.forEach((occupied, i) => { if (occupied) { const p = diamondPoint(cx, cy, size, i + 1); person(ctx, p.x, p.y - 4, 0.72, runnerColor, 1); } });
+  s.runners.forEach((runner) => { const p = diamondPoint(cx, cy, size, runner.from + (runner.to - runner.from) * runner.t); person(ctx, p.x, p.y - 5, 0.72, runnerColor, 1); });
   // Pitch visual uses a little curve drift, then a high fly-ball path after contact.
-  if (s.phase === 'pitch') {
+  if (s.phase === 'pitch' || s.phase === 'defend-pitch') {
     const p = clamp(s.pitchProgress, 0, 1); const curve = s.pitch.kind === 'CURVE' ? Math.sin(p * Math.PI) * 0.13 : 0;
     const bx = cx + (s.pitch.targetX + curve) * size * 0.31 * p; const by = cy - size * 0.02 + p * size * 0.31 + s.pitch.targetY * size * 0.1 * p;
     ball(ctx, bx, by, clamp(8 - p * 2, 5, 8));
@@ -417,9 +523,21 @@ function draw(ctx: CanvasRenderingContext2D, s: State, w: number, h: number): vo
   const cursorX = zoneX + s.aimX * zoneW * 0.72; ctx.strokeStyle = '#ffe86a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cursorX - 8, zoneY + zoneH / 2 + 15); ctx.lineTo(cursorX + 8, zoneY + zoneH / 2 + 15); ctx.stroke();
   // HUD stays compact enough for a phone but makes the baseball situation legible.
   ctx.fillStyle = 'rgba(12,34,69,.88)'; ctx.roundRect(10, 10, w - 20, 47, 13); ctx.fill();
-  ctx.fillStyle = '#fff8d2'; ctx.font = '800 12px system-ui'; ctx.textBaseline = 'middle'; ctx.fillText(`INNING ${s.inning}  •  RUNS ${s.count.runs}  •  SCORE ${s.score}`, 19, 27);
+  ctx.fillStyle = '#fff8d2'; ctx.font = '800 12px system-ui'; ctx.textBaseline = 'middle'; ctx.fillText(`HARBOR ${s.playerScore}  —  COMETS ${s.rivalScore}   ${s.defending ? '▲' : '▼'} ${s.inning}`, 19, 27);
   ctx.textAlign = 'right'; ctx.fillText(`OUTS ${'●'.repeat(s.count.outs)}${'○'.repeat(3 - s.count.outs)}`, w - 19, 27);
   ctx.font = '700 11px system-ui'; ctx.fillStyle = '#b9e7ff'; ctx.fillText(`BALLS / STRIKES  ${countText(s.count)}`, w - 19, 45); ctx.textAlign = 'left';
   ctx.fillStyle = s.flash ? '#fff07d' : '#ffffff'; ctx.font = '900 18px ui-rounded, system-ui'; ctx.textAlign = 'center'; ctx.fillText(s.message, cx, h * 0.11);
   ctx.fillStyle = 'rgba(8,27,52,.82)'; ctx.font = '700 12px system-ui'; ctx.fillText(s.detail, cx, h * 0.15); ctx.textAlign = 'left';
+  // Built-in touch controls: card selection followed by a large nine-square
+  // catcher target. Keyboard users get the same flow with arrows and Space.
+  if (s.phase === 'pitch-select') {
+    const names: PitchKind[] = ['BREEZE', 'CURVE', 'ZIP'];
+    names.forEach((name, i) => { const x = 12 + i * (w - 32) / 3; const cardW = (w - 44) / 3; ctx.fillStyle = s.selectedPitch === name ? '#ffe567' : 'rgba(12,34,69,.88)'; ctx.roundRect(x, h * 0.78, cardW, h * 0.13, 10); ctx.fill(); ctx.fillStyle = s.selectedPitch === name ? '#253656' : '#fff'; ctx.font = '900 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText(name, x + cardW / 2, h * 0.825); ctx.font = '700 9px system-ui'; ctx.fillText(i === 0 ? 'SAFE' : i === 1 ? 'BEND' : 'FAST', x + cardW / 2, h * 0.855); });
+    ctx.textAlign = 'left';
+  }
+  if (s.phase === 'target-select') {
+    const cell = Math.min(w * 0.16, h * 0.075); const left = cx - cell * 1.5; const top = h * 0.69;
+    for (let i = 0; i < 9; i += 1) { const x = left + (i % 3) * cell; const y = top + Math.floor(i / 3) * cell; ctx.fillStyle = s.targetIndex === i ? '#ffe567' : 'rgba(15,52,87,.9)'; ctx.fillRect(x + 2, y + 2, cell - 4, cell - 4); }
+    ctx.fillStyle = '#fff'; ctx.font = '800 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('TAP A TARGET', cx, top - 10); ctx.textAlign = 'left';
+  }
 }

@@ -10,12 +10,14 @@ const H = 520;
 type Pad = { x: number; w: number };
 type LanderState = {
   x: number; y: number; vx: number; vy: number; fuel: number; angle: number;
-  level: number; lives: number; pad: Pad; landed: number; time: number;
+  level: number; lives: number; pad: Pad; landed: number; time: number; thrust: number;
 };
 const GRAVITY = { easy: 27, normal: 35, hard: 43 } as const;
 
-export function safeLanding(vx: number, vy: number, x: number, pad: Pad) {
-  return Math.abs(vx) <= 24 && vy <= 39 && x >= pad.x && x <= pad.x + pad.w;
+export function safeLanding(vx: number, vy: number, x: number, pad: Pad, landerHalfWidth = 12) {
+  // `x` is the lander's centre. Requiring both feet inside the pad prevents a
+  // visual "landing" where only a single pixel happened to cross the edge.
+  return Math.abs(vx) <= 24 && vy >= 0 && vy <= 39 && x - landerHalfWidth >= pad.x && x + landerHalfWidth <= pad.x + pad.w;
 }
 
 export function landingPad(level: number): Pad {
@@ -24,7 +26,7 @@ export function landingPad(level: number): Pad {
 }
 
 function fresh(level = 1, lives = 3): LanderState {
-  return { x: W / 2, y: 82, vx: 18, vy: 0, fuel: 100, angle: 0, level, lives, pad: landingPad(level), landed: 0, time: 0 };
+  return { x: W / 2, y: 82, vx: 18, vy: 0, fuel: 100, angle: 0, level, lives, pad: landingPad(level), landed: 0, time: 0, thrust: 0 };
 }
 
 export default function LunarLander({ paused, input, api, restartToken, difficulty, controlsInset }: GameCanvasProps) {
@@ -36,6 +38,7 @@ export default function LunarLander({ paused, input, api, restartToken, difficul
       let s = stateRef.current;
       const playH = Math.max(180, ch - controlsInset);
       s.time += dt;
+      s.thrust = Math.max(0, s.thrust - dt);
       if (s.landed > 0) {
         s.landed -= dt;
         if (s.landed <= 0) {
@@ -45,12 +48,25 @@ export default function LunarLander({ paused, input, api, restartToken, difficul
           s = stateRef.current;
         }
       } else {
-        const side = (input.held.right ? 1 : 0) - (input.held.left ? 1 : 0);
+        // D-pad buttons queue taps while keyboard keys remain held. A tap gets
+        // a helpful burst so an iPad player can cross the whole moon, while a
+        // held key remains precise for fine approach corrections.
+        const tap = input.consumeTap();
+        const heldSide = (input.held.right ? 1 : 0) - (input.held.left ? 1 : 0);
+        const side = heldSide || (tap === 'right' ? 1 : tap === 'left' ? -1 : 0);
         if (side !== 0 && s.fuel > 0) {
           s.vx += side * 48 * dt; s.fuel = Math.max(0, s.fuel - 7 * dt); s.angle = side * .18;
+          if (tap === 'left' || tap === 'right') { s.vx += side * 11; s.fuel = Math.max(0, s.fuel - 1.5); }
         } else s.angle *= Math.pow(.08, dt);
-        if ((input.held.up || input.consumeJump()) && s.fuel > 0) {
+        const wantsThrust = input.held.up || tap === 'up' || input.consumeJump();
+        if (wantsThrust && s.fuel > 0) {
           s.vy -= 74 * dt; s.fuel = Math.max(0, s.fuel - 15 * dt);
+          if (tap === 'up') { s.vy -= 24; s.fuel = Math.max(0, s.fuel - 3.5); }
+          s.thrust = .12;
+        }
+        if ((input.held.down || tap === 'down') && s.fuel > 0) {
+          s.vx *= Math.pow(.22, dt); s.vy *= Math.pow(.62, dt); s.fuel = Math.max(0, s.fuel - 4 * dt);
+          if (tap === 'down') { s.vx *= .68; s.vy *= .9; }
         }
         s.vy += GRAVITY[difficulty] * dt;
         s.x += s.vx * dt; s.y += s.vy * dt;
@@ -69,7 +85,7 @@ export default function LunarLander({ paused, input, api, restartToken, difficul
           }
         }
       }
-      draw(ctx, s, cw, ch, playH, input.held.up);
+      draw(ctx, s, cw, ch, playH, s.thrust > 0);
     },
   });
   return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />;
@@ -90,12 +106,13 @@ function draw(ctx: CanvasRenderingContext2D, s: LanderState, cw: number, ch: num
   ctx.fillStyle = '#89f3c1'; ctx.fillRect(s.pad.x, H - 64, s.pad.w, 6);
   ctx.shadowColor = '#89f3c1'; ctx.shadowBlur = 14; ctx.fillStyle = 'rgba(137,243,193,.18)'; ctx.fillRect(s.pad.x - 4, H - 70, s.pad.w + 8, 16); ctx.shadowBlur = 0;
   drawLander(ctx, s, thrust);
-  ctx.fillStyle = 'rgba(5,7,28,.8)'; ctx.beginPath(); ctx.roundRect(13, 13, W - 26, 50, 16); ctx.fill();
+  ctx.fillStyle = 'rgba(5,7,28,.8)'; ctx.beginPath(); ctx.roundRect(13, 13, W - 26, 66, 16); ctx.fill();
   ctx.font = '900 13px ui-rounded, system-ui, sans-serif'; ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left'; ctx.fillStyle = '#8ff3ca'; ctx.fillText(`BASE ${s.level}`, 26, 31);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#8ff3ca'; ctx.fillText(`BASE ${s.level}  ${'♥'.repeat(s.lives)}`, 26, 31);
   ctx.fillStyle = '#fff0a8'; ctx.fillText(`FUEL ${Math.ceil(s.fuel)}%`, 26, 49);
   ctx.textAlign = 'right'; ctx.fillStyle = Math.abs(s.vy) < 39 ? '#8ff3ca' : '#ff8b9e'; ctx.fillText(`↓ ${Math.max(0, s.vy).toFixed(0)}`, W - 27, 31);
-  ctx.fillStyle = '#ff8b9e'; ctx.fillText('♥'.repeat(s.lives), W - 27, 49);
+  ctx.fillStyle = Math.abs(s.vx) < 24 ? '#8ff3ca' : '#ff8b9e'; ctx.fillText(`↔ ${Math.abs(s.vx).toFixed(0)}`, W - 27, 49);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#dceaff'; ctx.font = '800 10px ui-rounded, system-ui, sans-serif'; ctx.fillText('◀ ▶ SIDE THRUST  •  ▲ LIFT  •  ▼ BRAKE', W / 2, 69);
   if (s.landed > 0) { ctx.textAlign = 'center'; ctx.font = '900 24px ui-rounded, system-ui, sans-serif'; ctx.fillStyle = '#fff5b6'; ctx.fillText('SOFT LANDING!', W / 2, H / 2); }
   ctx.restore(); ctx.fillStyle = '#03030b'; ctx.fillRect(0, playH, cw, Math.max(0, ch - playH));
 }

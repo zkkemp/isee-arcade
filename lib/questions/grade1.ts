@@ -12,7 +12,7 @@ import {
  * who does NOT read well yet.
  *
  * The app reads every prompt and every choice out loud (text-to-speech) for
- * this profile, and shows any picture-marks on screen. The child answers by
+ * this profile, and shows large picture groups on screen. The child answers by
  * LISTENING, not by reading. That changes the design rules versus every
  * other grade band in this folder:
  *
@@ -21,9 +21,8 @@ import {
  *   - Choices are SHORT (a number, a short word, a shape/color name, or a
  *     clock time like "3:00") so they read quickly aloud and stay
  *     distinguishable by ear from each other.
- *   - Counting questions put repeated marks (e.g. "* * *") directly in the
- *     prompt so they can be looked at on screen, the same convention the
- *     kindergarten bank (gradeK.ts) already uses.
+ *   - Counting questions carry structured picture data rendered as large,
+ *     spaced objects, using the same convention as the kindergarten bank.
  *   - Nothing requires the child to decode written text to find the answer -
  *     letter/word tasks are rhyming and beginning/ending SOUND matches,
  *     which work fine when read aloud, never sight-reading or spelling.
@@ -66,11 +65,6 @@ function joinList(items: string[]): string {
   if (items.length === 1) return items[0];
   if (items.length === 2) return `${items[0]} and ${items[1]}`;
   return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
-}
-
-/** "* * * *" - n copies of mark, space separated, for things a kid can count on screen. */
-function repeatMark(mark: string, n: number): string {
-  return Array.from({ length: n }, () => mark).join(' ');
 }
 
 const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'] as const;
@@ -119,7 +113,6 @@ export const GRADE_1_TEMPLATES: QuestionTemplate[] = [
     topic: 'count a small group of marks',
     generate: (rng) => {
       const n = randInt(rng, 3, 10);
-      const marks = repeatMark('*', n);
       const correct = num(n);
       const { choices, answer } = buildChoices(rng, correct, [
         num(n - 1),
@@ -128,10 +121,11 @@ export const GRADE_1_TEMPLATES: QuestionTemplate[] = [
         num(n - 2),
       ]);
       return {
-        prompt: `Look at the stars: ${marks} How many stars are there?`,
+        prompt: 'Look at the picture. How many stars are there?',
+        visual: { kind: 'counting', groups: [{ item: 'star', count: n }] },
         choices,
         answer,
-        explain: `Counting one at a time, ${marks} is ${n} stars.`,
+        explain: `Point to each star and count it once. There are ${n} stars.`,
       };
     },
   },
@@ -143,7 +137,6 @@ export const GRADE_1_TEMPLATES: QuestionTemplate[] = [
     topic: 'count a bigger group of marks',
     generate: (rng) => {
       const n = randInt(rng, 11, 20);
-      const marks = repeatMark('*', n);
       const correct = num(n);
       const { choices, answer } = buildChoices(rng, correct, [
         num(n - 1),
@@ -152,10 +145,11 @@ export const GRADE_1_TEMPLATES: QuestionTemplate[] = [
         num(n + 2),
       ]);
       return {
-        prompt: `Look at the dots: ${marks} How many dots are there?`,
+        prompt: 'Look at the picture. How many bright dots are there?',
+        visual: { kind: 'counting', groups: [{ item: 'dot', count: n }] },
         choices,
         answer,
-        explain: `Counting one at a time, ${marks} is ${n} dots.`,
+        explain: `Count across each row, touching every dot with your eyes. There are ${n} dots.`,
       };
     },
   },
@@ -905,7 +899,14 @@ export const GRADE_1_TEMPLATES: QuestionTemplate[] = [
         num(more + 2),
       ]);
       return {
-        prompt: `Look at the stars. First group: ${repeatMark('*', a)}. Second group: ${repeatMark('*', b)}. How many stars are in the bigger group?`,
+        prompt: 'Look at both pictures. How many stars are in the bigger group?',
+        visual: {
+          kind: 'counting',
+          groups: [
+            { label: 'First group', item: 'star', count: a },
+            { label: 'Second group', item: 'star', count: b },
+          ],
+        },
         choices,
         answer,
         explain: `The groups have ${a} and ${b} stars. ${more} is the bigger number.`,

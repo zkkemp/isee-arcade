@@ -123,7 +123,7 @@ for (const t of GRADE_K_TEMPLATES) {
     if (q.id !== t.id) fail(`${t.id} seed ${seed}: instance id ${q.id} does not match template id`);
     if (q.topic !== t.topic) fail(`${t.id} seed ${seed}: instance lost its topic`);
 
-    if (seed <= 40) promptsSeen.add(q.prompt);
+    if (seed <= 40) promptsSeen.add(`${q.prompt}|${JSON.stringify(q.visual ?? null)}`);
   }
 
   // Regenerating must actually change the wording/numbers over a handful of

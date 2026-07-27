@@ -171,7 +171,15 @@ export const MATH_TEMPLATES_3: QuestionTemplate[] = [
       const d = pick(rng, [3, 4, 5, 6]);
       const k = randInt(rng, 2, 3);
       const w = d * k;
-      const n = randInt(rng, 2, d - 1);
+      // This family teaches "a fraction of a whole," not simplification. Keep
+      // the prompt fraction reduced so 3/6 does not look like an accidental
+      // trick; equivalent-fraction practice belongs in its own clearly named
+      // question family.
+      const reducedNumerators = Array.from(
+        { length: d - 2 },
+        (_, index) => index + 2,
+      ).filter((candidate) => gcd(candidate, d) === 1);
+      const n = pick(rng, reducedNumerators);
       const result = n * k;
       const correct = num(result);
       const { choices, answer } = buildChoices(rng, correct, [
@@ -185,7 +193,7 @@ export const MATH_TEMPLATES_3: QuestionTemplate[] = [
         prompt: `What is ${n}/${d} x ${w}?`,
         choices,
         answer,
-        explain: `First ${w} / ${d} = ${k}, then ${k} x ${n} = ${result}. So ${n}/${d} x ${w} = ${result}.`,
+        explain: `Split ${w} into ${d} equal groups. Each group has ${k}.\nTake ${n} groups because the fraction is ${n}/${d}: ${k} + ${Array.from({ length: n - 1 }, () => k).join(' + ')} = ${result}.\nThe answer is ${result}.`,
       };
     },
   },
@@ -219,7 +227,7 @@ export const MATH_TEMPLATES_3: QuestionTemplate[] = [
         prompt: `What is ${n}/${d} of ${total}?`,
         choices,
         answer,
-        explain: `Split ${total} into ${d} equal groups of ${m}, then take ${n} groups: ${n} x ${m} = ${part}.`,
+        explain: `Split ${total} into ${d} equal groups. Each group has ${m}.\nTake ${n} groups because the fraction is ${n}/${d}: ${Array.from({ length: n }, () => m).join(' + ')} = ${part}.\nThe answer is ${part}.`,
       };
     },
   },

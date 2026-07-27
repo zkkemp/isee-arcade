@@ -4,6 +4,7 @@ import {
   emptyCount,
   forceWalk,
   judgeSwing,
+  judgeOpponentAtBat,
   makePitch,
   nextRandom,
 } from '../components/games/DiamondDerby';
@@ -46,6 +47,8 @@ assert(hard.speed > easy.speed, 'hard, later innings must deliver faster pitches
 assert(judgeSwing(easy, 0.88, easy.targetX, 'easy', 1, 0.95) === 'homer', 'perfect timing and aim should reward a homer');
 const playable = { kind: 'BREEZE' as const, targetX: 0, targetY: 0, inZone: true, speed: 1, seed: 1 };
 assert(judgeSwing(playable, 0.8, 0.25, 'hard', 10, 0.01) === 'out', 'weak fair contact on hard must let the defence make an out');
+assert(judgeOpponentAtBat({ ...playable, kind: 'CURVE', targetX: 0.46 }, 'easy', 1, 0.01) === 'strike', 'a well-placed curve should produce a called strike band');
+assert(judgeOpponentAtBat({ ...playable, kind: 'BREEZE', targetX: 0 }, 'hard', 8, 0.99) === 'homer', 'a hard rival must punish a centre-cut pitch sometimes');
 const [nextSeed, roll] = nextRandom(42);
 assert(nextSeed !== 42 && roll >= 0 && roll < 1, 'seeded random must advance within [0, 1)');
 

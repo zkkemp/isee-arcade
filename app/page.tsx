@@ -3,6 +3,7 @@ import ProfileGate from '@/components/ProfileGate';
 import DifficultyPicker from '@/components/DifficultyPicker';
 import ProgressStrip from '@/components/ProgressStrip';
 import GameArtwork from '@/components/GameArtwork';
+import RecentlyPlayed from '@/components/RecentlyPlayed';
 import { GAMES, type GameId } from '@/lib/games';
 import { TEMPLATE_COUNT, TOTAL_FAMILIES, countBySubject } from '@/lib/questions';
 import { SUBJECT_LABELS, type Subject } from '@/lib/questions/types';
@@ -15,13 +16,6 @@ const GAME_SECTIONS: Array<{
   ids: GameId[];
 }> = [
   {
-    eyebrow: 'Brand-new adventures',
-    title: 'Fresh from the workshop',
-    icon: '✦',
-    accent: '#fbbf24',
-    ids: ['skystack', 'starfall', 'firefly'],
-  },
-  {
     eyebrow: 'Run · jump · dodge',
     title: 'Fast & fearless',
     icon: '⚡',
@@ -33,28 +27,28 @@ const GAME_SECTIONS: Array<{
     title: 'Classics Reimagined',
     icon: '★',
     accent: '#38bdf8',
-    ids: ['reversi', 'backgammon', 'seabattle', 'paddleduel', 'asteroids', 'stardefender', 'lunarlander', 'diamond'],
+    ids: ['maze', 'seabattle', 'paddleduel', 'asteroids', 'stardefender', 'starfall', 'lunarlander', 'diamond'],
   },
   {
     eyebrow: 'Match · stack · solve',
     title: 'Puzzle power',
     icon: '◆',
     accent: '#a78bfa',
-    ids: ['match3', 'blocks', 'tetris', 'merge', 'bubble', 'memory'],
+    ids: ['colorbynumber', 'match3', 'blocks', 'tetris', 'merge', 'bubble', 'memory', 'skystack'],
   },
   {
-    eyebrow: 'Plan · challenge · win',
-    title: 'Tabletop legends',
+    eyebrow: 'Boards · cards · strategy',
+    title: 'Tabletop classics',
     icon: '♟',
     accent: '#34d399',
-    ids: ['chess', 'checkers', 'tictactoe', 'dots', 'sudoku', 'cards'],
+    ids: ['reversi', 'backgammon', 'chess', 'checkers', 'tictactoe', 'dots', 'sudoku', 'cards'],
   },
   {
     eyebrow: 'Remember · react · discover',
     title: 'Quick thinkers',
     icon: '☄',
     accent: '#fb923c',
-    ids: ['maze', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling'],
+    ids: ['mysteryfaces', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling', 'firefly'],
   },
 ];
 
@@ -73,6 +67,8 @@ const NEW_GAME_IDS = new Set<GameId>([
   'skystack',
   'starfall',
   'firefly',
+  'mysteryfaces',
+  'colorbynumber',
 ]);
 
 export default function Home() {
@@ -114,6 +110,8 @@ export default function Home() {
           <DifficultyPicker />
         </div>
       </div>
+
+      <RecentlyPlayed />
 
       <Link
         href={`/play/${featured.id}`}
@@ -159,13 +157,12 @@ export default function Home() {
         </div>
 
         <div className="game-library space-y-3">
-          {GAME_SECTIONS.map((section, sectionIndex) => (
+          {GAME_SECTIONS.map((section) => (
             <details
               key={section.title}
               name="game-library"
               className="game-category overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"
               style={{ '--category-accent': section.accent } as React.CSSProperties}
-              open={sectionIndex === 0}
             >
               <summary className="game-category__summary">
                 <span className="game-category__icon" aria-hidden="true">

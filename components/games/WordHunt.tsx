@@ -124,6 +124,19 @@ export const BACKWARD_DIRS: Dir[] = FORWARD_DIRS.map((d) => ({ dr: -d.dr, dc: -d
 
 export const ALL_DIRS: Dir[] = [...FORWARD_DIRS, ...BACKWARD_DIRS];
 
+export function hasAlphabetRun(letters: string[], size: number, length = 5): boolean {
+  for (let r = 0; r < size; r += 1) for (let c = 0; c < size; c += 1) for (const dir of FORWARD_DIRS) {
+    const chars: string[] = [];
+    for (let i = 0; i < length; i += 1) {
+      const rr = r + dir.dr * i; const cc = c + dir.dc * i;
+      if (rr < 0 || rr >= size || cc < 0 || cc >= size) break;
+      chars.push(letters[idx(size, rr, cc)]);
+    }
+    if (chars.length === length && chars.every((letter, i) => i === 0 || letter.charCodeAt(0) === chars[i - 1].charCodeAt(0) + 1)) return true;
+  }
+  return false;
+}
+
 // ------------------------------------------------------------------- placement
 
 export type Placement = {
@@ -164,11 +177,9 @@ export function canPlace(
 }
 
 /**
- * Places every word it can fit (longest first, since a long word has fewer legal
- * spots and should get first pick of the grid), then fills every untouched cell
- * with a random letter. A word that cannot be placed after many random tries is
- * simply skipped rather than failing the level - the returned `placements` are
- * exactly the words actually on the board.
+ * Deals a complete, seeded word-search board. Each deal retries the whole layout
+ * rather than quietly dropping a target word, so the visible target list is
+ * always exactly the set of words hidden in the grid.
  */
 export function buildGrid(
   size: number,
@@ -176,42 +187,49 @@ export function buildGrid(
   rand: () => number,
   allowBackwards: boolean,
 ): Board {
-  const cells: (string | null)[] = new Array(size * size).fill(null);
   const dirs = allowBackwards ? ALL_DIRS : FORWARD_DIRS;
-  const placements: Placement[] = [];
-  const ordered = [...words].sort((a, b) => b.word.length - a.word.length);
-
-  for (const w of ordered) {
-    let placed = false;
-    for (let attempt = 0; attempt < 400 && !placed; attempt += 1) {
-      const dir = dirs[Math.floor(rand() * dirs.length) % dirs.length];
-      const r0 = Math.floor(rand() * size) % size;
-      const c0 = Math.floor(rand() * size) % size;
-      if (!canPlace(cells, size, w.word, r0, c0, dir)) continue;
-
-      const placedCells: number[] = [];
-      for (let i = 0; i < w.word.length; i += 1) {
-        const r = r0 + dir.dr * i;
-        const c = c0 + dir.dc * i;
-        const at = idx(size, r, c);
-        cells[at] = w.word[i];
-        placedCells.push(at);
+  let best: { cells: (string | null)[]; placements: Placement[] } | null = null;
+  for (let deal = 0; deal < 192; deal += 1) {
+    const cells: (string | null)[] = new Array(size * size).fill(null);
+    const ordered = [...words];
+    for (let i = ordered.length - 1; i > 0; i -= 1) { const j = Math.floor(rand() * (i + 1)); [ordered[i], ordered[j]] = [ordered[j], ordered[i]]; }
+    ordered.sort((a, b) => b.word.length - a.word.length);
+    const placements: Placement[] = [];
+    for (const w of ordered) {
+      const candidates: Array<{ r: number; c: number; dir: Dir }> = [];
+      for (const dir of dirs) for (let r = 0; r < size; r += 1) for (let c = 0; c < size; c += 1) {
+        if (canPlace(cells, size, w.word, r, c, dir)) candidates.push({ r, c, dir });
       }
-      placements.push({
-        word: w.word,
-        hint: w.hint,
-        cells: placedCells,
-        dir,
-        found: false,
-        colorIndex: placements.length,
-      });
-      placed = true;
+      if (!candidates.length) break;
+      const pick = candidates[Math.floor(rand() * candidates.length)];
+      const placedCells: number[] = [];
+      for (let i = 0; i < w.word.length; i += 1) { const at = idx(size, pick.r + pick.dir.dr * i, pick.c + pick.dir.dc * i); cells[at] = w.word[i]; placedCells.push(at); }
+      placements.push({ word: w.word, hint: w.hint, cells: placedCells, dir: pick.dir, found: false, colorIndex: placements.length });
+    }
+    if (!best || placements.length > best.placements.length) best = { cells, placements };
+    if (placements.length === words.length) {
+      const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const letters: string[] = [];
+      for (let at = 0; at < cells.length; at += 1) {
+        const existing = cells[at];
+        if (existing !== null) { letters.push(existing); continue; }
+        let letter = 'Q';
+        for (let pick = 0; pick < 20; pick += 1) {
+          letter = ALPHA[Math.floor(rand() * ALPHA.length)];
+          letters.push(letter);
+          const alphabetic = hasAlphabetRun(letters.concat(cells.slice(at + 1).map((v) => v ?? 'Z')), size);
+          letters.pop();
+          if (!alphabetic) break;
+        }
+        letters.push(letter);
+      }
+      return { size, letters, placements };
     }
   }
-
+  // Custom callers can request an impossible packing. Keep the board valid,
+  // but production level specs are checked to always reach this branch's full-deal return.
   const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const letters = cells.map((c) => c ?? ALPHA[Math.floor(rand() * ALPHA.length) % ALPHA.length]);
-  return { size, letters, placements };
+  return { size, letters: best!.cells.map((c) => c ?? ALPHA[Math.floor(rand() * ALPHA.length)]), placements: best!.placements };
 }
 
 // --------------------------------------------------------------------- levels
@@ -598,14 +616,17 @@ export function update(
     }
 
     case 'playing': {
-      if (input.consumePointerPress()) {
+      const pressed = input.consumePointerPress();
+      const released = input.consumePointerRelease();
+      if (pressed) {
         const cell = computeCandidateCell(sim, layout, cw, ch, input);
         if (cell !== null) {
           sim.dragStart = cell;
           sim.dragEnd = cell;
           playSound('click');
         }
-      } else if (input.pointerDown && sim.dragStart >= 0) {
+      }
+      if (sim.dragStart >= 0 && (input.pointerDown || released)) {
         const cand = computeCandidateCell(sim, layout, cw, ch, input);
         if (cand !== null) {
           const size = sim.board.size;
@@ -617,7 +638,7 @@ export function update(
         }
       }
 
-      if (input.consumePointerRelease() && sim.dragStart >= 0) {
+      if (released && sim.dragStart >= 0) {
         releaseSelection(sim, api);
       }
 

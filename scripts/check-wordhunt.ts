@@ -30,18 +30,16 @@ import {
   MIN_WORD_LEN,
   VOCAB_POOL,
   backwardsAllowed,
-  buildGrid,
   buildLevel,
   canPlace,
   cellAt,
   cellCentre,
   colOf,
   idx,
+  hasAlphabetRun,
   layoutFor,
-  lcg,
   makeBoard,
   matchSelection,
-  pickWords,
   resolveLine,
   rowOf,
   sizeForLevel,
@@ -85,8 +83,11 @@ function fail(msg: string): void {
 
 // --- 1. every placed word is readable along its claimed line, in the FINAL grid
 
-function checkBoardHonesty(board: Board, label: string): void {
+function checkBoardHonesty(board: Board, label: string, expectedTargets?: number): void {
   if (board.placements.length === 0) fail(`${label}: built a board with zero placed words`);
+  if (expectedTargets !== undefined && board.placements.length !== expectedTargets) {
+    fail(`${label}: placed ${board.placements.length}/${expectedTargets} targets instead of dealing a complete board`);
+  }
   for (const p of board.placements) {
     if (p.cells.length < MIN_WORD_LEN) fail(`${label}: placement ${p.word} has too few cells`);
     if (p.cells.length !== p.word.length) fail(`${label}: placement ${p.word} cell count != word length`);
@@ -117,26 +118,30 @@ function checkBoardHonesty(board: Board, label: string): void {
   for (let i = 0; i < board.letters.length; i += 1) {
     if (!/^[A-Z]$/.test(board.letters[i])) fail(`${label}: cell ${i} is not a single A-Z letter: ${JSON.stringify(board.letters[i])}`);
   }
+  if (hasAlphabetRun(board.letters, board.size)) fail(`${label}: contains a five-letter alphabetical filler run`);
 }
 
 for (let level = 1; level <= 24; level += 1) {
   for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+    const signatures = new Set<string>();
     for (let seedBase = 1; seedBase <= 4; seedBase += 1) {
       const spec = buildLevel(level, difficulty, seedBase * 7919 + level);
       const board = makeBoard(spec);
-      checkBoardHonesty(board, `level ${level} (${difficulty}, seed ${seedBase})`);
+      checkBoardHonesty(board, `level ${level} (${difficulty}, seed ${seedBase})`, spec.wordCount);
       if (board.size !== spec.size) fail(`level ${level}: board size ${board.size} != spec size ${spec.size}`);
+      signatures.add(`${board.letters.join('')}/${board.placements.map((p) => `${p.word}:${p.cells.join('.')}`).join('|')}`);
     }
+    if (signatures.size < 4) fail(`level ${level} (${difficulty}): different seeds produced duplicate boards`);
   }
 }
 
-// A dedicated tight-grid stress case: small grid, max word count, backwards on -
-// the densest, most collision-prone configuration the game ever deals.
+// A dedicated late-game stress case: maximum target count with backwards on.
+// It uses the real level spec rather than inventing an impossible 8-word 7×7
+// board that the game never deals.
 for (let seed = 1; seed <= 20; seed += 1) {
-  const spec = buildLevel(1, 'hard', seed * 104729);
-  // Force the hardest packing the level system allows at size 7.
-  const board = buildGrid(7, pickWords(VOCAB_POOL, 7, 8, lcg(spec.seed)), lcg(spec.seed ^ 0xabc), true);
-  checkBoardHonesty(board, `dense stress seed ${seed}`);
+  const spec = buildLevel(16, 'hard', seed * 104729);
+  const board = makeBoard(spec);
+  checkBoardHonesty(board, `late stress seed ${seed}`, spec.wordCount);
 }
 
 // --- self-test: a placement that overwrote another must be caught -----------
@@ -352,10 +357,11 @@ if (errors.length > 0) {
 
 console.log('Word Hunt check passed:');
 console.log(' - imported vocab bank yields a non-empty, deduped 3-8 letter word list covering every length');
-console.log(' - 288 built boards (24 levels x 3 difficulties x 4 seeds) + 20 dense stress boards: every placed word');
+console.log(' - 288 built boards (24 levels x 3 difficulties x 4 seeds) + 20 late-game stress boards: every requested target');
 console.log('   reads back correctly off the FINAL grid via resolveLine, proving no later word corrupts an earlier one');
 console.log(' - resolveLine accepts all 8 straight directions exactly, rejects knight/bent moves and off-board endpoints');
 console.log(' - matchSelection matches forwards and backwards, and never re-matches an already-found word');
 console.log(' - canPlace enforces both grid bounds and crossing-letter agreement');
+console.log(' - every tested deal contains all requested targets, differs across seeds, and has no alphabetical filler run');
 console.log(' - sizeForLevel/wordCountForLevel ramp non-decreasing and cap correctly; backwardsAllowed gates by difficulty');
 console.log(' - grid layout/input round-trips hit the exact cell tapped, off-board points return null');

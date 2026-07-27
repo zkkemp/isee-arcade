@@ -1,0 +1,65 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { GAMES, GAME_LIST, type GameId } from '../lib/games';
+import { nextRecentGames } from '../lib/recentGames';
+
+const fail = (message: string): never => {
+  throw new Error(`Game catalog check failed: ${message}`);
+};
+
+const page = readFileSync(resolve('app/page.tsx'), 'utf8');
+const sectionsSource = page.slice(
+  page.indexOf('const GAME_SECTIONS'),
+  page.indexOf('const NEW_GAME_IDS'),
+);
+const categoryIds = [...sectionsSource.matchAll(/ids:\s*\[([^\]]+)\]/g)].flatMap((match) =>
+  [...match[1].matchAll(/'([^']+)'/g)].map((idMatch) => idMatch[1] as GameId),
+);
+const allIds = Object.keys(GAMES) as GameId[];
+const missingFromCategories = allIds.filter((id) => !categoryIds.includes(id));
+const duplicateCategories = [...new Set(categoryIds.filter((id, index) => categoryIds.indexOf(id) !== index))];
+
+if (missingFromCategories.length) fail(`uncategorized games: ${missingFromCategories.join(', ')}`);
+if (duplicateCategories.length) fail(`games repeated across categories: ${duplicateCategories.join(', ')}`);
+if (categoryIds.length !== allIds.length) fail(`category count ${categoryIds.length} does not match ${allIds.length} games`);
+if (GAME_LIST.length !== allIds.length || new Set(GAME_LIST.map((game) => game.id)).size !== allIds.length) {
+  fail('GAME_LIST must contain every game exactly once');
+}
+
+const playClient = readFileSync(resolve('components/PlayClient.tsx'), 'utf8');
+const componentBlock = playClient.slice(
+  playClient.indexOf('const COMPONENTS'),
+  playClient.indexOf('export default function PlayClient'),
+);
+const mappedIds = [...componentBlock.matchAll(/^\s{2}([a-z0-9]+):\s*([A-Za-z0-9]+),$/gm)];
+const mappedGameIds = mappedIds.map((match) => match[1] as GameId);
+const missingMappings = allIds.filter((id) => !mappedGameIds.includes(id));
+if (missingMappings.length || mappedGameIds.length !== allIds.length) {
+  fail(`component mapping mismatch: ${missingMappings.join(', ') || 'duplicate mapping'}`);
+}
+
+const imports = new Map(
+  [...playClient.matchAll(/^import\s+([A-Za-z0-9]+)\s+from\s+'\.\/games\/([^']+)';$/gm)].map(
+    (match) => [match[1], match[2]],
+  ),
+);
+for (const [, , componentName] of mappedIds) {
+  const fileName = imports.get(componentName);
+  if (!fileName) fail(`missing game import for ${componentName}`);
+  const source = readFileSync(resolve(`components/games/${fileName}.tsx`), 'utf8');
+  if (!source.includes('<canvas')) fail(`${fileName} has no game canvas`);
+  if (!source.includes('h-full') || !source.includes('w-full') || !source.includes('touch-none')) {
+    fail(`${fileName} canvas does not fill the touch stage`);
+  }
+}
+
+let recent: GameId[] = [];
+for (const id of allIds.slice(0, 10)) recent = nextRecentGames(recent, id);
+if (recent.length !== 6) fail('recently played shelf must stop at six games');
+const newest = recent[0];
+recent = nextRecentGames(recent, recent[3]);
+if (recent[0] === newest || new Set(recent).size !== recent.length) {
+  fail('replaying a game must move it to the front without duplication');
+}
+
+console.log(`Game catalog verified: ${allIds.length} routed, categorized, full-canvas games; recent shelf capped at 6.`);
