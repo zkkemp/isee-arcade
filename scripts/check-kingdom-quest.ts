@@ -1,11 +1,12 @@
 /** Focused structural regression check for the original Kingdom Quest campaign. */
 import { readFileSync } from 'node:fs';
 import { KINGDOM_THEME } from '../lib/kingdomMusic.js';
-import { GROUND_Y, HERO_H, LEVELS, cameraTarget, cloneLevel, dampCamera, levelHasGoalRoute, newHero, overlaps, portalExitX, portalTouches, questPace, questViewport, reachableLanding, simulationSteps, stepEnemy, stepHero } from '../lib/kingdomQuest.js';
+import { GROUND_Y, HERO_H, LEVELS, cameraTarget, cloneLevel, dampCamera, levelHasGoalRoute, newHero, overlaps, questPace, questViewport, reachableLanding, simulationSteps, stepEnemy, stepHero } from '../lib/kingdomQuest.js';
 
 const fail = (message: string): never => { throw new Error(`Kingdom Quest check failed: ${message}`); };
 
-if (LEVELS.length < 6) fail('campaign needs six handcrafted stages');
+if (LEVELS.length !== 16) fail('campaign needs exactly sixteen handcrafted stages');
+if (new Set(LEVELS.map((v) => v.id)).size !== 16 || new Set(LEVELS.map((v) => v.name)).size !== 16) fail('every campaign stage needs a unique identity');
 if (new Set(LEVELS.map((v) => v.biome)).size < 3) fail('each realm needs its own biome');
 
 for (let i = 0; i < LEVELS.length; i += 1) {
@@ -13,7 +14,6 @@ for (let i = 0; i < LEVELS.length; i += 1) {
   if (!levelHasGoalRoute(level)) fail(`${level.name} has no ground route to its beacon`);
   if (level.platforms.filter((v) => v.y < GROUND_Y).length < 5) fail(`${level.name} lacks platforming variety`);
   if (level.coins.length < 12 || level.runes.length < 2) fail(`${level.name} lacks collectible exploration rewards`);
-  if (level.portals.length !== 2 || level.portals.some((v) => v.toX < 0 || v.toX > level.width - 30 || v.toY < 0 || v.toY > GROUND_Y)) fail(`${level.name} portal pair has an unsafe destination`);
   if (level.checkpoints.length < 1) fail(`${level.name} needs a checkpoint`);
   if (!level.powers.length) fail(`${level.name} needs an original power-up`);
   for (const enemy of level.enemies) {
@@ -45,13 +45,8 @@ const eased30 = Array.from({ length: 30 }).reduce<number>((camera) => dampCamera
 const eased60 = Array.from({ length: 60 }).reduce<number>((camera) => dampCamera(camera, target, 1 / 60), 0);
 if (Math.abs(eased30 - eased60) > 0.01) fail('camera easing changes with frame rate');
 if (simulationSteps(1 / 20).some((slice) => slice > 1 / 120 + 1e-8)) fail('slow frames are not split into collision-safe physics slices');
-if (questPace(5, 1) <= questPace(0, 1)) fail('the six-stage campaign must build pace toward its finale');
-
-const warp = LEVELS[0].portals[0];
-const portalHero = newHero(warp.x - 5, warp.y + 4);
-if (!portalTouches(portalHero, warp)) fail('a hero brushing the visible warp ring must activate it');
-const exitRight = portalExitX(warp, 1, LEVELS[0].width);
-if (overlaps({ ...portalHero, x: exitRight, y: warp.toY }, { x: warp.toX, y: warp.toY, w: warp.w, h: warp.h })) fail('a warp must place the hero beyond the destination ring');
+if (questPace(15, 1) <= questPace(0, 1)) fail('the sixteen-stage campaign must build pace toward its finale');
+if (questPace(15, 1) > 1.42) fail('late-campaign speed must remain fair on touch controls');
 
 // The touch UI promises that a tap jumps. A released jump must still cross the
 // widest authored gap (98px) once the hero has built normal running speed.
@@ -75,8 +70,11 @@ if (!componentSource.includes('className="absolute inset-0 h-full w-full touch-n
 if (componentSource.includes('ch - insetRef.current') || componentSource.includes('ch - controlsInset')) {
   fail('Coin Runner 3 must not subtract the separate controls strip from its canvas again');
 }
+if (/\b(portal|warp)\b/i.test(componentSource)) fail('Coin Runner 3 must not contain portal or warp mechanics');
+const campaignSource = readFileSync(new URL('../lib/kingdomQuest.ts', import.meta.url), 'utf8');
+if (/\b(portal|warp)\b/i.test(campaignSource)) fail('Coin Runner 3 campaign data must not contain portals or warps');
 if (KINGDOM_THEME.length < 24 || new Set(KINGDOM_THEME.filter((note) => note !== null)).size < 8) {
   fail('original platformer theme needs a real melodic phrase');
 }
 
-console.log(`Kingdom Quest verified: ${LEVELS.length} realms, full-screen iPad viewports, stable camera/physics, safe warps, original theme, checkpoints, powers, and final boss.`);
+console.log(`Kingdom Quest verified: ${LEVELS.length} sequential realms, full-screen iPad viewports, stable camera/physics, no warps, original theme, checkpoints, powers, and final boss.`);

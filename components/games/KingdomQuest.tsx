@@ -6,18 +6,18 @@ import type { GameCanvasProps } from '@/lib/games';
 import { startKingdomMusic } from '@/lib/kingdomMusic';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
-import { GROUND_Y, HERO_H, LEVELS, WORLD_H, cameraTarget, cloneLevel, dampCamera, newHero, overlaps, portalExitX, portalTouches, questPace, questViewport, simulationSteps, stepEnemy, stepHero, type Enemy, type Hero, type QuestLevel, type Rect } from '@/lib/kingdomQuest';
+import { GROUND_Y, HERO_H, LEVELS, WORLD_H, cameraTarget, cloneLevel, dampCamera, newHero, overlaps, questPace, questViewport, simulationSteps, stepEnemy, stepHero, type Enemy, type Hero, type QuestLevel, type Rect } from '@/lib/kingdomQuest';
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
 type Phase = 'map' | 'playing' | 'finale';
 type State = {
   levelIndex: number; level: QuestLevel; hero: Hero; phase: Phase; camera: number; respawn: { x: number; y: number };
-  coins: number; runes: number; hearts: number; portalCooldown: number; banner: number; shake: number; finalT: number; particles: Particle[]; shownTip: boolean; combo: number; comboT: number; warpFlash: number;
+  coins: number; runes: number; hearts: number; banner: number; shake: number; finalT: number; particles: Particle[]; shownTip: boolean; combo: number; comboT: number;
 };
 
 function fresh(index = 0, phase: Phase = 'map', coins = 0, runes = 0): State {
   const level = cloneLevel(index);
-  return { levelIndex: index, level, hero: newHero(), phase, camera: 0, respawn: { x: 76, y: GROUND_Y - HERO_H }, coins, runes, hearts: 3, portalCooldown: 0, banner: 2.8, shake: 0, finalT: 0, particles: [], shownTip: false, combo: 0, comboT: 0, warpFlash: 0 };
+  return { levelIndex: index, level, hero: newHero(), phase, camera: 0, respawn: { x: 76, y: GROUND_Y - HERO_H }, coins, runes, hearts: 3, banner: 2.8, shake: 0, finalT: 0, particles: [], shownTip: false, combo: 0, comboT: 0 };
 }
 
 function pushBurst(s: State, x: number, y: number, color: string, count = 9) {
@@ -165,12 +165,20 @@ function drawMap(
   ctx.fillStyle = 'rgba(255,255,255,.8)';
   for (let i = 0; i < 46; i += 1) ctx.fillRect((i * 113) % viewW, (i * 53) % 225, 2, 2);
   ctx.fillStyle = '#f4d66d'; ctx.font = `900 ${viewW < 340 ? 23 : 30}px ui-rounded,system-ui`; ctx.textAlign = 'center'; ctx.fillText('KINGDOM QUEST', viewW / 2, 38);
-  ctx.fillStyle = '#d8eaff'; ctx.font = `${viewW < 340 ? 11 : 14}px system-ui`; ctx.fillText('Six realms. Lost runes. One brave keeper.', viewW / 2, 58);
+  ctx.fillStyle = '#d8eaff'; ctx.font = `${viewW < 340 ? 11 : 14}px system-ui`; ctx.fillText('Sixteen realms. Lost runes. One brave keeper.', viewW / 2, 58);
   const colors = ['#86d974', '#ef936e', '#ad9cff'];
-  const nodeLeft = Math.max(38, viewW * .14); const nodeSpan = (viewW - nodeLeft * 2) / 2;
-  const nodes = LEVELS.map((level, i) => ({ x: nodeLeft + (i % 3) * nodeSpan, y: 176 + Math.floor(i / 3) * 96, label: level.name, color: colors[['meadow', 'cavern', 'citadel'].indexOf(level.biome)] }));
-  ctx.strokeStyle = '#d9c777'; ctx.lineWidth = 5; ctx.beginPath(); nodes.forEach((node, i) => { if (i === 0) ctx.moveTo(node.x, node.y); else ctx.lineTo(node.x, node.y); }); ctx.stroke();
-  nodes.forEach((n, i) => { const open = i <= s.levelIndex; ctx.fillStyle = open ? n.color : '#53607e'; ctx.beginPath(); ctx.arc(n.x, n.y, 23 + (i === s.levelIndex ? Math.sin(pulse * 5) * 2 : 0), 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = i === s.levelIndex ? 4 : 1; ctx.stroke(); ctx.fillStyle = '#eff8ff'; ctx.font = `bold ${viewW < 340 ? 8 : 10}px system-ui`; const words = n.label.split(' '); ctx.fillText(words[0], n.x, n.y + 37); ctx.fillText(words.slice(1).join(' '), n.x, n.y + 48); });
+  const gridLeft = Math.max(30, viewW * .11); const gridSpan = (viewW - gridLeft * 2) / 3;
+  const nodes = LEVELS.map((level, i) => {
+    const row = Math.floor(i / 4); const logicalColumn = i % 4; const column = row % 2 ? 3 - logicalColumn : logicalColumn;
+    return { x: gridLeft + column * gridSpan, y: 172 + row * 48, color: colors[['meadow', 'cavern', 'citadel'].indexOf(level.biome)] };
+  });
+  ctx.strokeStyle = 'rgba(244,214,109,.72)'; ctx.lineWidth = 3; ctx.beginPath(); nodes.forEach((node, i) => { if (i === 0) ctx.moveTo(node.x, node.y); else ctx.lineTo(node.x, node.y); }); ctx.stroke();
+  nodes.forEach((n, i) => {
+    const open = i <= s.levelIndex; const current = i === s.levelIndex; const radius = 13 + (current ? Math.sin(pulse * 5) * 1.5 : 0);
+    ctx.fillStyle = open ? n.color : '#53607e'; ctx.beginPath(); ctx.arc(n.x, n.y, radius, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = current ? 3 : 1; ctx.stroke();
+    ctx.fillStyle = '#111737'; ctx.font = `900 ${viewW < 340 ? 8 : 9}px system-ui`; ctx.fillText(String(i + 1), n.x, n.y + 3);
+  });
   const l = s.level; ctx.fillStyle = '#fff8cf'; ctx.font = `bold ${viewW < 340 ? 16 : 18}px system-ui`; ctx.fillText(l.name, viewW / 2, 89);
   ctx.fillStyle = 'rgba(12,17,45,.72)'; ctx.beginPath(); ctx.roundRect(12, 101, viewW - 24, 42, 12); ctx.fill();
   ctx.fillStyle = '#e2edff'; ctx.font = `${viewW < 340 ? 10 : 12}px system-ui`; ctx.fillText(l.tip.length > 56 && viewW < 340 ? `${l.tip.slice(0, 53)}…` : l.tip, viewW / 2, 126);
@@ -217,7 +225,7 @@ export default function KingdomQuest({ paused, input, api, restartToken, difficu
       ctx.fillStyle = '#fff5bb'; ctx.font = 'bold 15px system-ui'; ctx.fillText('Restart for a new quest', viewW / 2, viewH - 25); ctx.restore(); return;
     }
     const h = s.hero; const speed = questPace(s.levelIndex, SPEED_SCALE[difficulty]);
-    h.hurt = Math.max(0, h.hurt - dt); h.star = Math.max(0, h.star - dt); s.portalCooldown = Math.max(0, s.portalCooldown - dt); s.banner = Math.max(0, s.banner - dt); s.shake = Math.max(0, s.shake - dt); s.warpFlash = Math.max(0, s.warpFlash - dt); s.comboT = Math.max(0, s.comboT - dt); if (!s.comboT) s.combo = 0; s.finalT += dt;
+    h.hurt = Math.max(0, h.hurt - dt); h.star = Math.max(0, h.star - dt); s.banner = Math.max(0, s.banner - dt); s.shake = Math.max(0, s.shake - dt); s.comboT = Math.max(0, s.comboT - dt); if (!s.comboT) s.combo = 0; s.finalT += dt;
     const beforeBottom = h.y + h.h; const wasGrounded = h.grounded; let landed = false;
     const slices = simulationSteps(dt);
     slices.forEach((slice, index) => {
@@ -233,16 +241,10 @@ export default function KingdomQuest({ paused, input, api, restartToken, difficu
     for (const enemy of threats) if (enemy.alive && overlaps(h, enemy)) { if ((h.star > 0 || (h.vy > 70 && beforeBottom <= enemy.y + 10))) stomp(s, enemy, api); else damage(s, api, enemy.kind === 'sentinel' ? 'The Sentinel stopped the quest' : 'A realm creature bumped you'); }
     collectAll(s, api);
     for (const cp of s.level.checkpoints) if (!cp.hit && overlaps(h, cp)) { cp.hit = true; s.respawn = { x: cp.x - 14, y: GROUND_Y - HERO_H }; api.setStatus('Lantern lit — checkpoint saved!'); playSound('powerup'); pushBurst(s, cp.x + 9, cp.y + 12, '#ffe16a', 14); }
-    for (const gate of s.level.portals) if (s.portalCooldown <= 0 && portalTouches(h, gate)) {
-      h.x = portalExitX(gate, h.facing, s.level.width); h.y = gate.toY; h.vx = h.facing * 70; h.vy = -45;
-      s.portalCooldown = 1.05; s.warpFlash = .36; s.camera = cameraTarget(h.x, viewW, s.level.width);
-      pushBurst(s, h.x + 12, h.y + 16, '#bd9fff', 24); playSound('powerup'); api.setStatus(`${gate.label} warp!`);
-      break;
-    }
     if (h.y > WORLD_H + 60) damage(s, api, 'You fell beyond the realm');
     if (!s.level.goal.locked && overlaps(h, s.level.goal)) {
       pushBurst(s, s.level.goal.x + 17, s.level.goal.y + 18, '#ffe16a', 36); api.addScore(200 + s.level.coins.length * 5); playSound('levelClear');
-      if (s.levelIndex === LEVELS.length - 1) { s.phase = 'finale'; api.requestGate('Aurora Spire restored'); }
+      if (s.levelIndex === LEVELS.length - 1) { s.phase = 'finale'; api.requestGate('Aurora Crown restored'); }
       else { const next = s.levelIndex + 1; stateRef.current = fresh(next, 'map', s.coins, s.runes); api.requestGate(`${s.level.name} restored`); ctx.restore(); return; }
     }
     s.camera = dampCamera(s.camera, cameraTarget(h.x, viewW, s.level.width), dt);
@@ -252,7 +254,6 @@ export default function KingdomQuest({ paused, input, api, restartToken, difficu
     for (const c of s.level.coins) { const spin = .25 + Math.abs(Math.sin(time * 5 + c.x)) * .75; ctx.save(); ctx.translate(c.x + 6.5, c.y + 6.5); ctx.scale(spin, 1); ctx.shadowColor = '#ffe36f'; ctx.shadowBlur = 7; ctx.fillStyle = '#ffc83d'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.strokeStyle = '#fff3a0'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#fff9ca'; ctx.fillRect(-1, -4, 2, 8); ctx.restore(); }
     for (const r of s.level.runes) { ctx.shadowColor = '#8df6ff'; ctx.shadowBlur = 10; ctx.fillStyle = '#8df6ff'; ctx.beginPath(); ctx.moveTo(r.x + 8, r.y); ctx.lineTo(r.x + 16, r.y + 10); ctx.lineTo(r.x + 8, r.y + 20); ctx.lineTo(r.x, r.y + 10); ctx.fill(); ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.fillRect(r.x + 7, r.y + 5, 2, 9); }
     for (const power of s.level.powers) if (!power.used) { const pulse = 10 + Math.sin(time * 7) * 2; ctx.shadowColor = power.kind === 'bloom' ? '#ffb7e4' : '#c7fbff'; ctx.shadowBlur = 12; ctx.fillStyle = power.kind === 'bloom' ? '#ffb7e4' : '#c7fbff'; ctx.beginPath(); ctx.arc(power.x + 10, power.y + 11, pulse, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.fillRect(power.x + 9, power.y + 5, 2, 12); }
-    for (const portal of s.level.portals) { const alpha = s.portalCooldown > .62 ? .45 : .9; ctx.save(); ctx.translate(portal.x + 15, portal.y + 22); ctx.rotate(Math.sin(time * 2 + portal.x) * .08); ctx.strokeStyle = `rgba(222,184,255,${alpha})`; ctx.shadowColor = '#c99dff'; ctx.shadowBlur = 12; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 0, 13 + Math.sin(time * 6) * 2, 20, 0, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(157,100,239,.18)'; ctx.fill(); ctx.restore(); }
     for (const cp of s.level.checkpoints) { ctx.fillStyle = '#4a3d67'; ctx.fillRect(cp.x + 8, cp.y, 3, 56); ctx.fillStyle = cp.hit ? '#ffe068' : '#8f9bb5'; ctx.beginPath(); ctx.arc(cp.x + 9, cp.y + 7, cp.hit ? 9 : 6, 0, Math.PI * 2); ctx.fill(); }
     for (const enemy of threats) drawEnemy(ctx, enemy, time); drawHero(ctx, h, time);
     ctx.fillStyle = s.level.goal.locked ? '#6b587c' : '#7f5539'; ctx.fillRect(s.level.goal.x + 12, s.level.goal.y, 6, 82); ctx.fillStyle = s.level.goal.locked ? '#b49ec9' : '#fff5ab'; ctx.beginPath(); ctx.moveTo(s.level.goal.x + 18, s.level.goal.y + 4); ctx.lineTo(s.level.goal.x + 47, s.level.goal.y + 16); ctx.lineTo(s.level.goal.x + 18, s.level.goal.y + 29); ctx.fill(); ctx.shadowColor = '#fff5ab'; ctx.shadowBlur = s.level.goal.locked ? 0 : 12; ctx.beginPath(); ctx.arc(s.level.goal.x + 15, s.level.goal.y + 5, 7, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
@@ -264,7 +265,6 @@ export default function KingdomQuest({ paused, input, api, restartToken, difficu
     ctx.fillStyle = '#fff'; ctx.font = '13px system-ui'; ctx.fillText(`♥${s.hearts}   ◉${s.coins}   ◇${s.runes}${s.combo > 1 ? `   ×${s.combo}` : ''}`, 19, 49);
     if (s.level.boss?.alive) { const bossW = Math.min(170, viewW - 20); const bossX = viewW - bossW - 10; ctx.fillStyle = 'rgba(30,20,60,.82)'; ctx.beginPath(); ctx.roundRect(bossX, 67, bossW, 32, 10); ctx.fill(); ctx.fillStyle = '#e3d8ff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`SENTINEL  ${'✦'.repeat(s.level.boss.hp)}`, bossX + bossW / 2, 87); }
     if (s.banner > 0) { const bannerW = Math.min(viewW - 24, 390); const bx = (viewW - bannerW) / 2; ctx.fillStyle = 'rgba(21,25,58,.86)'; ctx.beginPath(); ctx.roundRect(bx, 75, bannerW, 52, 13); ctx.fill(); ctx.fillStyle = '#fff6ba'; ctx.font = `bold ${viewW < 340 ? 11 : 14}px system-ui`; ctx.textAlign = 'center'; const tip = viewW < 340 && s.level.tip.length > 46 ? `${s.level.tip.slice(0, 43)}…` : s.level.tip; ctx.fillText(tip, viewW / 2, 105); }
-    if (s.warpFlash > 0) { ctx.fillStyle = `rgba(198,157,255,${s.warpFlash * .55})`; ctx.fillRect(0, 0, viewW, viewH); }
     ctx.restore();
   }});
   return (

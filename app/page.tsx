@@ -78,7 +78,6 @@ const NEW_GAME_IDS = new Set<GameId>([
 export default function Home() {
   const counts = countBySubject();
   const subjects = Object.keys(counts) as Subject[];
-  const featured = GAMES.platformer3;
 
   return (
     <main className="arcade-home mx-auto w-full max-w-6xl px-4 pb-16 pt-5 sm:px-8 sm:pt-9">
@@ -136,34 +135,6 @@ export default function Home() {
       </div>
 
       <RecentlyPlayed />
-
-      <Link
-        href={`/play/${featured.id}`}
-        className="featured-game group mb-12 grid overflow-hidden md:grid-cols-[1.05fr_.95fr]"
-      >
-        <GameArtwork
-          game={featured.id}
-          accent={featured.accent}
-          icon={featured.icon}
-          featured
-        />
-        <span className="relative flex flex-col justify-center p-6 sm:p-8">
-          <span className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">
-            Featured adventure
-          </span>
-          <span className="text-3xl font-black tracking-[-0.025em] text-white sm:text-4xl">
-            {featured.name}
-          </span>
-          <span className="mt-3 max-w-md text-sm leading-relaxed text-white/64 sm:text-base">
-            A completely rebuilt six-stage platform adventure with a kingdom map, handcrafted
-            realms, powers, secrets, checkpoints, portals, enemies, and a final boss. Earlier
-            editions are still here too.
-          </span>
-          <span className="featured-game__cta mt-6 inline-flex w-fit items-center gap-2 bg-amber-300 px-5 py-2.5 text-sm font-black text-[#21152b] transition group-hover:gap-3">
-            Start the adventure <span>→</span>
-          </span>
-        </span>
-      </Link>
 
       <section aria-labelledby="game-library-title">
         <div className="mb-5 flex items-end justify-between gap-4 px-1">

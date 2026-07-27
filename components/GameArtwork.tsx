@@ -89,7 +89,17 @@ export default function GameArtwork({
       <span className="game-art__spark game-art__spark--one" />
       <span className="game-art__spark game-art__spark--two" />
       <span className="game-art__spark game-art__spark--three" />
-      <span className="game-art__glyph">{icon}</span>
+      <span className="game-art__glyph">
+        {game === 'backgammon' ? (
+          <span className="game-art__backgammon-board">
+            {Array.from({ length: 8 }, (_, index) => <i key={index} />)}
+          </span>
+        ) : game === 'diceroyale' ? (
+          <span className="game-art__five-dice">
+            <i>⚄</i><i>⚂</i><i>⚅</i><i>⚀</i><i>⚃</i>
+          </span>
+        ) : icon}
+      </span>
       <span className="game-art__shine" />
     </span>
   );
