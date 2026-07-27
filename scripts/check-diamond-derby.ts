@@ -49,7 +49,28 @@ const playable = { kind: 'BREEZE' as const, targetX: 0, targetY: 0, inZone: true
 assert(judgeSwing(playable, 0.8, 0.25, 'hard', 10, 0.01) === 'out', 'weak fair contact on hard must let the defence make an out');
 assert(judgeOpponentAtBat({ ...playable, kind: 'CURVE', targetX: 0.46 }, 'easy', 1, 0.01) === 'strike', 'a well-placed curve should produce a called strike band');
 assert(judgeOpponentAtBat({ ...playable, kind: 'BREEZE', targetX: 0 }, 'hard', 8, 0.99) === 'homer', 'a hard rival must punish a centre-cut pitch sometimes');
+
+const isHit = (outcome: ReturnType<typeof judgeOpponentAtBat>) =>
+  outcome === 'single' || outcome === 'double' || outcome === 'triple' || outcome === 'homer';
+const hitCount = (
+  pitch: Parameters<typeof judgeOpponentAtBat>[0],
+  difficulty: Parameters<typeof judgeOpponentAtBat>[1],
+  level: number,
+) => {
+  let hits = 0;
+  for (let sample = 0; sample < 1000; sample += 1) {
+    if (isHit(judgeOpponentAtBat(pitch, difficulty, level, (sample + 0.5) / 1000))) hits += 1;
+  }
+  return hits;
+};
+const smartCurve = { ...playable, kind: 'CURVE' as const, targetX: 0.46, targetY: -0.38 };
+const highFastball = { ...playable, kind: 'ZIP' as const, targetX: 0.46, targetY: -0.38 };
+const centerChangeup = { ...playable, targetX: 0, targetY: 0 };
+assert(hitCount(smartCurve, 'hard', 8) <= 80, 'a corner curve must hold even a hard rival below an 8% hit rate');
+assert(hitCount(highFastball, 'hard', 8) <= 100, 'a high fastball must hold even a hard rival below a 10% hit rate');
+assert(hitCount(centerChangeup, 'hard', 8) >= 300, 'a centre-cut changeup must remain clearly dangerous');
+
 const [nextSeed, roll] = nextRandom(42);
 assert(nextSeed !== 42 && roll >= 0 && roll < 1, 'seeded random must advance within [0, 1)');
 
-console.log('Diamond Derby: counts, forced advances, innings, deterministic pitches, and swing rewards passed.');
+console.log('Diamond Derby: counts, forced advances, innings, pitch strategy, and swing rewards passed.');

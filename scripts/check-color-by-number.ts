@@ -29,8 +29,8 @@ assert(componentSource.includes('onWheel=') && componentSource.includes('zoomAro
 assert(componentSource.includes("ctx.fillStyle = '#ffffff'"), 'painting sheet must use a non-blending white background');
 
 for (const picture of PICTURES) {
-  assert(picture.rows >= 18 && picture.cols >= 20 && picture.cells.length >= 360, `${picture.name} is not intricate enough`);
-  assert(picture.palette.length >= 8 && picture.palette.length <= 16, `${picture.name} palette must be rich but usable`);
+  assert(picture.rows >= 34 && picture.cols >= 36 && picture.cells.length >= 1200, `${picture.name} is not intricate enough`);
+  assert(picture.palette.length >= 10 && picture.palette.length <= 16, `${picture.name} palette must be rich but usable`);
   assert(picture.cells.length === picture.rows * picture.cols, `${picture.name} grid size mismatch`);
   const used = new Set(picture.cells);
   for (let color = 0; color < picture.palette.length; color += 1) assert(used.has(color), `${picture.name} does not use palette color ${color + 1}`);
@@ -68,4 +68,4 @@ for (const picture of PICTURES) {
   }
 }
 
-console.log(`Color by Number verified: ${PICTURES.length} distinct solvable pictures, responsive iPad layout, detail zoom, and auto-hiding completed colors.`);
+console.log(`Color by Number verified: ${PICTURES.length} distinct 1,200+ cell pictures, responsive iPad layout, detail zoom, and auto-hiding completed colors.`);

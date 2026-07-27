@@ -19,15 +19,29 @@ const NAMES: Record<PictureCategory, string[]> = {
 
 const CATEGORY_ORDER: PictureCategory[] = ['animals', 'fantasy', 'nature', 'space', 'vehicles', 'patterns'];
 const COLOR_NAMES = ['Ink', 'Coral', 'Gold', 'Leaf', 'Sky', 'Indigo', 'Plum', 'Rose', 'Mint', 'Amber', 'Ocean', 'Lilac', 'Berry', 'Lime', 'Sun', 'Cloud'];
+const CATEGORY_HUE: Record<PictureCategory, number> = {
+  animals: 28,
+  fantasy: 278,
+  nature: 118,
+  space: 220,
+  vehicles: 8,
+  patterns: 188,
+};
 
 function hsl(h: number, s: number, l: number) { return `hsl(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%)`; }
 function mod(n: number, m: number) { return ((n % m) + m) % m; }
 
-function makePalette(seed: number, count: number): PaletteColor[] {
-  return Array.from({ length: count }, (_, i) => ({
-    hex: hsl(mod(seed * 41 + i * 360 / count + (i % 3) * 17, 360), 61 + (i * 9) % 24, 36 + (i * 11) % 31),
-    name: COLOR_NAMES[i],
-  }));
+function makePalette(category: PictureCategory, seed: number, count: number): PaletteColor[] {
+  const base = mod(CATEGORY_HUE[category] + seed * 7, 360);
+  return Array.from({ length: count }, (_, i) => {
+    if (i === 0) return { hex: hsl(base, 36, 94), name: 'Light' };
+    if (i === 1) return { hex: hsl(base + 32, 34, 82), name: 'Backdrop' };
+    if (i === 2) return { hex: hsl(base + 205, 42, 22), name: 'Outline' };
+    return {
+      hex: hsl(mod(base + (i - 3) * 137.5 + (i % 2) * 18, 360), 64 + (i * 7) % 22, 43 + (i * 9) % 22),
+      name: COLOR_NAMES[i],
+    };
+  });
 }
 
 const ellipse = (x: number, y: number, cx: number, cy: number, rx: number, ry: number) =>
@@ -111,18 +125,50 @@ function subjectMask(category: PictureCategory, variant: number, x: number, y: n
 }
 
 function makeCells(spec: Spec): number[] {
-  const cells: number[] = [];
+  const masks: boolean[] = [];
   for (let r = 0; r < spec.rows; r += 1) for (let c = 0; c < spec.cols; c += 1) {
     const x = (c + .5) / spec.cols * 2 - 1;
     const y = (r + .5) / spec.rows * 2 - 1;
-    const wave = Math.sin(x * (4 + spec.seed % 5) + spec.seed) + Math.cos(y * (5 + spec.seed % 4) - spec.seed * .7) + Math.sin((x + y) * 7);
-    const texture = mod(Math.floor((wave + 3) * 2.3) + r * 3 + c * 5 + spec.seed, spec.colors);
-    const mask = subjectMask(spec.category, spec.variant, x, y);
+    masks.push(subjectMask(spec.category, spec.variant, x, y) === 1);
+  }
+
+  const cells: number[] = [];
+  for (let r = 0; r < spec.rows; r += 1) for (let c = 0; c < spec.cols; c += 1) {
+    const index = r * spec.cols + c;
+    const x = (c + .5) / spec.cols * 2 - 1;
+    const y = (r + .5) / spec.rows * 2 - 1;
+    // Broad flowing regions read like deliberate shading at gallery scale.
+    // The old row/column hash produced noisy confetti that hid the subject.
+    const wave =
+      Math.sin(x * (2.2 + spec.seed % 3) + spec.seed * .37) +
+      Math.cos(y * (2.6 + spec.seed % 2) - spec.seed * .23) +
+      Math.sin((x + y) * 2.4 + spec.variant);
+    const foregroundBand = mod(
+      Math.floor((wave + 3) * 0.9 + (x + 1) * 2.1 + (y + 1) * 1.4 + spec.seed),
+      spec.colors - 3,
+    );
+    const mask = masks[index];
+    const boundary =
+      mask &&
+      (
+        r === 0 ||
+        c === 0 ||
+        r === spec.rows - 1 ||
+        c === spec.cols - 1 ||
+        !masks[index - 1] ||
+        !masks[index + 1] ||
+        !masks[index - spec.cols] ||
+        !masks[index + spec.cols]
+      );
     // Two quiet background colors make the named silhouette readable. Every
-    // other palette color is reserved for rich detail inside the subject.
+    // subject gets a dark numbered outline, then broad rich shading inside.
     const value = mask
-      ? 2 + mod(texture + Math.floor((x - y + 2) * 2), spec.colors - 2)
-      : mod(texture + Math.floor((r + c) / 5), 2);
+      ? boundary
+        ? 2
+        : 3 + foregroundBand
+      : y > 0.42 + Math.sin(x * 2.7 + spec.seed) * 0.08
+        ? 1
+        : 0;
     cells.push(value);
   }
   // Guarantee palette coverage without scattering foreground "spark" pixels
@@ -142,7 +188,15 @@ function specs(): Spec[] {
   const result: Spec[] = [];
   let seed = 11;
   CATEGORY_ORDER.forEach((category, catIndex) => NAMES[category].forEach((name, variant) => {
-    result.push({ name, category, variant, seed: seed++, rows: 18 + (variant + catIndex) % 5, cols: 20 + (variant * 2 + catIndex) % 5, colors: 8 + (variant * 3 + catIndex) % 9 });
+    result.push({
+      name,
+      category,
+      variant,
+      seed: seed++,
+      rows: 34 + (variant + catIndex) % 7,
+      cols: 36 + (variant * 2 + catIndex) % 7,
+      colors: 10 + (variant * 3 + catIndex) % 7,
+    });
   }));
   return result;
 }
@@ -150,7 +204,7 @@ function specs(): Spec[] {
 export const PICTURES: PictureTemplate[] = specs().map((spec, i) => ({
   id: `${spec.category}-${spec.name.toLowerCase().replaceAll(' ', '-')}`,
   name: spec.name, category: spec.category, rows: spec.rows, cols: spec.cols,
-  palette: makePalette(spec.seed + i * 3, spec.colors), cells: makeCells(spec),
+  palette: makePalette(spec.category, spec.seed + i * 3, spec.colors), cells: makeCells(spec),
 }));
 
 export function pictureHash(picture: PictureTemplate): string {
@@ -216,11 +270,11 @@ export function boardLayout(
   // picture could look fine at first and then hide its lower cells beneath the
   // palette on a portrait iPad.
   const key = paletteLayout(width, height, paletteItemCount);
-  const usableHeight = Math.max(56, key.top - 112);
+  const usableHeight = Math.max(56, key.top - 132);
   const base = Math.min((width - 24) / picture.cols, usableHeight / picture.rows);
   const cell = Math.max(8, base * zoom);
   const boardWidth = cell * picture.cols; const boardHeight = cell * picture.rows;
-  return { x: (width - boardWidth) / 2 + panX, y: 102 + (usableHeight - boardHeight) / 2 + panY, cell, width: boardWidth, height: boardHeight };
+  return { x: (width - boardWidth) / 2 + panX, y: 118 + (usableHeight - boardHeight) / 2 + panY, cell, width: boardWidth, height: boardHeight };
 }
 export function cellAt(layout: BoardLayout, picture: PictureTemplate, x: number, y: number): number | null {
   const col = Math.floor((x - layout.x) / layout.cell); const row = Math.floor((y - layout.y) / layout.cell);

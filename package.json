@@ -52,27 +52,36 @@
     "check:lower-level-language": "node --import tsx scripts/check-lower-level-language.ts",
     "check:word-games": "node --import tsx scripts/check-word-games.ts",
     "check:dice-royale": "node --import tsx scripts/check-dice-royale.ts",
+    "check:strategy-games": "node --import tsx scripts/check-strategy-games.ts",
     "check:classic-board": "node --import tsx scripts/check-classic-board.ts",
     "check:kingdom": "node --import tsx scripts/check-kingdom-quest.ts",
     "check:diamond-v2": "node --import tsx scripts/check-diamond-derby.ts",
-    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:block-sizes && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory && npm run check:merge && npm run check:bubble && npm run check:checkers && npm run check:echo && npm run check:fruit && npm run check:chess && npm run check:tapattack && npm run check:sudoku && npm run check:dots && npm run check:cards && npm run check:wordhunt && npm run check:spelling && npm run check:gradek && npm run check:grade1 && npm run check:grade3 && npm run check:frogger && npm run check:newgames && npm run check:classic-a && npm run check:classic-b && npm run check:classic-board && npm run check:kingdom && npm run check:diamond-v2 && npm run check:paddle-duel && npm run check:pyramid-hop && npm run check:mystery-faces && npm run check:color-by-number && npm run check:counting-visuals && npm run check:learning && npm run check:isee-practice && npm run check:lower-level-language && npm run check:word-games && npm run check:dice-royale && npm run check:catalog",
+    "check": "npm run typecheck && npm run check:sprites && npm run check:questions && npm run check:logic && npm run check:platformer && npm run check:breakout && npm run check:maze && npm run check:blocks && npm run check:block-sizes && npm run check:climber && npm run check:match3 && npm run check:runner && npm run check:tetra && npm run check:tictactoe && npm run check:memory && npm run check:merge && npm run check:bubble && npm run check:checkers && npm run check:echo && npm run check:fruit && npm run check:chess && npm run check:tapattack && npm run check:sudoku && npm run check:dots && npm run check:cards && npm run check:wordhunt && npm run check:spelling && npm run check:gradek && npm run check:grade1 && npm run check:grade3 && npm run check:frogger && npm run check:newgames && npm run check:classic-a && npm run check:classic-b && npm run check:classic-board && npm run check:kingdom && npm run check:diamond-v2 && npm run check:paddle-duel && npm run check:pyramid-hop && npm run check:mystery-faces && npm run check:color-by-number && npm run check:counting-visuals && npm run check:learning && npm run check:isee-practice && npm run check:lower-level-language && npm run check:word-games && npm run check:dice-royale && npm run check:strategy-games && npm run check:catalog",
     "icons": "node scripts/make-icons.mjs",
     "passcode": "node scripts/passcode-hash.mjs"
   },
   "dependencies": {
-    "next": "16.2.11",
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.8",
+    "next": "^16.2.12",
+    "postcss": "^8.5.23",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.11",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "sharp": "$sharp"
   }
 }

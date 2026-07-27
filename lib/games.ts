@@ -49,7 +49,10 @@ export type GameId =
   | 'colorbynumber'
   | 'hangman'
   | 'wordscramble'
-  | 'diceroyale';
+  | 'diceroyale'
+  | 'starlinefour'
+  | 'mancala'
+  | 'gemcode';
 
 /**
  * How a game is driven on touch.
@@ -476,6 +479,36 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'board',
     aspect: 3 / 4,
   },
+  starlinefour: {
+    id: 'starlinefour',
+    name: 'Starline Four',
+    tagline: 'Drop glowing stars and connect four before your rival.',
+    gateNote: 'Study time buys play time.',
+    icon: '🌠',
+    accent: '#fbbf24',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
+  mancala: {
+    id: 'mancala',
+    name: 'Mancala Garden',
+    tagline: 'Sow the stones, plan a capture, and fill your store.',
+    gateNote: 'Study time buys play time.',
+    icon: '🪨',
+    accent: '#6ee7b7',
+    controls: 'board',
+    aspect: 4 / 3,
+  },
+  gemcode: {
+    id: 'gemcode',
+    name: 'Gem Code',
+    tagline: 'Crack the hidden color code with logic and careful clues.',
+    gateNote: 'Study time buys play time.',
+    icon: '💎',
+    accent: '#67e8f9',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
 };
 
 /**
@@ -501,7 +534,7 @@ export const HOW_TO: Record<GameId, string> = {
   platformer3:
     'Follow the sixteen-stage kingdom map, then run and jump to each beacon in order. Build speed smoothly, stomp creatures, cross pits, collect coins and hidden runes, and light checkpoints. Sunblooms give you a shield and comet stars let you charge through danger. Restore all sixteen realms, then defeat the Aurora Sentinel with four careful stomps.',
   diamond:
-    'Play both sides of a three-inning Harbor Cup. On defense, choose Breeze, Curve, or Zip, then tap a square in the catcher target to place the pitch. On offense, move the yellow aim marker and tap as the ball reaches the strike zone. Balls, strikes, walks, fielded outs, hits, runners, runs, innings, extra innings, wins, and losses all count.',
+    'Play both sides of a three-inning Harbor Cup. On defense, choose Changeup, Curveball, or Fastball, then tap the catcher target. Pitch smart: changeups work best low, fastballs work best high, and curveballs create outs on the corners. Avoid the risky center square. On offense, move the yellow aim marker and tap as the ball reaches the strike zone. Balls, strikes, walks, fielded outs, hits, runners, runs, innings, extra innings, wins, and losses all count.',
   paperroute: 'Move left and right along the street. Deliver papers to the mailboxes, dodge obstacles, and keep your route rolling.',
   pyramidhop: 'Light every jewel while avoiding the dust bug. Left and Right descend the two visible slopes; Up climbs the left slope and Down climbs the right slope. The top jewel starts lit, invalid moves stay safely on the pyramid, and each completed pyramid begins a faster level.',
   reversi: 'Place a disc so it traps the other color in a straight line. Every trapped disc flips to your color. When the board is full, the most discs wins.',
@@ -560,13 +593,19 @@ export const HOW_TO: Record<GameId, string> = {
   mysteryfaces:
     'A secret member of the Mystery Crew has been chosen. Ask yes-or-no questions, use each answer to cross off faces that cannot be the secret, then tap MAKE GUESS and choose the one face left. Easy mode helps cross off impossible faces for you.',
   colorbynumber:
-    'Choose one of 42 original pictures, then pick a numbered color and paint every cell with that same number. Drag your finger to fill a run of cells. Wrong colors do not stick. Use the arrows and plus or minus buttons to pan and zoom, and come back later to resume right where you stopped.',
+    'Choose from a seven-page gallery of 42 original pictures, each with more than 1,200 numbered cells. Use the large Previous and Next buttons to change gallery pages, or the Picture buttons while painting to move directly to another design. Pick a numbered color and paint every cell with that number. Pinch to zoom, use two fingers to move, and tap Fit whenever you want the whole picture back on screen. Finished colors disappear automatically, wrong colors do not stick, and every picture resumes where you stopped.',
   hangman:
     'Use the clue and guess one letter at a time. Correct letters fill the word; wrong letters bring the storm closer. Solve four words to complete a Word Rescue mission. Word difficulty follows the active learner profile.',
   wordscramble:
     'Use the picture or meaning clue, then tap the mixed-up letter tiles in the right order. Undo, reshuffle, or place one hint letter when needed. Words automatically match the active learner profile and grow harder as rounds increase.',
   diceroyale:
     'Choose 1 to 4 players and decide which seats are people or computer rivals. Roll up to three times, tapping dice to hold the ones you want to keep. Then choose one open score row. Every row can be used once; the highest total after all 13 rounds wins.',
+  starlinefour:
+    'Choose one player or two players. Take turns dropping one glowing star into a column. Stars fall to the lowest open spot. Connect four of your color across, down, or diagonally before your rival does.',
+  mancala:
+    'Choose one player or two players. Tap one bowl on your side to pick up every stone and sow them one at a time around the board. Skip the other player’s store. End in your own store to play again. End in an empty bowl on your side to capture that stone and the stones directly opposite. When one side is empty, the most stones in a store wins.',
+  gemcode:
+    'The vault hides four different colored gems. Build a four-gem guess, then lock it in. Each bright clue pin means one gem has the right color and the right position. Each pale pin means a right color is in the wrong position. Use those clues to crack the code in ten guesses.',
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -616,6 +655,9 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.hangman,
   GAMES.wordscramble,
   GAMES.diceroyale,
+  GAMES.starlinefour,
+  GAMES.mancala,
+  GAMES.gemcode,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

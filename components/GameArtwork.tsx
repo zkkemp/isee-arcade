@@ -49,6 +49,9 @@ const ART_KIND: Record<GameId, ArtKind> = {
   hangman: 'words',
   wordscramble: 'words',
   diceroyale: 'tabletop',
+  starlinefour: 'tabletop',
+  mancala: 'tabletop',
+  gemcode: 'candy',
 };
 
 export default function GameArtwork({

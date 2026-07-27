@@ -17,6 +17,7 @@ import {
   type PictureTemplate,
 } from '@/lib/colorByNumber';
 import { playSound } from '@/lib/sound';
+import { profileStorageSuffix } from '@/lib/profiles';
 
 type Mode = 'gallery' | 'paint';
 type State = {
@@ -29,33 +30,80 @@ type Pinch = { distance: number; cellX: number; cellY: number };
 
 const SAVE_KEY = 'isee-arcade:color-by-number:v1';
 const FINISHED_KEY = 'isee-arcade:color-by-number:finished:v1';
-const PER_PAGE = 8;
+const PER_PAGE = 6;
+
+function key(base: string): string {
+  return `${base}${profileStorageSuffix()}`;
+}
+
+function queueSync(): void {
+  void import('@/lib/cloudSync')
+    .then(({ queueCloudSync }) => queueCloudSync())
+    .catch(() => undefined);
+}
 
 function safeLoadPicture(picture: PictureTemplate): number[] {
   if (typeof window === 'undefined') return emptyPainting(picture);
   try {
-    const all = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? '{}') as Record<string, number[]>;
+    const raw = window.localStorage.getItem(key(SAVE_KEY)) ?? window.localStorage.getItem(SAVE_KEY);
+    const all = JSON.parse(raw ?? '{}') as Record<string, number[]>;
     const candidate = all[picture.id];
     return Array.isArray(candidate) && candidate.length === picture.cells.length && candidate.every((v) => Number.isInteger(v) && v >= -1 && v < picture.palette.length) ? candidate : emptyPainting(picture);
   } catch { return emptyPainting(picture); }
 }
 function savePicture(picture: PictureTemplate, painted: number[]) {
-  try { const all = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? '{}') as Record<string, number[]>; all[picture.id] = painted; window.localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { /* optional local resume */ }
+  try {
+    const storageKey = key(SAVE_KEY);
+    const fallback = window.localStorage.getItem(SAVE_KEY);
+    const all = JSON.parse(window.localStorage.getItem(storageKey) ?? fallback ?? '{}') as Record<string, number[]>;
+    all[picture.id] = painted;
+    window.localStorage.setItem(storageKey, JSON.stringify(all));
+    queueSync();
+  } catch { /* optional local resume */ }
 }
 function loadFinished() {
   if (typeof window === 'undefined') return new Set<string>();
-  try { const ids = JSON.parse(window.localStorage.getItem(FINISHED_KEY) ?? '[]'); return new Set(Array.isArray(ids) ? ids.filter((v): v is string => typeof v === 'string') : []); } catch { return new Set<string>(); }
+  try {
+    const raw = window.localStorage.getItem(key(FINISHED_KEY)) ?? window.localStorage.getItem(FINISHED_KEY);
+    const ids = JSON.parse(raw ?? '[]');
+    return new Set(Array.isArray(ids) ? ids.filter((v): v is string => typeof v === 'string') : []);
+  } catch { return new Set<string>(); }
 }
-function saveFinished(done: Set<string>) { try { window.localStorage.setItem(FINISHED_KEY, JSON.stringify([...done])); } catch { /* optional local resume */ } }
-function fresh(): State { return { mode: 'gallery', page: 0, pictureIndex: 0, painted: [], selected: 0, zoom: 1.22, panX: 0, panY: 0, draggingCell: null, wrong: null, complete: 0, gateSent: false, completed: loadFinished(), viewW: 1, viewH: 1 }; }
+function saveFinished(done: Set<string>) {
+  try {
+    window.localStorage.setItem(key(FINISHED_KEY), JSON.stringify([...done]));
+    queueSync();
+  } catch { /* optional local resume */ }
+}
+function fresh(): State { return { mode: 'gallery', page: 0, pictureIndex: 0, painted: [], selected: 0, zoom: 1, panX: 0, panY: 0, draggingCell: null, wrong: null, complete: 0, gateSent: false, completed: loadFinished(), viewW: 1, viewH: 1 }; }
 
 function rounded(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r = 12) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
 function pageCount() { return Math.ceil(PICTURES.length / PER_PAGE); }
+function galleryLayout(width: number, height: number) {
+  const gap = 12;
+  const header = 96;
+  const footer = 68;
+  const cardW = (width - gap * 3) / 2;
+  const cardH = (height - header - footer - gap * 4) / 3;
+  return { gap, header, footer, cardW, cardH };
+}
 function galleryCardAt(x: number, y: number, width: number, height: number, page: number): number | null {
-  const gap = 12; const cardW = (width - gap * 3) / 2; const cardH = (height - 126 - gap * 5) / 4;
-  const col = Math.floor((x - gap) / (cardW + gap)); const row = Math.floor((y - 82) / (cardH + gap));
-  if (col < 0 || col > 1 || row < 0 || row > 3 || x > gap + col * (cardW + gap) + cardW || y > 82 + row * (cardH + gap) + cardH) return null;
+  const { gap, header, cardW, cardH } = galleryLayout(width, height);
+  const col = Math.floor((x - gap) / (cardW + gap)); const row = Math.floor((y - header) / (cardH + gap));
+  if (col < 0 || col > 1 || row < 0 || row > 2 || x > gap + col * (cardW + gap) + cardW || y > header + row * (cardH + gap) + cardH) return null;
   const index = page * PER_PAGE + row * 2 + col; return index < PICTURES.length ? index : null;
+}
+
+function paintToolbar(width: number) {
+  const left = 12;
+  const gap = 7;
+  const itemWidth = (width - left * 2 - gap * 4) / 5;
+  return Array.from({ length: 5 }, (_, index) => ({
+    x: left + index * (itemWidth + gap),
+    y: 59,
+    width: itemWidth,
+    height: 38,
+  }));
 }
 
 function paletteIndexAt(x: number, y: number, width: number, height: number, visible: readonly number[]): number | null {
@@ -79,6 +127,25 @@ export default function ColorByNumber({ paused, input, api, restartToken, contro
     stateRef.current.selected = visible.includes(preferred)
       ? preferred
       : (visible.find((color) => color > preferred) ?? visible[0]);
+  };
+
+  const openPicture = (index: number) => {
+    const s = stateRef.current;
+    const normalized = (index + PICTURES.length) % PICTURES.length;
+    const picture = PICTURES[normalized];
+    s.mode = 'paint';
+    s.pictureIndex = normalized;
+    s.page = Math.floor(normalized / PER_PAGE);
+    s.painted = safeLoadPicture(picture);
+    s.zoom = 1;
+    s.panX = 0;
+    s.panY = 0;
+    s.wrong = null;
+    s.draggingCell = null;
+    s.complete = 0;
+    s.gateSent = false;
+    chooseNextColor(picture, 0);
+    playSound('click');
   };
 
   const paintAt = (x: number, y: number) => {
@@ -114,7 +181,7 @@ export default function ColorByNumber({ paused, input, api, restartToken, contro
     const oldLayout = boardLayout(s.viewW, s.viewH, picture, s.zoom, s.panX, s.panY);
     const cellX = (focus.x - oldLayout.x) / oldLayout.cell;
     const cellY = (focus.y - oldLayout.y) / oldLayout.cell;
-    s.zoom = Math.max(.9, Math.min(5.5, nextZoom));
+    s.zoom = Math.max(.68, Math.min(8, nextZoom));
     const centered = boardLayout(s.viewW, s.viewH, picture, s.zoom, 0, 0);
     s.panX = focus.x - centered.x - cellX * centered.cell;
     s.panY = focus.y - centered.y - cellY * centered.cell;
@@ -123,29 +190,45 @@ export default function ColorByNumber({ paused, input, api, restartToken, contro
   const activatePoint = (point: Point) => {
     const s = stateRef.current;
     if (s.mode === 'gallery') {
-      if (point.y > s.viewH - 42) {
-        if (point.x < 84) s.page = Math.max(0, s.page - 1);
-        else if (point.x > s.viewW - 84) s.page = Math.min(pageCount() - 1, s.page + 1);
+      const gallery = galleryLayout(s.viewW, s.viewH);
+      if (point.y > s.viewH - gallery.footer) {
+        if (point.x < s.viewW * .42) {
+          if (s.page > 0) {
+            s.page -= 1;
+            playSound('click');
+          }
+        } else if (point.x > s.viewW * .58) {
+          if (s.page < pageCount() - 1) {
+            s.page += 1;
+            playSound('click');
+          }
+        }
         return;
       }
       const selected = galleryCardAt(point.x, point.y, s.viewW, s.viewH, s.page);
-      if (selected !== null) {
-        const picture = PICTURES[selected];
-        s.mode = 'paint'; s.pictureIndex = selected; s.painted = safeLoadPicture(picture);
-        s.zoom = 1.22; s.panX = 0; s.panY = 0; s.wrong = null;
-        chooseNextColor(picture, 0); playSound('click');
-      }
+      if (selected !== null) openPicture(selected);
       return;
     }
     const picture = PICTURES[s.pictureIndex];
-    if (point.y < 50 && point.x < 86) { s.mode = 'gallery'; s.draggingCell = null; playSound('click'); return; }
-    if (point.y >= 54 && point.y < 94 && point.x > s.viewW - 202) {
-      if (point.x < s.viewW - 170) s.panX += 46;
-      else if (point.x < s.viewW - 138) s.panY += 46;
-      else if (point.x < s.viewW - 106) s.panY -= 46;
-      else if (point.x < s.viewW - 74) s.panX -= 46;
-      else if (point.x < s.viewW - 40) zoomAround(s.zoom / 1.22, { x: s.viewW / 2, y: s.viewH / 2 });
-      else zoomAround(s.zoom * 1.22, { x: s.viewW / 2, y: s.viewH / 2 });
+    if (point.y < 50 && point.x < 104) { s.mode = 'gallery'; s.draggingCell = null; playSound('click'); return; }
+    if (point.y >= 56 && point.y <= 101) {
+      const toolbar = paintToolbar(s.viewW);
+      const tool = toolbar.findIndex(
+        (item) =>
+          point.x >= item.x &&
+          point.x <= item.x + item.width &&
+          point.y >= item.y &&
+          point.y <= item.y + item.height,
+      );
+      if (tool === 0) openPicture(s.pictureIndex - 1);
+      else if (tool === 1) {
+        s.zoom = 1;
+        s.panX = 0;
+        s.panY = 0;
+        playSound('click');
+      } else if (tool === 2) zoomAround(s.zoom / 1.3, { x: s.viewW / 2, y: s.viewH / 2 });
+      else if (tool === 3) zoomAround(s.zoom * 1.3, { x: s.viewW / 2, y: s.viewH / 2 });
+      else if (tool === 4) openPicture(s.pictureIndex + 1);
       return;
     }
     const visible = availableColors(picture, s.painted);
@@ -186,7 +269,7 @@ export default function ColorByNumber({ paused, input, api, restartToken, contro
       const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const distance = Math.max(12, Math.hypot(a.x - b.x, a.y - b.y));
       const oldZoom = s.zoom;
-      s.zoom = Math.max(.9, Math.min(5.5, s.zoom * distance / pinchRef.current.distance));
+      s.zoom = Math.max(.68, Math.min(8, s.zoom * distance / pinchRef.current.distance));
       const centered = boardLayout(s.viewW, s.viewH, PICTURES[s.pictureIndex], s.zoom, 0, 0);
       s.panX = center.x - centered.x - pinchRef.current.cellX * centered.cell;
       s.panY = center.y - centered.y - pinchRef.current.cellY * centered.cell;
@@ -260,15 +343,91 @@ function drawThumbnail(ctx: CanvasRenderingContext2D, picture: PictureTemplate, 
 }
 
 function drawGallery(ctx: CanvasRenderingContext2D, s: State, width: number, height: number) {
-  drawBackground(ctx, width, height); ctx.fillStyle = '#fff7cf'; ctx.font = '900 25px ui-rounded, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('COLOR BY NUMBER', width / 2, 34); ctx.fillStyle = '#d9eaff'; ctx.font = '13px system-ui'; ctx.fillText('Choose a picture — every color has a numbered home.', width / 2, 56);
-  const gap = 12; const cardW = (width - gap * 3) / 2; const cardH = (height - 126 - gap * 5) / 4;
+  drawBackground(ctx, width, height);
+  ctx.fillStyle = '#fff7cf';
+  ctx.font = `900 ${Math.max(22, Math.min(30, width * .044))}px "Avenir Next", system-ui`;
+  ctx.textAlign = 'center';
+  ctx.fillText('COLOR BY NUMBER STUDIO', width / 2, 35);
+  ctx.fillStyle = '#d9eaff';
+  ctx.font = `700 ${Math.max(11, Math.min(14, width * .021))}px "Avenir Next", system-ui`;
+  ctx.fillText('42 detailed pictures · tap one to open it', width / 2, 59);
+  ctx.fillStyle = 'rgba(255,255,255,.48)';
+  ctx.font = `800 ${Math.max(9, Math.min(11, width * .017))}px "Avenir Next", system-ui`;
+  ctx.fillText(`${s.completed.size} finished · progress saves automatically`, width / 2, 78);
+
+  const { gap, header, footer, cardW, cardH } = galleryLayout(width, height);
   for (let slot = 0; slot < PER_PAGE; slot += 1) {
-    const index = s.page * PER_PAGE + slot; if (index >= PICTURES.length) break; const picture = PICTURES[index]; const col = slot % 2; const row = Math.floor(slot / 2); const x = gap + col * (cardW + gap); const y = 82 + row * (cardH + gap);
-    ctx.fillStyle = 'rgba(13,18,48,.78)'; rounded(ctx, x, y, cardW, cardH); ctx.fill(); drawThumbnail(ctx, picture, x, y, cardW, cardH - 25);
-    if (s.completed.has(picture.id)) { ctx.fillStyle = '#8cf1b5'; ctx.beginPath(); ctx.arc(x + cardW - 16, y + 16, 10, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#153c35'; ctx.font = 'bold 13px system-ui'; ctx.fillText('✓', x + cardW - 16, y + 21); }
-    ctx.fillStyle = '#fff7dc'; ctx.font = '800 12px ui-rounded, system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(picture.name, x + 9, y + cardH - 8); ctx.textAlign = 'right'; ctx.fillStyle = '#b8d6ff'; ctx.fillText(picture.category.toUpperCase(), x + cardW - 9, y + cardH - 8);
+    const index = s.page * PER_PAGE + slot;
+    if (index >= PICTURES.length) break;
+    const picture = PICTURES[index];
+    const col = slot % 2;
+    const row = Math.floor(slot / 2);
+    const x = gap + col * (cardW + gap);
+    const y = header + row * (cardH + gap);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.24)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 7;
+    ctx.fillStyle = 'rgba(11,19,48,.91)';
+    rounded(ctx, x, y, cardW, cardH, 15);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    rounded(ctx, x + 5, y + 5, cardW - 10, cardH - 48, 11);
+    ctx.clip();
+    ctx.fillStyle = '#f8fbff';
+    ctx.fillRect(x + 5, y + 5, cardW - 10, cardH - 48);
+    drawThumbnail(ctx, picture, x + 5, y + 5, cardW - 10, cardH - 48);
+    ctx.restore();
+    if (s.completed.has(picture.id)) {
+      ctx.fillStyle = '#8cf1b5';
+      ctx.beginPath();
+      ctx.arc(x + cardW - 18, y + 18, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#153c35';
+      ctx.font = '900 13px "Avenir Next", system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('✓', x + cardW - 18, y + 23);
+    }
+    ctx.fillStyle = '#fff7dc';
+    ctx.font = `900 ${Math.max(11, Math.min(14, cardW * .075))}px "Avenir Next", system-ui`;
+    ctx.textAlign = 'left';
+    ctx.fillText(picture.name, x + 10, y + cardH - 26);
+    ctx.fillStyle = '#9ccdf1';
+    ctx.font = `800 ${Math.max(8, Math.min(10, cardW * .052))}px "Avenir Next", system-ui`;
+    ctx.fillText(
+      `${picture.category.toUpperCase()} · ${picture.cells.length.toLocaleString()} CELLS`,
+      x + 10,
+      y + cardH - 10,
+    );
   }
-  ctx.fillStyle = 'rgba(7,10,30,.74)'; rounded(ctx, 10, height - 42, width - 20, 31, 13); ctx.fill(); ctx.fillStyle = '#dbeaff'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`‹  PAGE ${s.page + 1} OF ${pageCount()}  ›     ${s.completed.size}/${PICTURES.length} PERFECT`, width / 2, height - 21);
+
+  const footerY = height - footer + 8;
+  ctx.fillStyle = 'rgba(7,13,34,.92)';
+  rounded(ctx, 10, footerY, width - 20, footer - 16, 15);
+  ctx.fill();
+  const buttonW = width * .34;
+  ctx.fillStyle = s.page === 0 ? 'rgba(255,255,255,.08)' : 'rgba(143,200,255,.18)';
+  rounded(ctx, 18, footerY + 7, buttonW, footer - 30, 11);
+  ctx.fill();
+  ctx.fillStyle = s.page === pageCount() - 1 ? 'rgba(255,255,255,.08)' : 'rgba(114,230,194,.18)';
+  rounded(ctx, width - 18 - buttonW, footerY + 7, buttonW, footer - 30, 11);
+  ctx.fill();
+  ctx.fillStyle = '#eaf4ff';
+  ctx.font = `900 ${Math.max(10, Math.min(13, width * .021))}px "Avenir Next", system-ui`;
+  ctx.textAlign = 'center';
+  ctx.fillText('‹  PREVIOUS', 18 + buttonW / 2, footerY + 30);
+  ctx.fillText('NEXT  ›', width - 18 - buttonW / 2, footerY + 30);
+  const dots = pageCount();
+  for (let page = 0; page < dots; page += 1) {
+    ctx.fillStyle = page === s.page ? '#ffe37a' : 'rgba(255,255,255,.22)';
+    ctx.beginPath();
+    ctx.arc(width / 2 + (page - (dots - 1) / 2) * 9, footerY + 25, page === s.page ? 3.5 : 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.font = '800 9px "Avenir Next", system-ui';
+  ctx.fillText(`PAGE ${s.page + 1} OF ${pageCount()}`, width / 2, footerY + 42);
 }
 
 function drawPaint(ctx: CanvasRenderingContext2D, s: State, picture: PictureTemplate, width: number, height: number) {
@@ -281,38 +440,56 @@ function drawPaint(ctx: CanvasRenderingContext2D, s: State, picture: PictureTemp
   const pct = Math.round(fraction * 100);
   const filledCount = Math.round(fraction * picture.cells.length);
 
-  ctx.fillStyle = '#17223e'; ctx.fillRect(0, 0, width, 98);
+  ctx.fillStyle = '#17223e'; ctx.fillRect(0, 0, width, 108);
   ctx.font = '900 15px ui-rounded, system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#fff'; ctx.fillText('‹ GALLERY', 18, 29);
+  ctx.fillStyle = '#fff'; ctx.fillText('‹ GALLERY', 14, 27);
   ctx.textAlign = 'center'; ctx.fillStyle = '#fff5c7'; ctx.fillText(picture.name, width / 2, 29);
   ctx.textAlign = 'right'; ctx.fillStyle = '#86efc2'; ctx.fillText(`${pct}%`, width - 18, 29);
-  ctx.fillStyle = 'rgba(255,255,255,.18)'; rounded(ctx, 18, 43, width - 36, 10, 5); ctx.fill();
-  if (fraction > 0) { ctx.fillStyle = '#35d39a'; rounded(ctx, 18, 43, (width - 36) * fraction, 10, 5); ctx.fill(); }
-  ctx.font = '700 11px system-ui'; ctx.fillStyle = '#dbe6ff'; ctx.textAlign = 'left';
-  ctx.fillText(`${filledCount} of ${picture.cells.length} cells`, 18, 72);
-  ctx.textAlign = 'center'; ctx.fillText('Paint · pinch to zoom · two fingers to move', width / 2, 91);
-  ctx.textAlign = 'right'; ctx.fillText(`${visible.length} colors left`, width - 18, 72);
+  ctx.fillStyle = 'rgba(255,255,255,.16)'; rounded(ctx, 14, 38, width - 28, 7, 4); ctx.fill();
+  if (fraction > 0) { ctx.fillStyle = '#35d39a'; rounded(ctx, 14, 38, (width - 28) * fraction, 7, 4); ctx.fill(); }
+  ctx.fillStyle = 'rgba(226,238,255,.62)';
+  ctx.font = '800 9px "Avenir Next", system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText(
+    `${filledCount.toLocaleString()} / ${picture.cells.length.toLocaleString()} cells  ·  ${visible.length} colors left`,
+    width / 2,
+    55,
+  );
 
-  ctx.fillStyle = '#263653'; rounded(ctx, width - 202, 55, 188, 34, 10); ctx.fill();
-  ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#e8efff';
-  ctx.fillText('◀  ▲  ▼  ▶     −  +', width - 108, 77);
+  const toolbar = paintToolbar(width);
+  const toolLabels = ['‹ PICTURE', 'FIT', '− ZOOM', '+ ZOOM', 'PICTURE ›'];
+  toolbar.forEach((tool, index) => {
+    ctx.fillStyle = index === 1 ? '#eaf5ff' : 'rgba(255,255,255,.1)';
+    rounded(ctx, tool.x, tool.y, tool.width, tool.height, 9);
+    ctx.fill();
+    ctx.fillStyle = index === 1 ? '#17223e' : '#eef6ff';
+    ctx.font = `900 ${Math.max(8, Math.min(11, tool.width * .11))}px "Avenir Next", system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillText(toolLabels[index], tool.x + tool.width / 2, tool.y + 24);
+  });
 
   // The art lives on a clean white sheet, while clipping protects the header
   // and live palette. This prevents pale colors from blending into the app's
   // decorative background and keeps a zoomed canvas from covering controls.
-  ctx.save(); ctx.beginPath(); ctx.rect(0, 98, width, Math.max(1, key.top - 104)); ctx.clip();
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 108, width, Math.max(1, key.top - 114)); ctx.clip();
   ctx.shadowColor = 'rgba(15,23,42,.18)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 5;
   ctx.fillStyle = '#ffffff'; rounded(ctx, layout.x - 8, layout.y - 8, layout.width + 16, layout.height + 16, 7); ctx.fill();
   ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   for (let r = 0; r < picture.rows; r += 1) for (let c = 0; c < picture.cols; c += 1) {
     const index = r * picture.cols + c; const x = layout.x + c * layout.cell; const y = layout.y + r * layout.cell; const filled = s.painted[index] === picture.cells[index];
     ctx.fillStyle = filled ? picture.palette[picture.cells[index]].hex : '#ffffff'; ctx.fillRect(x, y, layout.cell + .25, layout.cell + .25);
-    if (!filled && picture.cells[index] === s.selected) { ctx.fillStyle = '#fff1a8'; ctx.fillRect(x + .5, y + .5, layout.cell - 1, layout.cell - 1); }
+    if (!filled) {
+      ctx.save();
+      ctx.globalAlpha = picture.cells[index] === s.selected ? .2 : .055;
+      ctx.fillStyle = picture.palette[picture.cells[index]].hex;
+      ctx.fillRect(x + .5, y + .5, layout.cell - 1, layout.cell - 1);
+      ctx.restore();
+    }
     ctx.strokeStyle = s.wrong?.index === index && s.wrong.time > 0 ? '#ef315f' : filled ? 'rgba(255,255,255,.36)' : '#cbd1dc';
     ctx.lineWidth = s.wrong?.index === index ? 2.5 : .75; ctx.strokeRect(x, y, layout.cell, layout.cell);
-    if (!filled && layout.cell >= 10) {
+    if (!filled && layout.cell >= 8) {
       ctx.fillStyle = picture.cells[index] === s.selected ? '#382c64' : '#778092'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `800 ${Math.max(8, layout.cell * .48)}px ui-rounded, system-ui`;
+      ctx.font = `800 ${Math.max(7, layout.cell * .44)}px ui-rounded, system-ui`;
       ctx.fillText(String(picture.cells[index] + 1), x + layout.cell / 2, y + layout.cell / 2 + .5);
     }
   }

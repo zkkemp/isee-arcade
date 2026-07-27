@@ -42,14 +42,14 @@ const GAME_SECTIONS: Array<{
     title: 'Tabletop classics',
     icon: '♟',
     accent: '#34d399',
-    ids: ['reversi', 'backgammon', 'chess', 'checkers', 'tictactoe', 'dots', 'sudoku', 'cards', 'diceroyale'],
+    ids: ['reversi', 'backgammon', 'chess', 'checkers', 'mancala', 'starlinefour', 'tictactoe', 'dots', 'sudoku', 'cards', 'diceroyale'],
   },
   {
     eyebrow: 'Remember · react · discover',
     title: 'Quick thinkers',
     icon: '☄',
     accent: '#fb923c',
-    ids: ['mysteryfaces', 'hangman', 'wordscramble', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling', 'firefly'],
+    ids: ['mysteryfaces', 'gemcode', 'hangman', 'wordscramble', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling', 'firefly'],
   },
 ];
 
@@ -73,6 +73,9 @@ const NEW_GAME_IDS = new Set<GameId>([
   'hangman',
   'wordscramble',
   'diceroyale',
+  'starlinefour',
+  'mancala',
+  'gemcode',
 ]);
 
 export default function Home() {
@@ -95,13 +98,29 @@ export default function Home() {
             your earned play time anywhere in the arcade.
           </p>
         </div>
-        <Link
-          href="/progress"
-          className="arcade-action hidden px-4 py-3 text-sm font-bold text-white/80 sm:block"
-        >
-          View progress <span className="ml-1 text-violet-300">↗</span>
-        </Link>
+        <div className="hidden items-center gap-2 sm:flex">
+          <Link
+            href="/account"
+            className="arcade-action px-4 py-3 text-sm font-bold text-white/80"
+          >
+            Family cloud <span className="ml-1 text-cyan-200">☁</span>
+          </Link>
+          <Link
+            href="/progress"
+            className="arcade-action px-4 py-3 text-sm font-bold text-white/80"
+          >
+            View progress <span className="ml-1 text-violet-300">↗</span>
+          </Link>
+        </div>
       </header>
+
+      <Link
+        href="/account"
+        className="arcade-action mb-4 flex min-h-11 items-center justify-between px-4 text-sm font-bold text-white/80 sm:hidden"
+      >
+        <span>Family cloud</span>
+        <span className="text-cyan-200">Set up sync ☁</span>
+      </Link>
 
       <div className="mb-4">
         <ProgressStrip />
@@ -142,7 +161,7 @@ export default function Home() {
             <h2 id="game-library-title" className="text-2xl font-black tracking-[-0.025em] text-white sm:text-3xl">
               Browse the arcade
             </h2>
-            <p className="mt-1 text-sm text-white/48">Five shelves. Forty-six ways to play.</p>
+            <p className="mt-1 text-sm text-white/48">Five shelves. Forty-nine ways to play.</p>
           </div>
           <span className="hidden text-xs font-semibold text-white/35 sm:block">
             Tap a category to explore

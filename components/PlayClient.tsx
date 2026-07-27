@@ -48,6 +48,9 @@ import ColorByNumber from './games/ColorByNumber';
 import Hangman from './games/Hangman';
 import WordScramble from './games/WordScramble';
 import DiceRoyale from './games/DiceRoyale';
+import StarlineFour from './games/StarlineFour';
+import Mancala from './games/Mancala';
+import GemCode from './games/GemCode';
 import { GAMES, type GameComponent, type GameId } from '@/lib/games';
 import { recordRecentlyPlayed } from '@/lib/recentGames';
 
@@ -102,6 +105,9 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   hangman: Hangman,
   wordscramble: WordScramble,
   diceroyale: DiceRoyale,
+  starlinefour: StarlineFour,
+  mancala: Mancala,
+  gemcode: GemCode,
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

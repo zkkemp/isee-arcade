@@ -13,6 +13,47 @@ export type PlateOutcome = 'ball' | 'strike' | 'foul' | 'out' | 'walk' | HitKind
 export type PitchKind = 'BREEZE' | 'CURVE' | 'ZIP';
 export type RunnerMotion = { from: number; to: number; t: number };
 
+const PITCH_INFO: Record<
+  PitchKind,
+  {
+    name: string;
+    callout: string;
+    description: string;
+    accent: string;
+    dark: string;
+    speed: 1 | 2 | 3;
+    control: 1 | 2 | 3;
+  }
+> = {
+  BREEZE: {
+    name: 'CHANGEUP',
+    callout: 'OFF-SPEED',
+    description: 'Aim low · best control',
+    accent: '#72e6c2',
+    dark: '#123d45',
+    speed: 1,
+    control: 3,
+  },
+  CURVE: {
+    name: 'CURVEBALL',
+    callout: 'BREAK',
+    description: 'Paint corners · weak contact',
+    accent: '#8fc8ff',
+    dark: '#183962',
+    speed: 2,
+    control: 2,
+  },
+  ZIP: {
+    name: 'FASTBALL',
+    callout: 'HEAT',
+    description: 'Aim high · chase strikeouts',
+    accent: '#ffb86b',
+    dark: '#5c2d25',
+    speed: 3,
+    control: 1,
+  },
+};
+
 export type CountState = { balls: number; strikes: number; outs: number; bases: Bases; runs: number };
 export type PlateResult = {
   state: CountState;
@@ -192,14 +233,46 @@ export function judgeSwing(
 export function judgeOpponentAtBat(plan: PitchPlan, difficulty: Difficulty, level: number, roll: number): PlateOutcome {
   const pitcherCommand = plan.kind === 'ZIP' ? 0.72 : plan.kind === 'CURVE' ? 0.66 : 0.58;
   const corner = Math.max(Math.abs(plan.targetX), Math.abs(plan.targetY));
-  const rivalSkill: Record<Difficulty, number> = { easy: 0.06, normal: 0.14, hard: 0.23 };
-  const strikeBand = clamp(0.24 + pitcherCommand * 0.31 + corner * 0.13 - rivalSkill[difficulty] - level * 0.008, 0.16, 0.52);
+  const rivalSkill: Record<Difficulty, number> = { easy: 0.04, normal: 0.09, hard: 0.15 };
+  // Each pitch now has a teachable location: changeups down, fastballs up, and
+  // curveballs on an edge. Following the catcher earns visibly better outcomes.
+  const pitchFit =
+    plan.kind === 'CURVE'
+      ? corner > 0.3
+        ? 0.07
+        : -0.035
+      : plan.kind === 'ZIP'
+        ? plan.targetY < 0
+          ? 0.055
+          : -0.015
+        : plan.targetY > 0
+          ? 0.055
+          : -0.015;
+  const strikeBand = clamp(
+    0.26 +
+      pitcherCommand * 0.31 +
+      corner * 0.15 +
+      pitchFit -
+      rivalSkill[difficulty] -
+      level * 0.005,
+    0.2,
+    0.58,
+  );
   if (roll < strikeBand) return 'strike';
   const ballBand = clamp(strikeBand + 0.17 - corner * 0.1, 0.35, 0.64);
   if (roll < ballBand) return 'ball';
   // Once a rival makes contact, a well-placed curve or corner is more likely to
   // be a routine play; centre-cut breeze pitches invite extra-base damage.
-  const outBand = clamp(ballBand + 0.24 + corner * 0.12 + (plan.kind === 'CURVE' ? 0.08 : 0) - rivalSkill[difficulty] * 0.35, 0.58, 0.91);
+  const outBand = clamp(
+    ballBand +
+      0.29 +
+      corner * 0.18 +
+      Math.max(0, pitchFit) +
+      (plan.kind === 'CURVE' ? 0.045 : 0) -
+      rivalSkill[difficulty] * 0.3,
+    0.64,
+    0.94,
+  );
   if (roll < outBand) return 'out';
   if (roll > 0.965 - rivalSkill[difficulty] * 0.12) return 'homer';
   if (roll > 0.91) return 'triple';
@@ -251,7 +324,7 @@ function newPitch(s: State, difficulty: Difficulty): void {
   s.pitchProgress = 0;
   s.phase = 'windup';
   s.phaseT = 0.58;
-  s.message = `${plan.kind} PITCH`;
+  s.message = `${PITCH_INFO[plan.kind].name} COMING`;
   s.detail = plan.inZone ? 'Watch the plate and swing on time!' : 'It may miss the zone — be patient.';
 }
 
@@ -265,8 +338,54 @@ function newDefensePitch(s: State, difficulty: Difficulty): void {
   s.pitch = { kind: s.selectedPitch, targetX: target.x, targetY: target.y, inZone: true, speed: base * SPEED_SCALE[difficulty] * (1 + (s.level - 1) * 0.035), seed: s.seed };
   s.pitchProgress = 0;
   s.phase = 'defend-pitch';
-  s.message = `${s.selectedPitch} TO THE ${['LOW', 'MIDDLE', 'HIGH'][Math.floor(s.targetIndex / 3)]} ${['LEFT', 'MIDDLE', 'RIGHT'][s.targetIndex % 3]}`;
+  const row = ['HIGH', 'MIDDLE', 'LOW'][Math.floor(s.targetIndex / 3)];
+  const column = ['INSIDE', 'MIDDLE', 'OUTSIDE'][s.targetIndex % 3];
+  s.message = `${PITCH_INFO[s.selectedPitch].name} · ${row} ${column}`;
   s.detail = 'Your catcher sets the target...';
+}
+
+type PitchCardLayout = { x: number; y: number; width: number; height: number };
+
+function pitchCardLayouts(w: number, h: number): PitchCardLayout[] {
+  const margin = clamp(w * 0.028, 10, 18);
+  const gap = clamp(w * 0.018, 7, 12);
+  const width = (w - margin * 2 - gap * 2) / 3;
+  const height = clamp(h * 0.205, 104, 148);
+  const y = h - height - clamp(h * 0.025, 10, 18);
+  return [0, 1, 2].map((index) => ({
+    x: margin + index * (width + gap),
+    y,
+    width,
+    height,
+  }));
+}
+
+function pitchCardAt(x: number, y: number, w: number, h: number): number | null {
+  const cards = pitchCardLayouts(w, h);
+  const hit = cards.findIndex(
+    (card) =>
+      x >= card.x &&
+      x <= card.x + card.width &&
+      y >= card.y &&
+      y <= card.y + card.height,
+  );
+  return hit < 0 ? null : hit;
+}
+
+function targetGridLayout(w: number, h: number): { cell: number; left: number; top: number } {
+  const cell = Math.min(w * 0.19, h * 0.09, 84);
+  const grid = cell * 3;
+  return {
+    cell,
+    left: w / 2 - grid / 2,
+    top: Math.min(h * 0.61, h - grid - 26),
+  };
+}
+
+function targetAt(x: number, y: number, w: number, h: number): number | null {
+  const { cell, left, top } = targetGridLayout(w, h);
+  if (x < left || x >= left + cell * 3 || y < top || y >= top + cell * 3) return null;
+  return Math.floor((x - left) / cell) + Math.floor((y - top) / cell) * 3;
 }
 
 function countText(count: CountState): string {
@@ -347,20 +466,32 @@ export default function DiamondDerby({ paused, input, api, restartToken, difficu
       } else if (s.phase === 'pitch-select') {
         if (dir === 'left') s.selectedPitch = s.selectedPitch === 'BREEZE' ? 'ZIP' : s.selectedPitch === 'CURVE' ? 'BREEZE' : 'CURVE';
         if (dir === 'right') s.selectedPitch = s.selectedPitch === 'BREEZE' ? 'CURVE' : s.selectedPitch === 'CURVE' ? 'ZIP' : 'BREEZE';
-        if (tapped && input.pointerX !== null) {
-          s.selectedPitch = input.pointerX < 1 / 3 ? 'BREEZE' : input.pointerX < 2 / 3 ? 'CURVE' : 'ZIP';
-          s.phase = 'target-select'; s.message = `${s.selectedPitch} READY — PICK A TARGET`; s.detail = 'Tap a square in the glowing 3×3 strike zone.';
-        } else if (action) { s.phase = 'target-select'; s.message = `${s.selectedPitch} READY — PICK A TARGET`; s.detail = 'Use arrows, then Space, or tap a target square.'; }
+        if (tapped && input.pointerX !== null && input.pointerY !== null) {
+          const picked = pitchCardAt(input.pointerX * cw, input.pointerY * h, cw, h);
+          if (picked !== null) {
+            s.selectedPitch = (['BREEZE', 'CURVE', 'ZIP'] as const)[picked];
+            s.phase = 'target-select';
+            s.message = `${PITCH_INFO[s.selectedPitch].name} — PICK A TARGET`;
+            s.detail = PITCH_INFO[s.selectedPitch].description;
+            playSound('click');
+          }
+        } else if (!tapped && action) {
+          s.phase = 'target-select';
+          s.message = `${PITCH_INFO[s.selectedPitch].name} — PICK A TARGET`;
+          s.detail = `${PITCH_INFO[s.selectedPitch].description}. Use arrows, then Space.`;
+        }
       } else if (s.phase === 'target-select') {
         if (dir === 'left') s.targetIndex = s.targetIndex % 3 === 0 ? s.targetIndex + 2 : s.targetIndex - 1;
         if (dir === 'right') s.targetIndex = s.targetIndex % 3 === 2 ? s.targetIndex - 2 : s.targetIndex + 1;
         if (dir === 'up') s.targetIndex = s.targetIndex < 3 ? s.targetIndex + 6 : s.targetIndex - 3;
         if (dir === 'down') s.targetIndex = s.targetIndex > 5 ? s.targetIndex - 6 : s.targetIndex + 3;
         if (tapped && input.pointerX !== null && input.pointerY !== null) {
-          const cell = Math.min(cw * 0.16, h * 0.075); const left = 0.5 - cell * 1.5 / cw; const top = 0.69;
-          s.targetIndex = clamp(Math.floor((input.pointerX - left) / (cell / cw)), 0, 2) + clamp(Math.floor((input.pointerY - top) / (cell / h)), 0, 2) * 3;
-          newDefensePitch(s, difficulty);
-        } else if (action) newDefensePitch(s, difficulty);
+          const picked = targetAt(input.pointerX * cw, input.pointerY * h, cw, h);
+          if (picked !== null) {
+            s.targetIndex = picked;
+            newDefensePitch(s, difficulty);
+          }
+        } else if (!tapped && action) newDefensePitch(s, difficulty);
       } else if (s.phase === 'defend-pitch') {
         s.pitchProgress += dt * s.pitch.speed;
         if (s.pitchProgress >= 1.04) {
@@ -450,7 +581,14 @@ export default function DiamondDerby({ paused, input, api, restartToken, difficu
           s.lastHit = null;
           s.pendingOut = null;
           if (s.halfOver) startNextHalf(s, api);
-          else { s.phase = s.defending ? 'pitch-select' : 'ready'; s.phaseT = 0.45; s.message = s.defending ? 'PICK YOUR NEXT PITCH' : `BOTTOM ${s.inning} · BATTER UP`; s.detail = s.defending ? 'Choose a pitch card, then a target.' : 'Tap to call the next pitch.'; }
+          else {
+            s.phase = s.defending ? 'pitch-select' : 'ready';
+            s.phaseT = 0.45;
+            s.message = s.defending ? 'CALL THE NEXT PITCH' : `BOTTOM ${s.inning} · BATTER UP`;
+            s.detail = s.defending
+              ? 'Changeup low · fastball high · curveball to a corner.'
+              : 'Tap to call the next pitch.';
+          }
         }
       }
       draw(ctx, s, cw, h);
@@ -469,18 +607,97 @@ function diamondPoint(cx: number, cy: number, size: number, base: number): Pt {
 }
 
 function person(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, shirt: string, facing = 1, swing = 0): void {
-  ctx.save(); ctx.translate(x, y); ctx.scale(scale * facing, scale);
-  ctx.fillStyle = '#203657'; ctx.fillRect(-5, -2, 10, 14);
-  ctx.fillStyle = shirt; ctx.fillRect(-7, -13, 14, 14);
-  ctx.fillStyle = '#f1b17f'; ctx.beginPath(); ctx.arc(0, -19, 6, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#173456'; ctx.fillRect(-7, -25, 14, 4);
-  ctx.strokeStyle = '#d9a85d'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(5, -9); ctx.lineTo(14 + swing * 11, -21 - swing * 13); ctx.stroke(); ctx.restore();
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale * facing, scale);
+  ctx.fillStyle = 'rgba(7,21,42,.22)';
+  ctx.beginPath();
+  ctx.ellipse(0, 13, 11, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#eef5ff';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-4, -1);
+  ctx.lineTo(-7, 12);
+  ctx.moveTo(4, -1);
+  ctx.lineTo(8, 12);
+  ctx.stroke();
+  ctx.fillStyle = '#263a5b';
+  ctx.beginPath();
+  ctx.roundRect(-8, -3, 16, 7, 3);
+  ctx.fill();
+  ctx.fillStyle = shirt;
+  ctx.beginPath();
+  ctx.roundRect(-10, -17, 20, 17, 6);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.78)';
+  ctx.fillRect(-2, -16, 4, 15);
+  ctx.fillStyle = '#f1b17f';
+  ctx.beginPath();
+  ctx.arc(0, -24, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#173456';
+  ctx.beginPath();
+  ctx.arc(0, -27, 8.5, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(-9, -28, 18, 3);
+  ctx.strokeStyle = '#d9a85d';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(7, -13);
+  ctx.lineTo(17 + swing * 12, -27 - swing * 14);
+  ctx.stroke();
+  ctx.fillStyle = '#7a492b';
+  ctx.beginPath();
+  ctx.ellipse(-11, -11, 5, 7, -.45, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function ball(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   ctx.save(); ctx.fillStyle = '#fffdf2'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#dc5654'; ctx.lineWidth = Math.max(1, r * 0.13); ctx.beginPath(); ctx.arc(x, y, r * 0.72, -1.1, 0.85); ctx.stroke(); ctx.restore();
+}
+
+function meter(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  value: 1 | 2 | 3,
+  color: string,
+): void {
+  const gap = 3;
+  const segment = (width - gap * 2) / 3;
+  for (let index = 0; index < 3; index += 1) {
+    ctx.fillStyle = index < value ? color : 'rgba(255,255,255,.13)';
+    ctx.roundRect(x + index * (segment + gap), y, segment, 4, 2);
+    ctx.fill();
+  }
+}
+
+function pitchTrail(
+  ctx: CanvasRenderingContext2D,
+  kind: PitchKind,
+  x: number,
+  y: number,
+  width: number,
+  color: string,
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(x - width * 0.35, y);
+  if (kind === 'CURVE') ctx.bezierCurveTo(x - width * 0.05, y - 12, x + width * 0.08, y + 13, x + width * 0.34, y);
+  else if (kind === 'ZIP') ctx.lineTo(x + width * 0.34, y);
+  else ctx.bezierCurveTo(x - width * 0.02, y + 4, x + width * 0.12, y + 4, x + width * 0.34, y);
+  ctx.stroke();
+  ball(ctx, x + width * 0.34, y, 6);
+  ctx.restore();
 }
 
 function draw(ctx: CanvasRenderingContext2D, s: State, w: number, h: number): void {
@@ -501,12 +718,12 @@ function draw(ctx: CanvasRenderingContext2D, s: State, w: number, h: number): vo
   // Fielders move toward a hit's direction; otherwise they form a real defensive shape.
   const fielders = [ { x: cx - size * 0.24, y: cy + size * 0.04 }, { x: cx + size * 0.25, y: cy + size * 0.04 }, { x: cx, y: cy - size * 0.06 }, { x: cx - size * 0.35, y: cy - size * 0.22 }, { x: cx, y: cy - size * 0.32 }, { x: cx + size * 0.35, y: cy - size * 0.22 } ];
   const fieldColor = s.defending ? '#5b67bd' : '#e65855'; const runnerColor = s.defending ? '#e65855' : '#f3aa37';
-  fielders.forEach((p, i) => { const chase = s.phase === 'in-play' && i === (s.ball.direction < -0.25 ? 3 : s.ball.direction > 0.25 ? 5 : 4); person(ctx, p.x + (chase ? s.ball.direction * size * 0.11 * s.ball.flight : 0), p.y - (chase ? size * 0.05 * s.ball.flight : 0), 0.78, fieldColor, -1); });
-  person(ctx, cx, cy - size * 0.015, 1.04, s.defending ? '#5b67bd' : '#e65855', 1);
-  person(ctx, home.x - 18, home.y - 5, 1.08, runnerColor, 1, s.phase === 'pitch' && s.pitchProgress > 0.73 ? 1 : 0);
+  fielders.forEach((p, i) => { const chase = s.phase === 'in-play' && i === (s.ball.direction < -0.25 ? 3 : s.ball.direction > 0.25 ? 5 : 4); person(ctx, p.x + (chase ? s.ball.direction * size * 0.11 * s.ball.flight : 0), p.y - (chase ? size * 0.05 * s.ball.flight : 0), 1.2, fieldColor, -1); });
+  person(ctx, cx, cy - size * 0.015, 1.48, s.defending ? '#5b67bd' : '#e65855', 1);
+  person(ctx, home.x - 20, home.y - 5, 1.52, runnerColor, 1, s.phase === 'pitch' && s.pitchProgress > 0.73 ? 1 : 0);
   // Existing runners plus animated runners during a play.
-  if (s.runners.length === 0) s.count.bases.forEach((occupied, i) => { if (occupied) { const p = diamondPoint(cx, cy, size, i + 1); person(ctx, p.x, p.y - 4, 0.72, runnerColor, 1); } });
-  s.runners.forEach((runner) => { const p = diamondPoint(cx, cy, size, runner.from + (runner.to - runner.from) * runner.t); person(ctx, p.x, p.y - 5, 0.72, runnerColor, 1); });
+  if (s.runners.length === 0) s.count.bases.forEach((occupied, i) => { if (occupied) { const p = diamondPoint(cx, cy, size, i + 1); person(ctx, p.x, p.y - 4, 1.08, runnerColor, 1); } });
+  s.runners.forEach((runner) => { const p = diamondPoint(cx, cy, size, runner.from + (runner.to - runner.from) * runner.t); person(ctx, p.x, p.y - 5, 1.08, runnerColor, 1); });
   // Pitch visual uses a little curve drift, then a high fly-ball path after contact.
   if (s.phase === 'pitch' || s.phase === 'defend-pitch') {
     const p = clamp(s.pitchProgress, 0, 1); const curve = s.pitch.kind === 'CURVE' ? Math.sin(p * Math.PI) * 0.13 : 0;
@@ -532,12 +749,129 @@ function draw(ctx: CanvasRenderingContext2D, s: State, w: number, h: number): vo
   // catcher target. Keyboard users get the same flow with arrows and Space.
   if (s.phase === 'pitch-select') {
     const names: PitchKind[] = ['BREEZE', 'CURVE', 'ZIP'];
-    names.forEach((name, i) => { const x = 12 + i * (w - 32) / 3; const cardW = (w - 44) / 3; ctx.fillStyle = s.selectedPitch === name ? '#ffe567' : 'rgba(12,34,69,.88)'; ctx.roundRect(x, h * 0.78, cardW, h * 0.13, 10); ctx.fill(); ctx.fillStyle = s.selectedPitch === name ? '#253656' : '#fff'; ctx.font = '900 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText(name, x + cardW / 2, h * 0.825); ctx.font = '700 9px system-ui'; ctx.fillText(i === 0 ? 'SAFE' : i === 1 ? 'BEND' : 'FAST', x + cardW / 2, h * 0.855); });
+    const cards = pitchCardLayouts(w, h);
+    const panelTop = cards[0].y - clamp(h * 0.085, 44, 58);
+    const panel = ctx.createLinearGradient(0, panelTop, 0, h);
+    panel.addColorStop(0, 'rgba(5,24,48,.18)');
+    panel.addColorStop(0.22, 'rgba(5,24,48,.9)');
+    panel.addColorStop(1, 'rgba(3,14,31,.98)');
+    ctx.fillStyle = panel;
+    ctx.fillRect(0, panelTop, w, h - panelTop);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${clamp(w * 0.035, 14, 20)}px "Avenir Next", system-ui`;
+    ctx.fillText('CHOOSE YOUR PITCH', w / 2, panelTop + 22);
+    ctx.fillStyle = '#b9d8ec';
+    ctx.font = `700 ${clamp(w * 0.022, 9, 12)}px "Avenir Next", system-ui`;
+    ctx.fillText('Changeup low  ·  Fastball high  ·  Curveball to a corner', w / 2, panelTop + 39);
+
+    names.forEach((kind, index) => {
+      const card = cards[index];
+      const info = PITCH_INFO[kind];
+      const selected = s.selectedPitch === kind;
+      ctx.save();
+      ctx.shadowColor = selected ? info.accent : 'rgba(0,0,0,.35)';
+      ctx.shadowBlur = selected ? 18 : 9;
+      ctx.shadowOffsetY = 7;
+      const cardFill = ctx.createLinearGradient(card.x, card.y, card.x, card.y + card.height);
+      cardFill.addColorStop(0, selected ? info.dark : '#102b49');
+      cardFill.addColorStop(1, '#07182d');
+      ctx.fillStyle = cardFill;
+      ctx.roundRect(card.x, card.y, card.width, card.height, 13);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.lineWidth = selected ? 3 : 1.5;
+      ctx.strokeStyle = selected ? info.accent : 'rgba(255,255,255,.14)';
+      ctx.roundRect(card.x, card.y, card.width, card.height, 13);
+      ctx.stroke();
+
+      ctx.fillStyle = info.accent;
+      ctx.roundRect(card.x + 8, card.y + 8, card.width - 16, 4, 2);
+      ctx.fill();
+      pitchTrail(ctx, kind, card.x + card.width / 2, card.y + 27, card.width * 0.52, info.accent);
+
+      ctx.fillStyle = info.accent;
+      ctx.font = `900 ${clamp(card.width * 0.085, 8, 10)}px "Avenir Next", system-ui`;
+      ctx.fillText(info.callout, card.x + card.width / 2, card.y + 49);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `900 ${clamp(card.width * 0.11, 10, 14)}px "Avenir Next", system-ui`;
+      ctx.fillText(info.name, card.x + card.width / 2, card.y + 66);
+      ctx.fillStyle = 'rgba(235,247,255,.86)';
+      ctx.font = `700 ${clamp(card.width * 0.073, 8, 10)}px "Avenir Next", system-ui`;
+      ctx.fillText(info.description, card.x + card.width / 2, card.y + 81);
+
+      const meterWidth = Math.min(card.width * 0.28, 38);
+      const meterX = card.x + card.width - meterWidth - 9;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,.52)';
+      ctx.font = `800 ${clamp(card.width * 0.06, 7, 9)}px "Avenir Next", system-ui`;
+      ctx.fillText('SPEED', card.x + 9, card.y + card.height - 25);
+      meter(ctx, meterX, card.y + card.height - 29, meterWidth, info.speed, info.accent);
+      ctx.fillText('CONTROL', card.x + 9, card.y + card.height - 10);
+      meter(ctx, meterX, card.y + card.height - 14, meterWidth, info.control, info.accent);
+      ctx.restore();
+      ctx.textAlign = 'center';
+    });
     ctx.textAlign = 'left';
   }
   if (s.phase === 'target-select') {
-    const cell = Math.min(w * 0.16, h * 0.075); const left = cx - cell * 1.5; const top = h * 0.69;
-    for (let i = 0; i < 9; i += 1) { const x = left + (i % 3) * cell; const y = top + Math.floor(i / 3) * cell; ctx.fillStyle = s.targetIndex === i ? '#ffe567' : 'rgba(15,52,87,.9)'; ctx.fillRect(x + 2, y + 2, cell - 4, cell - 4); }
-    ctx.fillStyle = '#fff'; ctx.font = '800 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('TAP A TARGET', cx, top - 10); ctx.textAlign = 'left';
+    const info = PITCH_INFO[s.selectedPitch];
+    const { cell, left, top } = targetGridLayout(w, h);
+    const wash = ctx.createLinearGradient(0, top - 66, 0, h);
+    wash.addColorStop(0, 'rgba(4,22,42,.16)');
+    wash.addColorStop(0.2, 'rgba(4,22,42,.88)');
+    wash.addColorStop(1, 'rgba(2,13,28,.98)');
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, top - 66, w, h - top + 66);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = info.accent;
+    ctx.font = `900 ${clamp(w * 0.025, 10, 13)}px "Avenir Next", system-ui`;
+    ctx.fillText(`${info.name} · ${info.callout}`, cx, top - 42);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${clamp(w * 0.037, 15, 21)}px "Avenir Next", system-ui`;
+    ctx.fillText('PAINT YOUR SPOT', cx, top - 21);
+    ctx.fillStyle = 'rgba(226,242,252,.66)';
+    ctx.font = `700 ${clamp(w * 0.021, 9, 12)}px "Avenir Next", system-ui`;
+    ctx.fillText(info.description, cx, top - 5);
+
+    for (let index = 0; index < 9; index += 1) {
+      const x = left + (index % 3) * cell;
+      const y = top + Math.floor(index / 3) * cell;
+      const selected = s.targetIndex === index;
+      const corner = index === 0 || index === 2 || index === 6 || index === 8;
+      ctx.fillStyle = selected
+        ? info.dark
+        : corner
+          ? 'rgba(25,72,92,.94)'
+          : 'rgba(13,45,76,.94)';
+      ctx.roundRect(x + 3, y + 3, cell - 6, cell - 6, Math.min(12, cell * 0.16));
+      ctx.fill();
+      ctx.lineWidth = selected ? 3 : 1.5;
+      ctx.strokeStyle = selected ? info.accent : corner ? 'rgba(114,230,194,.3)' : 'rgba(255,255,255,.13)';
+      ctx.roundRect(x + 3, y + 3, cell - 6, cell - 6, Math.min(12, cell * 0.16));
+      ctx.stroke();
+      if (selected) {
+        ctx.strokeStyle = info.accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + cell / 2 - 10, y + cell / 2);
+        ctx.lineTo(x + cell / 2 + 10, y + cell / 2);
+        ctx.moveTo(x + cell / 2, y + cell / 2 - 10);
+        ctx.lineTo(x + cell / 2, y + cell / 2 + 10);
+        ctx.stroke();
+        ball(ctx, x + cell / 2, y + cell / 2, clamp(cell * 0.1, 5, 8));
+      } else if (index === 4) {
+        ctx.fillStyle = 'rgba(255,184,107,.7)';
+        ctx.font = `900 ${clamp(cell * 0.12, 7, 10)}px "Avenir Next", system-ui`;
+        ctx.fillText('RISK', x + cell / 2, y + cell / 2 + 3);
+      }
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.46)';
+    ctx.font = `800 ${clamp(w * 0.018, 8, 10)}px "Avenir Next", system-ui`;
+    ctx.fillText('HIGH', left - 22, top + cell / 2 + 3);
+    ctx.fillText('LOW', left - 22, top + cell * 2.5 + 3);
+    ctx.textAlign = 'left';
   }
 }

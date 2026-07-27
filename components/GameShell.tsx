@@ -577,7 +577,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         <div className="flex items-center gap-2.5 sm:gap-3">
           <Link
             href="/"
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] text-white/75 shadow-lg transition hover:bg-white/10 active:scale-95 sm:h-11 sm:w-11 sm:text-lg"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] text-white/75 shadow-lg transition hover:bg-white/10 active:scale-95 sm:text-lg"
             aria-label="Back to game list"
           >
             ←
@@ -656,7 +656,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             type="button"
             onClick={() => setInfoOpen((v) => !v)}
             aria-label="How to play"
-            className="flex h-8 flex-shrink-0 items-center gap-1 rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/75 transition active:scale-95 sm:h-9 sm:text-sm"
+            className="flex h-11 flex-shrink-0 items-center gap-1 rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/75 transition hover:bg-white/10 active:scale-95 sm:text-sm"
           >
             ⓘ How to play
           </button>
@@ -665,7 +665,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             type="button"
             onClick={() => setMuted(!muted)}
             aria-label={muted ? 'Unmute' : 'Mute'}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-9 sm:w-9"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition hover:bg-white/10 active:scale-95"
           >
             {muted ? '🔇' : '🔊'}
           </button>
@@ -674,7 +674,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             type="button"
             onClick={() => setManualPause((v) => !v)}
             aria-label={manualPause ? 'Resume' : 'Pause'}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition active:scale-95 sm:h-9 sm:w-9"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-sm text-white/75 transition hover:bg-white/10 active:scale-95"
           >
             {manualPause ? '▶' : '❚❚'}
           </button>
@@ -682,7 +682,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           <button
             type="button"
             onClick={restart}
-            className="flex h-8 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition active:scale-95 sm:h-9 sm:px-4 sm:text-sm"
+            className="flex h-11 flex-shrink-0 items-center rounded-xl border border-white/15 bg-white/5 px-2.5 text-xs font-semibold text-white/70 transition hover:bg-white/10 active:scale-95 sm:px-4 sm:text-sm"
           >
             Restart
           </button>
@@ -696,11 +696,17 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         <div
           className="game-stage relative w-full flex-1 overflow-hidden rounded-3xl border bg-black shadow-2xl sm:rounded-[2rem]"
           data-game={meta.id}
+          role="application"
+          aria-label={`${meta.name} game`}
+          aria-describedby={`game-instructions-${meta.id}`}
           style={{
             borderColor: `${meta.accent}4d`,
             boxShadow: `0 24px 70px rgba(0,0,0,.5), 0 0 36px ${meta.accent}18, inset 0 1px rgba(255,255,255,.12)`,
           }}
         >
+          <p id={`game-instructions-${meta.id}`} className="sr-only">
+            {meta.tagline} {controlsHelp}
+          </p>
           <Game
             paused={paused}
             input={input}

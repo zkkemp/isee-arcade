@@ -9,14 +9,10 @@ import { sha256Hex } from './passcode';
 /**
  * Per-kid learner accounts.
  *
- * This is a private family app, not a multi-tenant service, so "accounts" here
- * are a lightweight local thing: each kid is a Profile in localStorage with a
- * name, a grade band (which question bank they get), an avatar, and an optional
- * passcode (stored as a SHA-256 hash, same speed-bump approach as the app
- * passcode - never plaintext in storage). A master account ("Zach") holds its
- * own passcode and can reset any kid's forgotten passcode. None of this is real
- * security; it just keeps a five-year-old out of their sibling's ISEE bank and
- * lets a parent reset a code without wiping the profile.
+ * Profiles stay local-first so the arcade keeps working offline. When a parent
+ * connects the separate ISEE Arcade Supabase project, the cloud-sync layer
+ * mirrors these profiles and their learning data into that parent's RLS-protected
+ * household. Kid passcodes remain device-local and are never uploaded.
  *
  * The active profile drives three things: which grade band the study block draws
  * from, which avatar the games render, and (namespaced by id elsewhere) that
@@ -69,6 +65,9 @@ function writeProfiles(list: Profile[]): void {
     // Private browsing: the notify below still refreshes the in-memory view.
   }
   notify();
+  void import('./cloudSync')
+    .then(({ queueCloudSync }) => queueCloudSync())
+    .catch(() => undefined);
 }
 
 function readActiveId(): string | null {

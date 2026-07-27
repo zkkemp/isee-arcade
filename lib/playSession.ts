@@ -157,6 +157,9 @@ export function saveSession(s: PlaySession): void {
   } catch {
     // Private browsing or quota. The clock then only lasts the session.
   }
+  void import('./cloudSync')
+    .then(({ queueCloudSync }) => queueCloudSync())
+    .catch(() => undefined);
 }
 
 /** mm:ss for the HUD. */

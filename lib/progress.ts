@@ -95,6 +95,9 @@ export function saveProgress(p: Progress): void {
   } catch {
     // Quota or private-browsing failure. Progress is a nice-to-have, never block play.
   }
+  void import('./cloudSync')
+    .then(({ queueCloudSync }) => queueCloudSync())
+    .catch(() => undefined);
 }
 
 export function resetProgress(): void {

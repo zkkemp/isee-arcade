@@ -55,4 +55,7 @@ export function recordRecentlyPlayed(game: GameId): void {
     // The in-memory shelf still works when storage is unavailable.
   }
   listeners.forEach((listener) => listener());
+  void import('./cloudSync')
+    .then(({ queueCloudSync }) => queueCloudSync())
+    .catch(() => undefined);
 }
