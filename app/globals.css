@@ -3,6 +3,11 @@
 :root {
   --bg: #090812;
   --bg-soft: #17152b;
+  --surface: #141321;
+  --surface-raised: #1a1829;
+  --line: rgba(255, 255, 255, 0.1);
+  --text-muted: rgba(242, 242, 247, 0.62);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @theme inline {
@@ -19,11 +24,11 @@ html {
 
 body {
   background:
-    radial-gradient(circle at 12% -5%, rgba(108, 76, 190, 0.2), transparent 34rem),
-    radial-gradient(circle at 92% 8%, rgba(42, 185, 180, 0.09), transparent 30rem),
-    linear-gradient(180deg, #0d0b18 0%, var(--bg) 34rem);
+    radial-gradient(circle at 12% -5%, rgba(123, 92, 212, 0.24), transparent 34rem),
+    radial-gradient(circle at 92% 8%, rgba(42, 185, 180, 0.11), transparent 30rem),
+    linear-gradient(180deg, #100d1d 0%, var(--bg) 36rem);
   color: #f2f2f7;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Avenir Next", Avenir, "Century Gothic", ui-sans-serif, system-ui, sans-serif;
   min-height: 100dvh;
   /* Home-screen PWA: keep content clear of the notch and the home indicator. */
   padding-top: env(safe-area-inset-top);
@@ -33,6 +38,83 @@ body {
 
 .arcade-home {
   isolation: isolate;
+}
+
+.arcade-home::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(167, 139, 250, 0.06), transparent 20rem),
+    radial-gradient(circle at 76% 46%, rgba(56, 189, 248, 0.045), transparent 25rem);
+  content: "";
+  pointer-events: none;
+}
+
+a,
+button,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(250, 204, 21, 0.92);
+  outline-offset: 3px;
+}
+
+.arcade-kicker {
+  text-shadow: 0 0 24px rgba(196, 181, 253, 0.32);
+}
+
+.arcade-action {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0.8rem 1.8rem rgba(0, 0, 0, 0.18);
+  transition:
+    transform 220ms var(--ease-out),
+    background 220ms ease,
+    border-color 220ms ease;
+}
+
+.arcade-action:hover {
+  border-color: rgba(196, 181, 253, 0.38);
+  background: rgba(255, 255, 255, 0.11);
+  transform: translateY(-2px);
+}
+
+.prep-launch {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(196, 181, 253, 0.22);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(96, 224, 202, 0.12), transparent 18rem),
+    linear-gradient(110deg, rgba(95, 68, 150, 0.28), rgba(20, 27, 39, 0.92));
+  box-shadow: 0 1rem 2.8rem rgba(0, 0, 0, 0.22);
+  transition:
+    transform 260ms var(--ease-out),
+    border-color 220ms ease,
+    box-shadow 260ms var(--ease-out);
+}
+
+.prep-launch:hover {
+  border-color: rgba(196, 181, 253, 0.48);
+  box-shadow: 0 1.35rem 3.2rem rgba(0, 0, 0, 0.28);
+  transform: translateY(-3px);
+}
+
+.prep-launch__arrow {
+  border-radius: 0.8rem;
+  background: #c4b5fd;
+  box-shadow: 0 0.7rem 1.6rem rgba(90, 65, 148, 0.32);
+  transition: transform 260ms var(--ease-out);
+}
+
+.prep-launch:hover .prep-launch__arrow {
+  transform: translateX(3px);
 }
 
 /* A restrained glass-and-vignette finish shared by every canvas game. It adds
@@ -66,21 +148,56 @@ body {
 }
 
 .arcade-logo span {
-  background: linear-gradient(110deg, #c4b5fd 5%, #a78bfa 40%, #67e8f9 95%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #9edff4;
   filter: drop-shadow(0 0 20px rgba(167, 139, 250, 0.22));
 }
 
 .featured-game {
+  border: 1px solid rgba(253, 230, 138, 0.22);
+  border-radius: 1rem;
   background:
     radial-gradient(circle at 82% 20%, color-mix(in srgb, var(--game-accent, #ffb84e) 18%, transparent), transparent 42%),
     linear-gradient(135deg, #17142a, #12101e);
+  box-shadow: 0 1.6rem 4.6rem rgba(0, 0, 0, 0.34);
+  transition:
+    transform 300ms var(--ease-out),
+    border-color 220ms ease,
+    box-shadow 300ms var(--ease-out);
+}
+
+.featured-game:hover {
+  border-color: rgba(253, 230, 138, 0.46);
+  box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.42);
+  transform: translateY(-4px);
+}
+
+.featured-game__cta {
+  border-radius: 0.8rem;
+  box-shadow: 0 0.8rem 1.9rem rgba(251, 191, 36, 0.22);
 }
 
 .game-card {
   position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.052);
+  box-shadow: 0 0.8rem 1.9rem rgba(0, 0, 0, 0.18);
+  transition:
+    transform 260ms var(--ease-out),
+    border-color 220ms ease,
+    background 220ms ease,
+    box-shadow 260ms var(--ease-out);
+}
+
+.game-card:hover {
+  border-color: color-mix(in srgb, var(--game-accent) 45%, rgba(255, 255, 255, 0.16));
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: 0 1.15rem 2.4rem rgba(0, 0, 0, 0.26);
+  transform: translateY(-4px);
+}
+
+.game-card:active {
+  transform: translateY(-1px) scale(0.99);
 }
 
 .game-card::after {
@@ -99,7 +216,8 @@ body {
   transition: transform 180ms ease, background 180ms ease;
 }
 
-.game-card:hover .game-card__play {
+.game-card:hover .game-card__play,
+.game-card:focus-visible .game-card__play {
   background: var(--game-accent);
   color: #11111c;
   transform: scale(1.08);
@@ -115,12 +233,28 @@ body {
   scroll-snap-align: start;
 }
 
+.recently-played {
+  border: 1px solid rgba(103, 232, 249, 0.14);
+  border-radius: 1rem;
+  background:
+    linear-gradient(115deg, rgba(34, 211, 238, 0.055), transparent 45%),
+    rgba(18, 19, 31, 0.74);
+  box-shadow: 0 1rem 2.8rem rgba(0, 0, 0, 0.2);
+}
+
+.recently-played__empty {
+  border-top: 1px solid rgba(103, 232, 249, 0.12);
+}
+
 .recent-game-card .game-art {
   height: 5.5rem;
 }
 
 .game-category {
   --category-accent: #a78bfa;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.036);
   box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.12);
   transition:
     border-color 180ms ease,
@@ -159,8 +293,7 @@ body {
 }
 
 .game-category__summary:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--category-accent) 65%, white 10%);
-  outline-offset: -3px;
+  outline-offset: -4px;
 }
 
 .game-category__icon {
@@ -170,14 +303,9 @@ body {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--category-accent) 42%, transparent);
-  border-radius: 1rem;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.13), transparent),
-    color-mix(in srgb, var(--category-accent) 20%, #171326);
-  box-shadow:
-    0 0.7rem 1.6rem rgba(0, 0, 0, 0.2),
-    0 0 1.5rem color-mix(in srgb, var(--category-accent) 14%, transparent);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--category-accent) 23%, #171326);
+  box-shadow: 0 0.7rem 1.6rem rgba(0, 0, 0, 0.2);
   color: color-mix(in srgb, var(--category-accent) 80%, white);
   font-size: 1.25rem;
   font-weight: 900;
@@ -322,26 +450,23 @@ body {
   left: 50%;
   top: 49%;
   display: flex;
-  width: 4.1rem;
-  height: 4.1rem;
+  width: auto;
+  height: auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 1.35rem;
-  background:
-    linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.04)),
-    color-mix(in srgb, var(--game-accent) 28%, #171326);
-  box-shadow:
-    0 1rem 2rem rgba(0, 0, 0, 0.3),
-    0 0 2rem color-mix(in srgb, var(--game-accent) 28%, transparent),
-    inset 0 1px rgba(255, 255, 255, 0.24);
-  font-size: 2rem;
+  filter:
+    drop-shadow(0 0.8rem 0.8rem rgba(0, 0, 0, 0.35))
+    drop-shadow(0 0 1.1rem color-mix(in srgb, var(--game-accent) 34%, transparent));
+  font-size: 3.5rem;
   transform: translate(-50%, -50%) rotate(-5deg);
-  transition: transform 280ms cubic-bezier(.2,.9,.3,1.2);
+  transition:
+    transform 320ms var(--ease-out),
+    filter 320ms var(--ease-out);
   z-index: 4;
 }
 
-.group:hover .game-art__glyph {
+.group:hover .game-art__glyph,
+.group:focus-visible .game-art__glyph {
   transform: translate(-50%, -56%) rotate(3deg) scale(1.08);
 }
 
@@ -383,7 +508,8 @@ body {
   z-index: 5;
 }
 
-.group:hover .game-art__shine {
+.group:hover .game-art__shine,
+.group:focus-visible .game-art__shine {
   transform: translateX(80%);
 }
 
@@ -513,9 +639,51 @@ body {
   }
 
   .game-art__glyph {
-    width: 3.6rem;
-    height: 3.6rem;
-    font-size: 1.75rem;
+    font-size: 3rem;
+  }
+}
+
+.arcade-info-panel {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.038);
+  box-shadow: 0 1rem 2.8rem rgba(0, 0, 0, 0.18);
+}
+
+.practice-stat {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.practice-stat[data-index="0"],
+.practice-stat[data-index="1"] {
+  border-top: 0;
+}
+
+.how-it-works > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.how-it-works__number {
+  display: inline-flex;
+  width: 1.8rem;
+  height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: rgba(253, 230, 138, 0.12);
+  color: #fde68a;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+@media (hover: none) {
+  .prep-launch:active,
+  .featured-game:active,
+  .game-card:active {
+    transform: scale(0.99);
   }
 }
 

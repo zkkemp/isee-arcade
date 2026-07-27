@@ -28,7 +28,7 @@ export default function CelebrationCard({
   return (
     <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
       <div
-        className="flex animate-[pop_320ms_cubic-bezier(0.34,1.56,0.64,1)] flex-col items-center gap-2 rounded-3xl border-2 bg-[#12121e]/92 px-7 py-5 text-center shadow-2xl backdrop-blur-sm sm:gap-3 sm:px-12 sm:py-8"
+        className="flex animate-[pop_360ms_cubic-bezier(0.16,1,0.3,1)] flex-col items-center gap-2 rounded-3xl border-2 bg-[#12121e]/92 px-7 py-5 text-center shadow-2xl backdrop-blur-sm sm:gap-3 sm:px-12 sm:py-8"
         style={{ borderColor: accent }}
       >
         <div
@@ -50,8 +50,8 @@ export default function CelebrationCard({
 
       <style>{`
         @keyframes pop {
-          0%   { transform: scale(0.72) translateY(14px); opacity: 0; }
-          100% { transform: scale(1) translateY(0); opacity: 1; }
+          0%   { transform: scale(0.86) translateY(14px); filter: blur(5px); opacity: 0.2; }
+          100% { transform: scale(1) translateY(0); filter: blur(0); opacity: 1; }
         }
       `}</style>
     </div>

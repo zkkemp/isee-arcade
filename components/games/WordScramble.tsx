@@ -141,7 +141,7 @@ function WordScrambleGame({
         <div className="mt-4 flex flex-1 flex-col justify-center rounded-[2rem] border border-white/12 bg-white/[.055] p-4 shadow-2xl sm:p-7">
           <div className="text-center">
             {card.picture && <div className="text-6xl drop-shadow-xl sm:text-7xl">{card.picture}</div>}
-            <div className="mt-2 text-[10px] font-black uppercase tracking-[.2em] text-violet-200/60">Meaning clue</div>
+            <div className="mt-2 text-[10px] font-black uppercase tracking-[.18em] text-amber-100/60">Meaning clue</div>
             <div className="mx-auto mt-1 max-w-xl text-base font-bold leading-relaxed text-white/80 sm:text-lg">{card.hint}</div>
             {(band === 'k' || band === 'grade1') && (
               <button
@@ -162,8 +162,8 @@ function WordScrambleGame({
                   key={index}
                   type="button"
                   onClick={undo}
-                  className={`flex h-12 w-10 items-center justify-center rounded-xl border-b-4 text-2xl font-black sm:h-14 sm:w-12 sm:text-3xl ${
-                    tile ? 'border-violet-900 bg-violet-300 text-violet-950' : 'border-white/20 bg-white/[.035] text-transparent'
+                  className={`flex h-12 w-10 items-center justify-center rounded-xl border text-2xl font-black shadow-[0_4px_0_rgba(0,0,0,.28)] sm:h-14 sm:w-12 sm:text-3xl ${
+                    tile ? 'border-[#d49b31] bg-[#ffd166] text-[#281a05]' : 'border-white/20 bg-white/[.035] text-transparent'
                   }`}
                   aria-label={tile ? `Remove ${tile.letter}` : `Empty letter ${index + 1}`}
                 >
@@ -204,7 +204,7 @@ function WordScrambleGame({
                     type="button"
                     onClick={() => choose(tile.id)}
                     disabled={paused}
-                    className="flex h-12 w-11 items-center justify-center rounded-xl border border-fuchsia-200/30 bg-gradient-to-b from-fuchsia-200 to-violet-300 text-2xl font-black text-violet-950 shadow-[0_5px_0_#4c1d95] transition active:translate-y-1 active:shadow-none disabled:opacity-40 sm:h-14 sm:w-13 sm:text-3xl"
+                    className="flex h-12 w-11 items-center justify-center rounded-xl border border-[#ffe099] bg-[#ffd166] text-2xl font-black text-[#281a05] shadow-[0_5px_0_#9a5b12] transition active:translate-y-1 active:shadow-none disabled:opacity-40 sm:h-14 sm:w-13 sm:text-3xl"
                   >
                     {tile.letter}
                   </button>
