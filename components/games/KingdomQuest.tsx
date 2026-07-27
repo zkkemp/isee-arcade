@@ -183,5 +183,11 @@ export default function KingdomQuest({ paused, input, api, restartToken, difficu
     if (s.banner > 0) { ctx.fillStyle = 'rgba(21,25,58,.8)'; ctx.fillRect(80, 72, 352, 48); ctx.fillStyle = '#fff6ba'; ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center'; ctx.fillText(s.level.tip, VIEW_W / 2, 102); }
     ctx.restore();
   }});
-  return <canvas ref={canvasRef} className="game-canvas" aria-label="Kingdom Quest platform adventure" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 h-full w-full touch-none"
+      aria-label="Kingdom Quest platform adventure"
+    />
+  );
 }

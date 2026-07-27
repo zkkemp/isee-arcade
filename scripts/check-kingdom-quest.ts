@@ -1,4 +1,5 @@
 /** Focused structural regression check for the original Kingdom Quest campaign. */
+import { readFileSync } from 'node:fs';
 import { GROUND_Y, HERO_H, LEVELS, cloneLevel, levelHasGoalRoute, newHero, overlaps, reachableLanding, stepEnemy, stepHero } from '../lib/kingdomQuest.js';
 
 const fail = (message: string): never => { throw new Error(`Kingdom Quest check failed: ${message}`); };
@@ -42,5 +43,13 @@ for (let i = 0; i < 90 && tapHero.x < 98; i += 1) {
   tapPressed = false;
 }
 if (tapHero.x < 98 || tapHero.y > GROUND_Y - HERO_H + 1) fail('a tap jump cannot cross the widest authored gap');
+
+const componentSource = readFileSync(
+  new URL('../components/games/KingdomQuest.tsx', import.meta.url),
+  'utf8',
+);
+if (!componentSource.includes('className="absolute inset-0 h-full w-full touch-none"')) {
+  fail('canvas must fill the game stage on phones and tablets');
+}
 
 console.log(`Kingdom Quest verified: ${LEVELS.length} hand-authored realms, portals, checkpoints, power-ups, and final boss.`);
