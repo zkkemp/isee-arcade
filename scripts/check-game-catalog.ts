@@ -7,10 +7,10 @@ const fail = (message: string): never => {
   throw new Error(`Game catalog check failed: ${message}`);
 };
 
-const page = readFileSync(resolve('app/page.tsx'), 'utf8');
-const sectionsSource = page.slice(
-  page.indexOf('const GAME_SECTIONS'),
-  page.indexOf('const NEW_GAME_IDS'),
+const gameLibrary = readFileSync(resolve('components/GameLibrary.tsx'), 'utf8');
+const sectionsSource = gameLibrary.slice(
+  gameLibrary.indexOf('export const GAME_SECTIONS'),
+  gameLibrary.indexOf('const NEW_GAME_IDS'),
 );
 const categoryIds = [...sectionsSource.matchAll(/ids:\s*\[([^\]]+)\]/g)].flatMap((match) =>
   [...match[1].matchAll(/'([^']+)'/g)].map((idMatch) => idMatch[1] as GameId),

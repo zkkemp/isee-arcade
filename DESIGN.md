@@ -13,7 +13,8 @@ account role and moves the player directly into the correct environment.
 - **Sign in:** quiet, confident, and focused. The branded icon, one short promise, and the form
   must fit in the first phone viewport.
 - **Child arcade:** vivid game artwork and clear reward-loop information. Account management stays
-  out of the child experience.
+  out of the child experience. Search and shelf filters keep the large game catalog scannable
+  without flattening its arcade-like categories.
 - **Parent dashboard:** an inspection lane with restrained surfaces, direct labels, and visible
   access to Children, Reports, Learning Controls, Curriculum, and Parent Free Play.
 
@@ -42,9 +43,10 @@ Portraits are square, front-facing, diverse, expressive, and readable at 38–64
 shared midnight arcade background and remain illustrated rather than photographic. Picker
 portraits and lightweight gameplay drawings always represent the same human character identity.
 
-A separate **Fantastic friends** group adds 16 original non-human avatars—aliens, robots,
-creatures, celestial buddies, and emoji-like characters—using the same lighting and portrait
-framing. They remain original and avoid recognizable franchise designs.
+A separate **Fantastic friends** group adds 40 original non-human avatars—aliens, robots,
+creatures, celestial buddies, magical objects, and emoji-like characters—using the same lighting
+and portrait framing. Tabs, live counts, and name/personality search keep all 88 choices easy to
+browse. The characters remain original and avoid recognizable franchise designs.
 
 ## Interaction Rules
 
@@ -55,3 +57,5 @@ framing. They remain original and avoid recognizable franchise designs.
 - Sign out always returns to the common sign-in screen.
 - All primary controls have a minimum 44px touch target and a visible keyboard focus treatment.
 - Browser zoom remains available.
+- Large libraries expose counts, plain-language filters, search, helpful empty states, and a
+  one-action reset so children and parents never have to scan an undifferentiated wall of choices.

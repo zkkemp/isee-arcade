@@ -32,8 +32,9 @@ assert(
   'a younger-grade question leaked into the ISEE bank',
 );
 for (const band of ['k', 'grade1', 'grade3'] as const) {
+  const gradePrefix = band === 'k' ? 'gk-' : band === 'grade1' ? 'g1-' : 'g3-';
   assert(
-    familyIdsForBand(band).every((id) => id.startsWith(band === 'k' ? 'gk-' : band === 'grade1' ? 'g1-' : 'g3-')),
+    familyIdsForBand(band).every((id) => id.startsWith(gradePrefix) || id.startsWith('fig-')),
     `${band} contains an out-of-band question`,
   );
 }

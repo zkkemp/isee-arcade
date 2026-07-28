@@ -18,6 +18,7 @@ type OrbitState = {
   target: number;
   level: number;
   catches: number;
+  streak: number;
   lives: number;
   time: number;
   message: string;
@@ -38,6 +39,17 @@ export function orbitDistance(a: number, b: number): number {
   return Math.min(d, TAU - d);
 }
 
+export function catchQuality(
+  distance: number,
+  difficulty: Difficulty,
+): 'perfect' | 'great' | 'catch' | 'miss' {
+  const window = CATCH_WINDOW[difficulty];
+  if (distance > window) return 'miss';
+  if (distance <= window * 0.3) return 'perfect';
+  if (distance <= window * 0.62) return 'great';
+  return 'catch';
+}
+
 function nextTarget(s: OrbitState): number {
   // A deterministic golden-angle hop keeps targets varied without impossible
   // back-to-back placements.
@@ -50,6 +62,7 @@ export function createOrbitState(): OrbitState {
     target: 0.35,
     level: 1,
     catches: 0,
+    streak: 0,
     lives: START_LIVES,
     time: 0,
     message: 'Tap when the lights meet!',
@@ -76,9 +89,16 @@ function attemptCatch(
   s: OrbitState,
   difficulty: Difficulty,
 ): 'catch' | 'miss' | 'level' | 'dead' {
-  if (orbitDistance(s.angle, s.target) <= CATCH_WINDOW[difficulty]) {
+  const quality = catchQuality(orbitDistance(s.angle, s.target), difficulty);
+  if (quality !== 'miss') {
     s.catches += 1;
-    s.message = 'Firefly friends!';
+    s.streak += 1;
+    s.message =
+      quality === 'perfect'
+        ? `Perfect glow · ${s.streak}× streak!`
+        : quality === 'great'
+          ? `Great timing · ${s.streak}× streak!`
+          : 'Firefly friends!';
     s.messageT = 0.75;
     const result = s.catches % CATCHES_PER_LEVEL === 0 ? 'level' : 'catch';
     if (result === 'level') {
@@ -90,6 +110,7 @@ function attemptCatch(
     return result;
   }
   s.lives -= 1;
+  s.streak = 0;
   s.message = s.lives > 0 ? 'So close — watch the glow!' : 'The fireflies flew home!';
   s.messageT = 1.2;
   return s.lives > 0 ? 'miss' : 'dead';
@@ -184,6 +205,15 @@ function draw(ctx: CanvasRenderingContext2D, s: OrbitState, cw: number, ch: numb
 
   const target = orbPoint(s.target, cx, cy, radius);
   const player = orbPoint(s.angle, cx, cy, radius);
+  for (let trail = 5; trail >= 1; trail -= 1) {
+    const point = orbPoint(s.angle - trail * 0.075, cx, cy, radius);
+    ctx.globalAlpha = (6 - trail) * 0.055;
+    ctx.fillStyle = '#8ceaff';
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 2 + (6 - trail) * 0.45, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
   drawFirefly(ctx, target.x, target.y, '#fff19a', 24 + Math.sin(s.time * 8) * 5);
   drawFirefly(ctx, player.x, player.y, '#8ceaff', 18);
 
@@ -210,6 +240,12 @@ function draw(ctx: CanvasRenderingContext2D, s: OrbitState, cw: number, ch: numb
   ctx.textAlign = 'right';
   ctx.fillStyle = '#ff91ad';
   ctx.fillText('♥'.repeat(s.lives) + '♡'.repeat(START_LIVES - s.lives), WORLD_W - 27, 35);
+  if (s.streak > 1) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#a5f3fc';
+    ctx.font = '900 12px ui-rounded, system-ui, sans-serif';
+    ctx.fillText(`${s.streak}× GLOW STREAK`, cx, 75);
+  }
 
   if (s.messageT > 0) {
     ctx.globalAlpha = Math.min(1, s.messageT * 2);
@@ -258,10 +294,12 @@ export default function FireflyOrbit({
 
       if (input.consumePointerPress() || input.consumeJump()) {
         const target = orbPoint(s.target, WORLD_W / 2, 250, 104);
+        const quality = catchQuality(orbitDistance(s.angle, s.target), difficulty);
         const result = attemptCatch(s, difficulty);
         if (result === 'catch' || result === 'level') {
           burst(s, target.x, target.y, '#fff2a0');
-          api.addScore(result === 'level' ? 35 : 10);
+          const timingBonus = quality === 'perfect' ? 12 : quality === 'great' ? 5 : 0;
+          api.addScore((result === 'level' ? 35 : 10) + timingBonus + Math.min(20, s.streak * 2));
           playSound(result === 'level' ? 'pass' : 'coin');
           if (result === 'level') api.requestGate(`Firefly garden ${s.level - 1} lit up!`);
         } else {

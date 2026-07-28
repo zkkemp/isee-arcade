@@ -52,6 +52,8 @@ const ART_KIND: Record<GameId, ArtKind> = {
   starlinefour: 'tabletop',
   mancala: 'tabletop',
   gemcode: 'candy',
+  constellation: 'adventure',
+  lanterns: 'candy',
 };
 
 export default function GameArtwork({

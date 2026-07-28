@@ -80,7 +80,31 @@ export type CharacterId =
   | 'bop'
   | 'peep'
   | 'mushy'
-  | 'orbitbot';
+  | 'orbitbot'
+  | 'nimbus'
+  | 'mossback'
+  | 'jellonaut'
+  | 'berrywing'
+  | 'ripple'
+  | 'ticker'
+  | 'moonbun'
+  | 'reefbot'
+  | 'starfox'
+  | 'marsh'
+  | 'crystalbug'
+  | 'bubblemage'
+  | 'prickles'
+  | 'cometcat'
+  | 'lavapup'
+  | 'snowbell'
+  | 'origami'
+  | 'cyclops'
+  | 'shroomguard'
+  | 'solario'
+  | 'puddlefin'
+  | 'candybat'
+  | 'bloomie'
+  | 'cabinet';
 
 type HairStyle = 'bun' | 'ponytail' | 'part' | 'tousled' | 'pigtails' | 'cap' | 'buzz' | 'puffs';
 export type CharacterGroup = 'crew' | 'creatures' | 'cosmic' | 'powerups' | 'fantastic';
@@ -429,6 +453,30 @@ const FANTASTIC_FRIENDS: Character[] = [
   iconCharacter('peep', 'Peep', '🐦', 'fantastic', '#579ee8', 'A quick little friend with sharp focus.'),
   iconCharacter('mushy', 'Mushy', '🍄', 'fantastic', '#ef77c8', 'A magical thinker from the forest floor.'),
   iconCharacter('orbitbot', 'Orbit Bot', '🛸', 'fantastic', '#f2a63b', 'A one-eyed explorer built for adventure.'),
+  iconCharacter('nimbus', 'Nimbus', '🐋', 'fantastic', '#76cfff', 'A tiny cloud whale who floats above every worry.'),
+  iconCharacter('mossback', 'Mossback', '🪨', 'fantastic', '#77c45b', 'A gentle garden golem with rock-solid focus.'),
+  iconCharacter('jellonaut', 'Jellonaut', '🧑‍🚀', 'fantastic', '#66ddec', 'A bouncy space explorer from a watery moon.'),
+  iconCharacter('berrywing', 'Berrywing', '🍓', 'fantastic', '#ff667a', 'A strawberry dragon with a sweet brave streak.'),
+  iconCharacter('ripple', 'Ripple', '🫧', 'fantastic', '#b68cff', 'A rainbow axolotl who goes with the flow.'),
+  iconCharacter('ticker', 'Ticker', '🦉', 'fantastic', '#d99a45', 'A clockwork owl who always spots the pattern.'),
+  iconCharacter('moonbun', 'Moonbun', '🐇', 'fantastic', '#d9e5ff', 'A moonlit bunny with sky-high hops.'),
+  iconCharacter('reefbot', 'Reef Bot', '🪸', 'fantastic', '#47d5ce', 'A coral-powered robot built to help.'),
+  iconCharacter('starfox', 'Starfox', '🦊', 'fantastic', '#6a8dff', 'A starlight fox who follows every clue.'),
+  iconCharacter('marsh', 'Marsh', '👻', 'fantastic', '#fff0df', 'A marshmallow ghost who is far too cheerful to haunt.'),
+  iconCharacter('crystalbug', 'Crystal Bug', '🪲', 'fantastic', '#66d5ff', 'A jewel-bright beetle with a brilliant shell.'),
+  iconCharacter('bubblemage', 'Bubble Mage', '🔮', 'fantastic', '#9b7cff', 'A bubbly wizard who makes clever ideas appear.'),
+  iconCharacter('prickles', 'Prickles', '🌵', 'fantastic', '#8fd45d', 'A friendly cactus who sticks with every challenge.'),
+  iconCharacter('cometcat', 'Comet Cat', '🐈', 'fantastic', '#668cff', 'A cosmic cat with a tail full of stardust.'),
+  iconCharacter('lavapup', 'Lava Pup', '🐕', 'fantastic', '#ff7045', 'A warmhearted pup who glows under pressure.'),
+  iconCharacter('snowbell', 'Snowbell', '❄️', 'fantastic', '#bce9ff', 'A pocket-size yeti with mountain-sized courage.'),
+  iconCharacter('origami', 'Origami', '🪽', 'fantastic', '#c8b8ff', 'A folded crystal bird with razor-sharp ideas.'),
+  iconCharacter('cyclops', 'Cyclops', '👁️', 'fantastic', '#57e7bd', 'One enormous eye for every tiny detail.'),
+  iconCharacter('shroomguard', 'Shroom Guard', '🍄', 'fantastic', '#f17467', 'A tiny mushroom knight who protects good ideas.'),
+  iconCharacter('solario', 'Solario', '🦁', 'fantastic', '#ffbd4f', 'A solar lion who brightens the hardest level.'),
+  iconCharacter('puddlefin', 'Puddlefin', '🐟', 'fantastic', '#48d7db', 'A little sea monster with a huge imagination.'),
+  iconCharacter('candybat', 'Candy Bat', '🦇', 'fantastic', '#f77fbd', 'A sugar-sweet flier with lightning reflexes.'),
+  iconCharacter('bloomie', 'Bloomie', '🌸', 'fantastic', '#ff89be', 'A flower alien who grows new ideas everywhere.'),
+  iconCharacter('cabinet', 'Cabinet', '🕹️', 'fantastic', '#54dff3', 'A smiling arcade machine who is always ready for one more round.'),
 ];
 
 CHARACTERS.push(...FANTASTIC_FRIENDS);

@@ -90,10 +90,6 @@ summary:focus-visible {
   outline-offset: 3px;
 }
 
-.arcade-kicker {
-  text-shadow: 0 0 24px rgba(196, 181, 253, 0.32);
-}
-
 .arcade-action {
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 0.85rem;
@@ -214,7 +210,7 @@ summary:focus-visible {
 .game-card__play {
   background: color-mix(in srgb, var(--game-accent) 25%, rgba(255, 255, 255, 0.05));
   border: 1px solid color-mix(in srgb, var(--game-accent) 48%, transparent);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--game-accent) 20%, transparent);
+  box-shadow: 0 0.45rem 1rem rgba(0, 0, 0, 0.24);
   transition: transform 180ms ease, background 180ms ease;
 }
 
@@ -757,7 +753,9 @@ canvas {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 80ms !important;
   }
 }

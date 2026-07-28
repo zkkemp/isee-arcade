@@ -61,3 +61,13 @@ export async function passwordHash(password: string, salt: string): Promise<stri
   );
   return bytesToHex(new Uint8Array(derived));
 }
+
+/** Compares fixed-length credential digests without exiting on the first mismatch. */
+export function constantTimeEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return mismatch === 0;
+}

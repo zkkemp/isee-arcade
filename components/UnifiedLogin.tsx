@@ -62,6 +62,7 @@ export default function UnifiedLogin() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -77,51 +78,59 @@ export default function UnifiedLogin() {
     setBusy(true);
     setError('');
 
-    const supabase = getSupabaseBrowserClient();
-    if (supabase) {
-      const { data, error: parentError } = await supabase.auth.signInWithPassword({
-        email: usernameAuthEmail(cleanUsername),
-        password,
-      });
-      if (!parentError && data.user) {
-        const { data: account } = await supabase
-          .from('parent_accounts')
-          .select('status')
-          .eq('user_id', data.user.id)
-          .maybeSingle();
-        if (account?.status === 'active') {
-          const restored = await restoreCloudFamily();
-          if (!restored.ok) {
-            setError(`Signed in, but the family could not load: ${restored.message}`);
-            setBusy(false);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        const { data, error: parentError } = await supabase.auth.signInWithPassword({
+          email: usernameAuthEmail(cleanUsername),
+          password,
+        });
+        if (!parentError && data.user) {
+          const { data: account } = await supabase
+            .from('parent_accounts')
+            .select('status')
+            .eq('user_id', data.user.id)
+            .maybeSingle();
+          if (account?.status === 'active') {
+            const restored = await restoreCloudFamily();
+            if (!restored.ok) {
+              setError(`Signed in, but the family could not load: ${restored.message}`);
+              setBusy(false);
+              return;
+            }
+            setActiveProfile(null);
+            setPlayerMode('parent');
+            router.replace('/parent');
+            router.refresh();
             return;
           }
-          setActiveProfile(null);
-          setPlayerMode('parent');
-          router.replace('/parent');
-          router.refresh();
-          return;
+          await supabase.auth.signOut();
         }
-        await supabase.auth.signOut();
       }
-    }
 
-    const response = await fetch('/api/auth/child', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: cleanUsername, password }),
-    });
-    const result = (await response.json()) as ChildResponse;
-    if (response.ok && result.role === 'child' && result.profile) {
-      storeChild(result);
-      router.replace('/');
-      router.refresh();
-      return;
-    }
+      const response = await fetch('/api/auth/child', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUsername, password }),
+      });
+      const result = (await response.json().catch(() => ({
+        error: 'The sign-in service returned an unexpected response. Please try again.',
+      }))) as ChildResponse;
+      if (response.ok && result.role === 'child' && result.profile) {
+        storeChild(result);
+        router.replace('/');
+        router.refresh();
+        return;
+      }
 
-    setPassword('');
-    setError(result.error ?? 'That username or password did not match an active account.');
-    setBusy(false);
+      setPassword('');
+      setError(result.error ?? 'That username or password did not match an active account.');
+      setBusy(false);
+    } catch {
+      setPassword('');
+      setError('We could not reach the sign-in service. Check your connection and try again.');
+      setBusy(false);
+    }
   }
 
   return (
@@ -171,7 +180,11 @@ export default function UnifiedLogin() {
             right place automatically.
           </p>
 
-          <form onSubmit={(event) => void submit(event)} className="mt-7 space-y-5">
+          <form
+            onSubmit={(event) => void submit(event)}
+            className="mt-7 space-y-5"
+            aria-busy={busy}
+          >
             <label className="block">
               <span className="mb-2 block text-sm font-black text-white/78">Username</span>
               <input
@@ -181,24 +194,38 @@ export default function UnifiedLogin() {
                 autoCapitalize="none"
                 autoComplete="username"
                 required
+                aria-invalid={Boolean(error)}
+                aria-describedby={error ? 'login-error' : undefined}
                 className="min-h-14 w-full rounded-xl bg-white/[.075] px-4 text-lg font-bold text-white outline-none ring-1 ring-white/12 transition placeholder:text-white/30 focus:ring-2 focus:ring-cyan-200"
                 placeholder="Your username"
               />
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-black text-white/78">Password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value.slice(0, 64))}
-                autoComplete="current-password"
-                required
-                className="min-h-14 w-full rounded-xl bg-white/[.075] px-4 text-lg font-bold text-white outline-none ring-1 ring-white/12 transition placeholder:text-white/30 focus:ring-2 focus:ring-cyan-200"
-                placeholder="Your password"
-              />
+              <span className="relative block">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value.slice(0, 64))}
+                  autoComplete="current-password"
+                  required
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? 'login-error' : undefined}
+                  className="min-h-14 w-full rounded-xl bg-white/[.075] px-4 pr-20 text-lg font-bold text-white outline-none ring-1 ring-white/12 transition placeholder:text-white/42 focus:ring-2 focus:ring-cyan-200"
+                  placeholder="Your password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute inset-y-1.5 right-1.5 min-w-16 rounded-lg px-2 text-xs font-black text-cyan-100 hover:bg-white/[0.08]"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </span>
             </label>
             {error && (
-              <p role="alert" className="rounded-xl bg-rose-300/10 px-4 py-3 text-sm font-bold text-rose-100">
+              <p id="login-error" role="alert" className="rounded-xl bg-rose-300/10 px-4 py-3 text-sm font-bold text-rose-100">
                 {error}
               </p>
             )}
@@ -209,9 +236,12 @@ export default function UnifiedLogin() {
             >
               {busy ? 'Checking your account…' : 'Sign in'}
             </button>
+            <span className="sr-only" role="status" aria-live="polite">
+              {busy ? 'Checking your account' : ''}
+            </span>
           </form>
 
-          <p className="mt-5 text-center text-xs leading-relaxed text-white/42">
+          <p className="mt-5 text-center text-xs leading-relaxed text-white/55">
             Need a child password reset? Ask the parent account holder.
           </p>
         </section>

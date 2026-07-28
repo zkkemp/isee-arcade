@@ -52,7 +52,9 @@ export type GameId =
   | 'diceroyale'
   | 'starlinefour'
   | 'mancala'
-  | 'gemcode';
+  | 'gemcode'
+  | 'constellation'
+  | 'lanterns';
 
 /**
  * How a game is driven on touch.
@@ -509,6 +511,26 @@ export const GAMES: Record<GameId, GameMeta> = {
     controls: 'board',
     aspect: 3 / 4,
   },
+  constellation: {
+    id: 'constellation',
+    name: 'Constellation Connect',
+    tagline: 'Race across the night sky and connect every numbered star in order.',
+    gateNote: 'Study time buys play time.',
+    icon: '🌌',
+    accent: '#a5f3fc',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
+  lanterns: {
+    id: 'lanterns',
+    name: 'Lantern Garden',
+    tagline: 'Flip neighboring lanterns and make the whole moonlit garden glow.',
+    gateNote: 'Study time buys play time.',
+    icon: '🏮',
+    accent: '#fde68a',
+    controls: 'board',
+    aspect: 3 / 4,
+  },
 };
 
 /**
@@ -606,6 +628,10 @@ export const HOW_TO: Record<GameId, string> = {
     'Choose one player or two players. Tap one bowl on your side to pick up every stone and sow them one at a time around the board. Skip the other player’s store. End in your own store to play again. End in an empty bowl on your side to capture that stone and the stones directly opposite. When one side is empty, the most stones in a store wins.',
   gemcode:
     'The vault hides four different colored gems. Build a four-gem guess, then lock it in. Each bright clue pin means one gem has the right color and the right position. Each pale pin means a right color is in the wrong position. Use those clues to crack the code in ten guesses.',
+  constellation:
+    'Tap the numbered stars in order before the constellation fades. Correct stars draw a glowing path across the sky. A wrong star costs one second. Connect three constellations to reach a study break.',
+  lanterns:
+    'Tap a lantern to change it and the lanterns directly above, below, left, and right. Keep experimenting until every lantern is glowing. Every puzzle begins solvable, and larger difficulty settings grow a bigger garden.',
 };
 
 export const GAME_LIST: GameMeta[] = [
@@ -658,6 +684,8 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.starlinefour,
   GAMES.mancala,
   GAMES.gemcode,
+  GAMES.constellation,
+  GAMES.lanterns,
 ];
 
 const IDS = new Set<string>(Object.keys(GAMES));

@@ -205,7 +205,7 @@ export default function ParentChildren() {
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/52">
               Create usernames, replace forgotten passwords, change levels, and choose from
-              64 avatars across realistic kids and fantastic non-human friends. Each child keeps
+              88 avatars across realistic kids and fantastic non-human friends. Each child keeps
               separate progress and play time.
             </p>
           </div>
@@ -496,7 +496,7 @@ export default function ParentChildren() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-black text-white">Choose an avatar</h3>
-                  <p className="mt-1 text-xs text-white/42">48 expressive people plus 16 aliens, robots, creatures, and emoji-like friends.</p>
+                  <p className="mt-1 text-xs text-white/55">48 expressive people plus 40 aliens, robots, creatures, and magical friends.</p>
                 </div>
                 <CharacterFace character={getCharacter(editor.avatarId)} size={64} />
               </div>

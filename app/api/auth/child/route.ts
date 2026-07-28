@@ -1,7 +1,35 @@
 import { NextResponse } from 'next/server';
 import { createChildSession, childSessionCookie } from '@/lib/childSession';
-import { passwordHash, sha256Hex } from '@/lib/passcode';
+import { constantTimeEqual, passwordHash, sha256Hex } from '@/lib/passcode';
 import { getIseeDatabase } from '@/lib/supabase/database';
+
+const attempts = new Map<string, { count: number; resetsAt: number }>();
+const ATTEMPT_WINDOW_MS = 5 * 60 * 1000;
+const MAX_ATTEMPTS = 10;
+const DUMMY_SALT = 'isee-arcade-invalid-user-timing-salt';
+
+function attemptKey(request: Request, username: string): string {
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  return `${forwarded || 'unknown'}:${username}`;
+}
+
+function recordAttempt(key: string): boolean {
+  const now = Date.now();
+  if (attempts.size > 5_000) {
+    for (const [candidate, entry] of attempts) {
+      if (entry.resetsAt <= now) attempts.delete(candidate);
+    }
+    if (attempts.size > 5_000) attempts.clear();
+  }
+  const current = attempts.get(key);
+  if (!current || current.resetsAt <= now) {
+    attempts.set(key, { count: 1, resetsAt: now + ATTEMPT_WINDOW_MS });
+    return true;
+  }
+  if (current.count >= MAX_ATTEMPTS) return false;
+  current.count += 1;
+  return true;
+}
 
 type LearnerRow = {
   id: string;
@@ -24,6 +52,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Sign-in is not configured yet.' }, { status: 503 });
   }
 
+  const contentLength = Number(request.headers.get('content-length') ?? 0);
+  if (contentLength > 4096) {
+    return NextResponse.json({ error: 'Sign-in request is too large.' }, { status: 413 });
+  }
+
   let body: { username?: unknown; password?: unknown };
   try {
     body = (await request.json()) as typeof body;
@@ -36,8 +69,15 @@ export async function POST(request: Request) {
       ? body.username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24)
       : '';
   const password = typeof body.password === 'string' ? body.password : '';
-  if (username.length < 2 || !/^[A-Za-z0-9]{6,64}$/.test(password)) {
+  if (username.length < 2 || password.length < 6 || password.length > 64) {
     return NextResponse.json({ error: 'That username or password did not match.' }, { status: 401 });
+  }
+  const key = attemptKey(request, username);
+  if (!recordAttempt(key)) {
+    return NextResponse.json(
+      { error: 'Too many sign-in attempts. Wait five minutes and try again.' },
+      { status: 429, headers: { 'Retry-After': '300' } },
+    );
   }
 
   const learners = await sql<LearnerRow[]>`
@@ -48,6 +88,7 @@ export async function POST(request: Request) {
     limit 2
   `;
   if (learners.length !== 1) {
+    await passwordHash(password, DUMMY_SALT);
     return NextResponse.json({ error: 'That username or password did not match.' }, { status: 401 });
   }
 
@@ -55,9 +96,10 @@ export async function POST(request: Request) {
   const expected = learner.password_salt
     ? await passwordHash(password, learner.password_salt)
     : await sha256Hex(password);
-  if (!learner.password_hash || expected !== learner.password_hash) {
+  if (!learner.password_hash || !constantTimeEqual(expected, learner.password_hash)) {
     return NextResponse.json({ error: 'That username or password did not match.' }, { status: 401 });
   }
+  attempts.delete(key);
 
   const snapshots = await sql`
     select progress, play_session, recent_games, painting_progress, settings
@@ -66,6 +108,16 @@ export async function POST(request: Request) {
     limit 1
   `;
   const snapshot = snapshots[0] ?? null;
+
+  let sessionToken: string;
+  try {
+    sessionToken = await createChildSession(learner.id, learner.household_id);
+  } catch {
+    return NextResponse.json(
+      { error: 'Child sign-in is temporarily unavailable. Please try again shortly.' },
+      { status: 503 },
+    );
+  }
 
   const response = NextResponse.json({
     role: 'child',
@@ -85,7 +137,7 @@ export async function POST(request: Request) {
   });
   response.cookies.set(
     childSessionCookie.name,
-    await createChildSession(learner.id, learner.household_id),
+    sessionToken,
     childSessionCookie.options,
   );
   return response;
