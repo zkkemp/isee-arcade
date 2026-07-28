@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import PasscodeGate from '@/components/PasscodeGate';
 import DailyLimitProvider from '@/components/DailyLimitProvider';
 import './globals.css';
 
@@ -50,8 +49,6 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   // Pinch-zoom during play just fights the on-screen controls.
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
 };
 
@@ -63,9 +60,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
-        <PasscodeGate>
-          <DailyLimitProvider>{children}</DailyLimitProvider>
-        </PasscodeGate>
+        <DailyLimitProvider>{children}</DailyLimitProvider>
       </body>
     </html>
   );

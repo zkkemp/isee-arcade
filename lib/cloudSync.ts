@@ -261,8 +261,41 @@ export function queueCloudSync(): void {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     syncTimer = null;
-    void uploadDeviceState();
+    void uploadDeviceState().then((result) => {
+      if (!result.ok) return uploadSignedInChildState();
+    });
   }, 1800);
+}
+
+export async function uploadSignedInChildState(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const profiles = readProfiles();
+  const activeId = window.localStorage.getItem('isee-arcade:active-profile');
+  const profile = profiles.find((candidate) => candidate.id === activeId);
+  if (!profile) return;
+  const settings = settingsSnapshot();
+  await fetch('/api/child/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      progress: parseJson(window.localStorage.getItem(`${PROGRESS_KEY}::${profile.id}`), {}),
+      playSession: parseJson(window.localStorage.getItem(`${SESSION_KEY}::${profile.id}`), {}),
+      recentGames: parseJson(window.localStorage.getItem(RECENT_KEY), []),
+      paintings: parseJson(
+        window.localStorage.getItem(`${PAINTING_KEY}::${profile.id}`),
+        {},
+      ),
+      finishedPaintings: parseJson(
+        window.localStorage.getItem(`${PAINTING_FINISHED_KEY}::${profile.id}`),
+        [],
+      ),
+      dailyUsage: parseJson(
+        window.localStorage.getItem(`${DAILY_USAGE_KEY}::${profile.id}`),
+        {},
+      ),
+      settings,
+    }),
+  });
 }
 
 export async function restoreCloudFamily(): Promise<CloudSyncResult> {

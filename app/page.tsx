@@ -1,5 +1,8 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import ProfileGate from '@/components/ProfileGate';
+import UnifiedLogin from '@/components/UnifiedLogin';
 import DifficultyPicker from '@/components/DifficultyPicker';
 import ProgressStrip from '@/components/ProgressStrip';
 import GameArtwork from '@/components/GameArtwork';
@@ -8,6 +11,8 @@ import StableGameCategory from '@/components/StableGameCategory';
 import { GAMES, type GameId } from '@/lib/games';
 import { TEMPLATE_COUNT, TOTAL_FAMILIES, countBySubject } from '@/lib/questions';
 import { SUBJECT_LABELS, type Subject } from '@/lib/questions/types';
+import { childSessionCookie, verifyChildSession } from '@/lib/childSession';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 const GAME_SECTIONS: Array<{
   eyebrow: string;
@@ -78,7 +83,33 @@ const NEW_GAME_IDS = new Set<GameId>([
   'gemcode',
 ]);
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ play?: string }>;
+}) {
+  const query = await searchParams;
+  const cookieStore = await cookies();
+  const child = await verifyChildSession(cookieStore.get(childSessionCookie.name)?.value);
+  let parentPlaying = false;
+  if (!child) {
+    const supabase = await getSupabaseServerClient();
+    const { data } = (await supabase?.auth.getClaims()) ?? { data: null };
+    const parentId = typeof data?.claims?.sub === 'string' ? data.claims.sub : null;
+    if (parentId) {
+      const { data: account } = (await supabase
+        ?.from('parent_accounts')
+        .select('status')
+        .eq('user_id', parentId)
+        .maybeSingle()) ?? { data: null };
+      if (account?.status === 'active') {
+        if (query.play === 'parent') parentPlaying = true;
+        else redirect('/parent');
+      }
+    }
+    if (!parentPlaying) return <UnifiedLogin />;
+  }
+
   const counts = countBySubject();
   const subjects = Object.keys(counts) as Subject[];
 
@@ -100,12 +131,6 @@ export default function Home() {
         </div>
         <div className="hidden items-center gap-2 sm:flex">
           <Link
-            href="/account"
-            className="arcade-action px-4 py-3 text-sm font-bold text-white/80"
-          >
-            Family cloud <span className="ml-1 text-cyan-200">☁</span>
-          </Link>
-          <Link
             href="/progress"
             className="arcade-action px-4 py-3 text-sm font-bold text-white/80"
           >
@@ -113,14 +138,6 @@ export default function Home() {
           </Link>
         </div>
       </header>
-
-      <Link
-        href="/account"
-        className="arcade-action mb-4 flex min-h-11 items-center justify-between px-4 text-sm font-bold text-white/80 sm:hidden"
-      >
-        <span>Family cloud</span>
-        <span className="text-cyan-200">Set up sync ☁</span>
-      </Link>
 
       <div className="mb-4">
         <ProgressStrip />

@@ -46,13 +46,13 @@ export default function ParentOverview() {
             <h2 className="text-xl font-black text-white">Your children</h2>
             <p className="mt-1 text-xs text-white/45">A quick read before opening the full report.</p>
           </div>
-          <Link href="/?parent=settings" className="text-xs font-black text-cyan-200">
+          <Link href="/parent/children" className="text-xs font-black text-cyan-200">
             Manage children →
           </Link>
         </div>
         {profiles.length === 0 ? (
           <div className="p-6 text-sm text-white/50">
-            No children have been added yet. Add a learner from Parent settings in the arcade.
+            No children have been added yet. Open Children &amp; sign-ins to create the first account.
           </div>
         ) : (
           <div className="divide-y divide-white/7">
@@ -108,16 +108,16 @@ export default function ParentOverview() {
             text: 'Browse questions, answers, vocabulary, and dynamic families.',
           },
           {
-            href: '/parent/controls',
-            icon: '⚙',
-            title: 'Controls',
-            text: 'Manage Smart Practice, bookmarks, and disabled content.',
+            href: '/parent/children',
+            icon: '☺',
+            title: 'Children',
+            text: 'Manage usernames, passwords, levels, limits, and avatars.',
           },
           {
-            href: '/account',
-            icon: '☁',
-            title: 'Family cloud',
-            text: 'Sync this family or restore progress on another device.',
+            href: '/parent/controls',
+            icon: '⚙',
+            title: 'Learning controls',
+            text: 'Tune Smart Practice and review disabled content.',
           },
         ].map((item) => (
           <Link

@@ -7,10 +7,12 @@
  */
 import ParentOverview from '@/components/parent/ParentOverview';
 import ParentShell from '@/components/parent/ParentShell';
+import { requireActiveParent } from '@/lib/parentAccess';
 
 export const metadata = { title: 'Parent Center' };
 
-export default function ParentPage() {
+export default async function ParentPage() {
+  await requireActiveParent();
   return (
     <ParentShell
       title="Family overview"

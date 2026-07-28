@@ -1,9 +1,11 @@
 import ParentReports from '@/components/parent/ParentReports';
 import ParentShell from '@/components/parent/ParentShell';
+import { requireActiveParent } from '@/lib/parentAccess';
 
 export const metadata = { title: 'Parent Reports' };
 
-export default function ReportsPage() {
+export default async function ReportsPage() {
+  await requireActiveParent();
   return (
     <ParentShell
       title="Learning reports"

@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
+import AccountSignOutButton from '@/components/AccountSignOutButton';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { setActiveProfile } from '@/lib/profiles';
-import { setPlayerMode, usePlayerMode } from '@/lib/playerMode';
+import { setPlayerMode } from '@/lib/playerMode';
 
 const NAV = [
   { href: '/parent', label: 'Overview', icon: '⌂' },
+  { href: '/parent/children', label: 'Children', icon: '☺' },
   { href: '/parent/reports', label: 'Reports', icon: '↗' },
   { href: '/parent/curriculum', label: 'Curriculum', icon: '▤' },
   { href: '/parent/controls', label: 'Controls', icon: '⚙' },
@@ -25,7 +27,6 @@ export default function ParentShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const mode = usePlayerMode();
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -53,7 +54,7 @@ export default function ParentShell({
       await cloudClient.auth.signOut();
       setActiveProfile(null);
       setPlayerMode(null);
-      router.replace('/account');
+      router.replace('/');
     }
 
     void validateCloudAccess();
@@ -71,33 +72,12 @@ export default function ParentShell({
     };
   }, [router]);
 
-  if (mode !== 'parent') {
-    return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-xl items-center px-5 py-12">
-        <section className="w-full rounded-2xl bg-[#151527] p-7 text-center shadow-[0_28px_80px_rgba(0,0,0,.45)]">
-          <div className="text-4xl">🔒</div>
-          <h1 className="mt-4 text-2xl font-black text-white">Parent access required</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/55">
-            Open Parent settings from the arcade and enter the parent password. This keeps
-            reports and learning controls away from child accounts.
-          </p>
-          <Link
-            href="/"
-            className="mt-6 inline-flex min-h-12 items-center rounded-xl bg-amber-300 px-6 text-sm font-black text-[#211704]"
-          >
-            Return to the arcade
-          </Link>
-        </section>
-      </main>
-    );
-  }
-
   return (
     <main className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-5 sm:px-8 sm:pt-9">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/" className="text-sm font-bold text-violet-200/75 hover:text-white">
-            ← Arcade
+          <Link href="/?play=parent" className="text-sm font-bold text-violet-200/75 hover:text-white">
+            ← Parent free play
           </Link>
           <div className="mt-4 inline-flex rounded-full bg-amber-300/12 px-3 py-1 text-[10px] font-black uppercase tracking-[.16em] text-amber-200">
             Parent center
@@ -109,17 +89,22 @@ export default function ParentShell({
             {description}
           </p>
         </div>
-        <Link
-          href="/"
-          className="rounded-xl border border-amber-200/20 bg-amber-200/[0.07] px-4 py-3 text-sm font-black text-amber-100"
-        >
-          ∞ Parent free play
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/?play=parent"
+            className="rounded-xl border border-amber-200/20 bg-amber-200/[0.07] px-4 py-3 text-sm font-black text-amber-100"
+          >
+            Play games
+          </Link>
+          <AccountSignOutButton
+            className="rounded-xl bg-white/[0.06] px-4 py-3 text-sm font-black text-white/65 transition hover:bg-white/10 hover:text-white disabled:opacity-45"
+          />
+        </div>
       </header>
 
       <nav
         aria-label="Parent center"
-        className="mb-7 grid grid-cols-4 gap-1 rounded-2xl bg-black/25 p-1.5"
+        className="mb-7 flex gap-1 overflow-x-auto rounded-2xl bg-black/25 p-1.5 sm:grid sm:grid-cols-5"
       >
         {NAV.map((item) => {
           const active =
@@ -129,7 +114,7 @@ export default function ParentShell({
               key={item.href}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-2 text-xs font-black transition sm:text-sm ${
+              className={`flex min-h-12 min-w-24 items-center justify-center gap-2 rounded-xl px-3 text-xs font-black transition sm:min-w-0 sm:text-sm ${
                 active
                   ? 'bg-violet-300 text-[#171226]'
                   : 'text-white/52 hover:bg-white/[0.06] hover:text-white'

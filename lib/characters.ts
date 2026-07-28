@@ -26,14 +26,70 @@ export type CharacterId =
   | 'miles'
   | 'ruby'
   | 'jasper'
-  | 'nova';
+  | 'nova'
+  | 'scout'
+  | 'hoot'
+  | 'pogo'
+  | 'mochi'
+  | 'whiskers'
+  | 'roary'
+  | 'zippy'
+  | 'draco'
+  | 'rocket'
+  | 'orbit'
+  | 'comet'
+  | 'luna'
+  | 'sunny'
+  | 'bolt'
+  | 'brainwave'
+  | 'pixel'
+  | 'lucky'
+  | 'crown'
+  | 'gem'
+  | 'skater'
+  | 'aria'
+  | 'theo'
+  | 'nia'
+  | 'caleb'
+  | 'maya'
+  | 'liam'
+  | 'finn'
+  | 'chloe'
+  | 'owen'
+  | 'elsie'
+  | 'jack'
+  | 'sophie'
+  | 'micah'
+  | 'lily'
+  | 'grace'
+  | 'noah'
+  | 'ava'
+  | 'luke'
+  | 'glimmer'
+  | 'beebo'
+  | 'fuzzbit'
+  | 'emberwing'
+  | 'twinkle'
+  | 'moonlet'
+  | 'gooey'
+  | 'puff'
+  | 'prism'
+  | 'sprig'
+  | 'blink'
+  | 'droplet'
+  | 'bop'
+  | 'peep'
+  | 'mushy'
+  | 'orbitbot';
 
 type HairStyle = 'bun' | 'ponytail' | 'part' | 'tousled' | 'pigtails' | 'cap' | 'buzz' | 'puffs';
+export type CharacterGroup = 'crew' | 'creatures' | 'cosmic' | 'powerups' | 'fantastic';
 
 export type Character = {
   id: CharacterId;
   name: string;
-  kind: 'dog' | 'kid';
+  kind: 'dog' | 'kid' | 'icon';
+  group: CharacterGroup;
   age: number | null;
   blurb: string;
   /** Menu highlight colour. */
@@ -55,6 +111,10 @@ export type Character = {
   freckles?: boolean;
   /** Round glasses frames over the eyes. */
   glasses?: boolean;
+  /** Platform-native color symbol used by object and creature mascots. */
+  glyph?: string;
+  /** High-fidelity menu portrait. Gameplay can keep using the lightweight canvas form. */
+  portrait?: string;
 };
 
 const SKIN = '#f7dcc4';
@@ -64,11 +124,42 @@ const SKIN_TAN_SHADE = '#b9824f';
 const SKIN_DEEP = '#8c5a3c';
 const SKIN_DEEP_SHADE = '#6b4128';
 
+function iconCharacter(
+  id: CharacterId,
+  name: string,
+  glyph: string,
+  group: CharacterGroup,
+  accent: string,
+  blurb: string,
+): Character {
+  return {
+    id,
+    name,
+    kind: 'icon',
+    group,
+    age: null,
+    blurb,
+    accent,
+    glyph,
+    hair: null,
+    hairColor: accent,
+    hairShade: '#11111b',
+    skin: accent,
+    skinShade: '#11111b',
+    shirt: accent,
+    shirtShade: '#11111b',
+    stripes: false,
+    dots: false,
+    braces: false,
+  };
+}
+
 export const CHARACTERS: Character[] = [
   {
     id: 'marty',
     name: 'Marty',
     kind: 'dog',
+    group: 'crew',
     age: null,
     blurb: 'The good boy. Hops first, thinks later.',
     accent: '#f5a800',
@@ -87,6 +178,7 @@ export const CHARACTERS: Character[] = [
     id: 'dakota',
     name: 'Dakota',
     kind: 'kid',
+    group: 'crew',
     age: 10,
     blurb: 'Ten. Reads the whole passage.',
     accent: '#6f8bd8',
@@ -105,6 +197,7 @@ export const CHARACTERS: Character[] = [
     id: 'carson',
     name: 'Carson',
     kind: 'kid',
+    group: 'crew',
     age: 8,
     blurb: 'Eight. Braces and a big grin.',
     accent: '#ff8fbf',
@@ -123,6 +216,7 @@ export const CHARACTERS: Character[] = [
     id: 'colton',
     name: 'Colton',
     kind: 'kid',
+    group: 'crew',
     age: 6,
     blurb: 'Six. Full speed, always.',
     accent: '#43d6c4',
@@ -141,6 +235,7 @@ export const CHARACTERS: Character[] = [
     id: 'hudson',
     name: 'Hudson',
     kind: 'kid',
+    group: 'crew',
     age: 4,
     blurb: 'Four. Fearless.',
     accent: '#2fc7e8',
@@ -159,6 +254,7 @@ export const CHARACTERS: Character[] = [
     id: 'sadie',
     name: 'Sadie',
     kind: 'kid',
+    group: 'crew',
     age: 9,
     blurb: 'Nine. Freckles and fast pigtails.',
     accent: '#ff6a4d',
@@ -178,6 +274,7 @@ export const CHARACTERS: Character[] = [
     id: 'miles',
     name: 'Miles',
     kind: 'kid',
+    group: 'crew',
     age: 11,
     blurb: 'Eleven. Sees everything twice.',
     accent: '#8a6fd8',
@@ -197,6 +294,7 @@ export const CHARACTERS: Character[] = [
     id: 'ruby',
     name: 'Ruby',
     kind: 'kid',
+    group: 'crew',
     age: 7,
     blurb: 'Seven. Cap on, ready to go.',
     accent: '#e83e5c',
@@ -215,6 +313,7 @@ export const CHARACTERS: Character[] = [
     id: 'jasper',
     name: 'Jasper',
     kind: 'kid',
+    group: 'crew',
     age: 12,
     blurb: 'Twelve. Buzzcut and business.',
     accent: '#4a90d9',
@@ -233,6 +332,7 @@ export const CHARACTERS: Character[] = [
     id: 'nova',
     name: 'Nova',
     kind: 'kid',
+    group: 'crew',
     age: 5,
     blurb: 'Five. Puffs and pure energy.',
     accent: '#ffd23f',
@@ -247,7 +347,94 @@ export const CHARACTERS: Character[] = [
     dots: false,
     braces: false,
   },
+  iconCharacter('scout', 'Scout', '🦊', 'creatures', '#ff8a3d', 'Quick, curious, and ready to explore.'),
+  iconCharacter('hoot', 'Hoot', '🦉', 'creatures', '#b58cff', 'A night owl who spots every clue.'),
+  iconCharacter('pogo', 'Pogo', '🐸', 'creatures', '#5ee49b', 'Big jumps and even bigger ideas.'),
+  iconCharacter('mochi', 'Mochi', '🐼', 'creatures', '#f3f4f6', 'Calm focus with a playful side.'),
+  iconCharacter('whiskers', 'Whiskers', '🐱', 'creatures', '#ffbd59', 'Curious about absolutely everything.'),
+  iconCharacter('roary', 'Roary', '🐯', 'creatures', '#ff7a45', 'Brave enough for the hardest level.'),
+  iconCharacter('zippy', 'Zippy', '🐰', 'creatures', '#f5a7d2', 'Fast feet and a faster brain.'),
+  iconCharacter('draco', 'Draco', '🐲', 'creatures', '#63e0c7', 'A tiny dragon with giant confidence.'),
+  iconCharacter('rocket', 'Rocket', '🚀', 'cosmic', '#5bc8ff', 'Always headed for the next level.'),
+  iconCharacter('orbit', 'Orbit', '🪐', 'cosmic', '#a78bfa', 'Makes every challenge part of the journey.'),
+  iconCharacter('comet', 'Comet', '☄️', 'cosmic', '#ff8c5a', 'Bright, fast, and impossible to miss.'),
+  iconCharacter('luna', 'Luna', '🌙', 'cosmic', '#d7d4ff', 'Quiet confidence for thoughtful players.'),
+  iconCharacter('sunny', 'Sunny', '☀️', 'cosmic', '#ffd24d', 'Brings bright energy to every round.'),
+  iconCharacter('bolt', 'Bolt', '⚡', 'powerups', '#ffe14d', 'A jolt of focus when it matters.'),
+  iconCharacter('brainwave', 'Brainwave', '🧠', 'powerups', '#ff78b7', 'Built for clever answers and big ideas.'),
+  iconCharacter('pixel', 'Pixel', '🎮', 'powerups', '#66d9ff', 'Classic arcade energy in one button.'),
+  iconCharacter('lucky', 'Lucky', '🎲', 'powerups', '#ff6b6b', 'Ready to roll with any challenge.'),
+  iconCharacter('crown', 'Crown', '👑', 'powerups', '#ffd166', 'For players who rule their own progress.'),
+  iconCharacter('gem', 'Gem', '💎', 'powerups', '#5de7f1', 'A brilliant pick with plenty of sparkle.'),
+  iconCharacter('skater', 'Skater', '🛹', 'powerups', '#8dff7a', 'Keeps moving, learning, and landing tricks.'),
 ];
+
+const PORTRAIT_IDS: CharacterId[] = [
+  'marty', 'dakota', 'carson', 'colton', 'hudson', 'sadie',
+  'miles', 'ruby', 'jasper', 'nova', 'scout', 'hoot',
+  'pogo', 'mochi', 'whiskers', 'roary', 'zippy', 'draco',
+  'rocket', 'orbit', 'comet', 'luna', 'sunny', 'bolt',
+  'brainwave', 'pixel', 'lucky', 'crown', 'gem', 'skater',
+  'aria', 'theo', 'nia', 'caleb', 'maya', 'liam',
+  'finn', 'chloe', 'owen', 'elsie', 'jack', 'sophie',
+  'micah', 'lily', 'grace', 'noah', 'ava', 'luke',
+];
+
+const NEW_PORTRAIT_CHARACTERS: Character[] = [
+  iconCharacter('aria', 'Aria', '✦', 'cosmic', '#62d6ff', 'Curious, calm, and ready to explore.'),
+  iconCharacter('theo', 'Theo', '▲', 'cosmic', '#8b7cf6', 'Builds a plan, then levels it up.'),
+  iconCharacter('nia', 'Nia', '◆', 'powerups', '#ff8ab8', 'Bright ideas and brave answers.'),
+  iconCharacter('caleb', 'Caleb', '●', 'powerups', '#f7b955', 'A steady teammate with sharp focus.'),
+  iconCharacter('maya', 'Maya', '★', 'crew', '#55d6a8', 'Kind, quick, and always learning.'),
+  iconCharacter('liam', 'Liam', '⚡', 'crew', '#70a5ff', 'Turns every challenge into a new run.'),
+  iconCharacter('finn', 'Finn', '●', 'crew', '#55a7ff', 'Quick smile, quicker thinking.'),
+  iconCharacter('chloe', 'Chloe', '✦', 'crew', '#f2b544', 'Brings sunshine to every challenge.'),
+  iconCharacter('owen', 'Owen', '▲', 'crew', '#78a7ff', 'Always ready for the next level.'),
+  iconCharacter('elsie', 'Elsie', '◆', 'crew', '#b78cff', 'Creative, confident, and kind.'),
+  iconCharacter('jack', 'Jack', '★', 'crew', '#70b56b', 'A careful thinker with bold ideas.'),
+  iconCharacter('sophie', 'Sophie', '✿', 'crew', '#8e86df', 'Finds the fun in every puzzle.'),
+  iconCharacter('micah', 'Micah', '⚡', 'crew', '#4d91dc', 'Calm focus and a winning grin.'),
+  iconCharacter('lily', 'Lily', '✦', 'crew', '#78b9e8', 'Bright, brave, and ready to learn.'),
+  iconCharacter('grace', 'Grace', '◆', 'crew', '#e5899f', 'Notices every important detail.'),
+  iconCharacter('noah', 'Noah', '●', 'crew', '#d95f54', 'Keeps going until it clicks.'),
+  iconCharacter('ava', 'Ava', '★', 'crew', '#f0ae42', 'Big curiosity and bigger ideas.'),
+  iconCharacter('luke', 'Luke', '▲', 'crew', '#4f91d8', 'Makes every practice round count.'),
+];
+
+CHARACTERS.push(...NEW_PORTRAIT_CHARACTERS);
+for (const id of PORTRAIT_IDS) {
+  const character = CHARACTERS.find((candidate) => candidate.id === id);
+  if (character) {
+    character.portrait = `/avatars/${id}.webp`;
+    character.kind = 'kid';
+    character.glyph = undefined;
+    character.hair ??= 'tousled';
+  }
+}
+
+const FANTASTIC_FRIENDS: Character[] = [
+  iconCharacter('glimmer', 'Glimmer', '👽', 'fantastic', '#9bea55', 'A bright-eyed visitor from far away.'),
+  iconCharacter('beebo', 'Beebo', '🤖', 'fantastic', '#72ddff', 'A tiny robot with enormous curiosity.'),
+  iconCharacter('fuzzbit', 'Fuzzbit', '👾', 'fantastic', '#a98bff', 'Soft, silly, and surprisingly clever.'),
+  iconCharacter('emberwing', 'Emberwing', '🐲', 'fantastic', '#42d3cb', 'A little dragon with a brave heart.'),
+  iconCharacter('twinkle', 'Twinkle', '⭐', 'fantastic', '#ffd55c', 'Makes every answer shine brighter.'),
+  iconCharacter('moonlet', 'Moonlet', '🌙', 'fantastic', '#a8c9ff', 'A calm companion for big ideas.'),
+  iconCharacter('gooey', 'Gooey', '🟢', 'fantastic', '#72e15e', 'Bounces back from every mistake.'),
+  iconCharacter('puff', 'Puff', '☁️', 'fantastic', '#d7f4ff', 'A cheerful cloud with lofty plans.'),
+  iconCharacter('prism', 'Prism', '💎', 'fantastic', '#8b8cff', 'Sees every puzzle from a new angle.'),
+  iconCharacter('sprig', 'Sprig', '🌿', 'fantastic', '#77c866', 'Grows a little smarter every day.'),
+  iconCharacter('blink', 'Blink', '🟡', 'fantastic', '#ffbd4a', 'One big eye for important details.'),
+  iconCharacter('droplet', 'Droplet', '💧', 'fantastic', '#56c9ff', 'Cool under pressure and ready to flow.'),
+  iconCharacter('bop', 'Bop', '🎧', 'fantastic', '#b978ff', 'Finds the rhythm in every challenge.'),
+  iconCharacter('peep', 'Peep', '🐦', 'fantastic', '#579ee8', 'A quick little friend with sharp focus.'),
+  iconCharacter('mushy', 'Mushy', '🍄', 'fantastic', '#ef77c8', 'A magical thinker from the forest floor.'),
+  iconCharacter('orbitbot', 'Orbit Bot', '🛸', 'fantastic', '#f2a63b', 'A one-eyed explorer built for adventure.'),
+];
+
+CHARACTERS.push(...FANTASTIC_FRIENDS);
+for (const character of FANTASTIC_FRIENDS) {
+  character.portrait = `/avatars/${character.id}.webp`;
+}
 
 /** The dog leads, because he was the one specifically asked for. */
 export const DEFAULT_CHARACTER_ID: CharacterId = 'marty';
@@ -628,6 +815,48 @@ export function drawKidFace(
   }
 }
 
+/** A polished medallion for animals, space objects, and arcade power-ups. */
+function drawIconFace(
+  ctx: CanvasRenderingContext2D,
+  c: Character,
+  cx: number,
+  cy: number,
+  size: number,
+): void {
+  const r = size / 2;
+  const shadow = ctx.createRadialGradient(cx, cy + r * 0.34, r * 0.08, cx, cy, r * 1.05);
+  shadow.addColorStop(0, `${c.accent}66`);
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  circle(ctx, cx, cy + r * 0.18, r * 1.08);
+
+  const badge = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  badge.addColorStop(0, '#252544');
+  badge.addColorStop(0.58, '#151526');
+  badge.addColorStop(1, '#0c0c18');
+  ctx.fillStyle = badge;
+  circle(ctx, cx, cy, r * 0.94);
+
+  ctx.strokeStyle = c.accent;
+  ctx.globalAlpha = 0.74;
+  ctx.lineWidth = Math.max(1.5, r * 0.07);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.87, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  ellipse(ctx, cx - r * 0.24, cy - r * 0.48, r * 0.34, r * 0.12, -0.35);
+  ctx.fillStyle = '#ffffff';
+  circle(ctx, cx + r * 0.58, cy - r * 0.5, Math.max(1.2, r * 0.055));
+  circle(ctx, cx - r * 0.62, cy + r * 0.26, Math.max(1, r * 0.035));
+
+  ctx.font = `${Math.round(size * 0.58)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(c.glyph ?? '★', cx, cy + size * 0.025);
+}
+
 /** Face only, for menus and the celebration card. */
 export function drawCharacterFace(
   ctx: CanvasRenderingContext2D,
@@ -638,7 +867,8 @@ export function drawCharacterFace(
   opts: { look?: number } = {},
 ): void {
   if (c.kind === 'dog') drawDogFace(ctx, cx, cy, size, opts);
-  else drawKidFace(ctx, c, cx, cy, size, opts);
+  else if (c.kind === 'kid') drawKidFace(ctx, c, cx, cy, size, opts);
+  else drawIconFace(ctx, c, cx, cy, size);
 }
 
 /**
@@ -673,6 +903,15 @@ export function drawCharacterSprite(
   const bodyTop = -sh + headSize * 0.86;
   const bodyH = -bodyTop;
   const step = Math.sin(frame * Math.PI) * (airborne ? 0 : 1);
+
+  if (c.kind === 'icon') {
+    const bob = airborne ? -sh * 0.06 : Math.sin(frame * Math.PI * 2) * sh * 0.018;
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ellipse(ctx, 0, -sh * 0.015, sw * 0.3, sh * 0.045);
+    drawIconFace(ctx, c, 0, -sh * 0.53 + bob, Math.min(sw, sh) * 0.88);
+    ctx.restore();
+    return;
+  }
 
   if (c.kind === 'dog') {
     // Four legs, a body and a tail. Side-on, since he is running or hopping.

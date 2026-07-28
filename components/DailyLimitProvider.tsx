@@ -47,18 +47,21 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
     !parentSandbox && (pathname.startsWith('/play/') || pathname === '/prep');
 
   useEffect(() => {
-    if (!profile || parentSandbox) {
-      setUsedMs(0);
-      setLimitReached(false);
-      setBlocked(false);
-      return;
-    }
-    const current = loadDailyUsage(profile.id).activeMs;
-    setUsedMs(current);
-    const reached = current >= profile.dailyLimitMinutes * 60_000;
-    setLimitReached(reached);
-    setBlocked(reached && !deferredRef.current);
-  }, [parentSandbox, profile?.id, profile?.dailyLimitMinutes]);
+    const timer = window.setTimeout(() => {
+      if (!profile || parentSandbox) {
+        setUsedMs(0);
+        setLimitReached(false);
+        setBlocked(false);
+        return;
+      }
+      const current = loadDailyUsage(profile.id).activeMs;
+      setUsedMs(current);
+      const reached = current >= profile.dailyLimitMinutes * 60_000;
+      setLimitReached(reached);
+      setBlocked(reached && !deferredRef.current);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [parentSandbox, profile]);
 
   useEffect(() => {
     if (!profile || !countsAsLearningTime || blocked) return;
@@ -127,19 +130,21 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-white/58">
               You used today&apos;s {profile.dailyLimitMinutes} minutes. Your progress is saved.
-              A parent can add more time in Parent settings, or you can come back tomorrow.
+              A parent can add more time in the parent dashboard, or you can come back tomorrow.
             </p>
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                await fetch('/api/auth/logout', { method: 'POST' });
                 setActiveProfile(null);
                 setBlocked(false);
                 setLimitReached(false);
-                router.push('/');
+                router.replace('/');
+                router.refresh();
               }}
               className="mt-6 min-h-14 w-full rounded-2xl bg-cyan-200 px-5 font-black text-[#071821]"
             >
-              Return to player picker
+              Return to sign in
             </button>
             <p className="mt-3 text-xs text-white/30">
               {remainingMinutes > 0 ? `${remainingMinutes} minutes remain.` : 'Timer resets tomorrow.'}

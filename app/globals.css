@@ -36,6 +36,32 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+.login-stage {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(76, 110, 245, 0.2), transparent 34rem),
+    radial-gradient(circle at 88% 76%, rgba(34, 211, 238, 0.12), transparent 30rem),
+    linear-gradient(145deg, #070712 0%, #0d1024 55%, #090812 100%);
+}
+
+.login-story {
+  position: relative;
+}
+
+.login-story::after {
+  position: absolute;
+  z-index: -1;
+  inset: 15% 5% auto;
+  height: 18rem;
+  border-radius: 50%;
+  background: rgba(139, 124, 246, 0.08);
+  filter: blur(70px);
+  content: '';
+}
+
+.login-panel {
+  border: 1px solid rgba(165, 243, 252, 0.12);
+}
+
 .arcade-home {
   isolation: isolate;
 }

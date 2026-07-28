@@ -1,5 +1,6 @@
 import ParentCurriculumLibrary from '@/components/parent/ParentCurriculumLibrary';
 import ParentShell from '@/components/parent/ParentShell';
+import { requireActiveParent } from '@/lib/parentAccess';
 import {
   curriculumFamiliesForBand,
   GRADE_BANDS,
@@ -13,6 +14,7 @@ export default async function CurriculumPage({
 }: {
   searchParams: Promise<{ level?: string }>;
 }) {
+  await requireActiveParent();
   const requested = (await searchParams).level;
   const band = GRADE_BANDS.includes(requested as GradeBand)
     ? (requested as GradeBand)

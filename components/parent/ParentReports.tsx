@@ -97,7 +97,7 @@ export default function ParentReports() {
   if (profiles.length === 0) {
     return (
       <div className="rounded-2xl bg-[#151527] p-6 text-sm text-white/55">
-        Add a child from Parent settings before opening reports.
+        Add a child from Children &amp; sign-ins before opening reports.
       </div>
     );
   }

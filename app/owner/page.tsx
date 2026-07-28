@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import AccountSignOutButton from '@/components/AccountSignOutButton';
 import OwnerAccountManager, {
   type ParentAccount,
 } from '@/components/owner/OwnerAccountManager';
+import { usernameFromAuthEmail } from '@/lib/accountUsername';
 import { getOwnerSession } from '@/lib/ownerAccess';
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
@@ -46,6 +48,7 @@ export default async function OwnerPage() {
   }
 
   const adminConfigured = isSupabaseAdminConfigured();
+  const ownerUsername = usernameFromAuthEmail(owner.user.email) ?? 'owner';
   let initialParents: ParentAccount[] = [];
   if (adminConfigured) {
     const admin = getSupabaseAdminClient();
@@ -75,8 +78,14 @@ export default async function OwnerPage() {
             without exposing one family’s children or progress to another.
           </p>
         </div>
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(34,211,238,.18),rgba(244,114,182,.2))] text-3xl shadow-[0_18px_40px_rgba(0,0,0,.28)]">
-          ◈
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="rounded-xl bg-fuchsia-300/[0.09] px-4 py-3 text-right ring-1 ring-fuchsia-200/15">
+            <p className="text-[10px] font-black text-fuchsia-200/65">SIGNED IN AS OWNER</p>
+            <p className="mt-0.5 text-sm font-black text-white">@{ownerUsername}</p>
+          </div>
+          <AccountSignOutButton
+            className="min-h-12 rounded-xl bg-white/[0.06] px-4 text-sm font-black text-white/65 transition hover:bg-white/10 hover:text-white disabled:opacity-45"
+          />
         </div>
       </header>
 

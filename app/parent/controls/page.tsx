@@ -1,5 +1,6 @@
 import ParentControls from '@/components/parent/ParentControls';
 import ParentShell from '@/components/parent/ParentShell';
+import { requireActiveParent } from '@/lib/parentAccess';
 import {
   curriculumFamiliesForBand,
   GRADE_BANDS,
@@ -8,7 +9,8 @@ import {
 
 export const metadata = { title: 'Parent Controls' };
 
-export default function ControlsPage() {
+export default async function ControlsPage() {
+  await requireActiveParent();
   const seen = new Set<string>();
   const catalog: CurriculumFamilyPreview[] = [];
   for (const band of GRADE_BANDS) {

@@ -65,7 +65,6 @@ export default async function OpenGraphImage() {
           }}
         >
           {/* ImageResponse supports data-URI image sources for local assets. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={logoSrc}
             alt=""

@@ -693,7 +693,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
                   ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
                   : 'border-emerald-400/40 bg-emerald-400/10'
               }`}
-              title={parentSandbox ? 'Parent sandbox has unlimited play.' : 'Play time left. Answer questions to earn more.'}
+              title={parentSandbox ? 'Parent free play has no time limit.' : 'Play time left. Answer questions to earn more.'}
             >
               <span className="text-sm sm:text-base">{parentSandbox ? '∞' : '⏱'}</span>
               <span className="text-right">
@@ -809,7 +809,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               </div>
               <div className="text-xs text-white/40 sm:text-base">
                 {parentSandbox
-                  ? 'Parent sandbox — no questions or time limit'
+                  ? 'Parent free play — no questions or time limit'
                   : `Clock stopped - ${formatClock(msLeft)} of play left`}
               </div>
               <button
@@ -920,7 +920,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
             </p>
             <p className="mt-3 text-xs leading-relaxed text-white/40">
               {parentSandbox
-                ? 'Parent sandbox is active. Play as long as you want; no questions, time limits, or child progress are used.'
+                ? 'Parent free play is active. Play as long as you want; no questions, time limits, or child progress are used.'
                 : 'Answer a short study block to earn play time. Dying is free until the clock runs out. Tap an answer, or press its number key, to answer a question.'}
             </p>
             <button
