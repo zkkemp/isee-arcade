@@ -72,6 +72,13 @@ assert(
   'suspended and removed parents must fail household RLS checks',
 );
 assert(
+  migration.includes('grant select on table public.parent_accounts to authenticated') &&
+    migration.includes('grant select, insert, update, delete on table public.learners to authenticated') &&
+    migration.includes('grant select, insert, update on table public.learner_snapshots to authenticated') &&
+    migration.includes('grant select, insert, update on table public.parent_preferences to authenticated'),
+  'authenticated parents need explicit table privileges before PostgREST can evaluate family RLS',
+);
+assert(
   bootstrap.includes("EXPECTED_PROJECT_REF = 'hgmupcysijskaowsrgbn'") &&
     bootstrap.includes('owner already exists') &&
     bootstrap.includes("account_role: 'owner'"),

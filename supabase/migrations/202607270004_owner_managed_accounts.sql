@@ -315,3 +315,14 @@ revoke all on table public.parent_account_invites from anon, authenticated;
 revoke all on table public.owner_account_audit from anon, authenticated;
 revoke all on table public.platform_admins from anon;
 revoke all on table public.parent_accounts from anon;
+
+-- RLS decides which family rows an authenticated parent may reach. Explicit
+-- table grants are still required for PostgREST to evaluate those policies.
+grant select on table public.parent_accounts to authenticated;
+grant select on table public.platform_admins to authenticated;
+grant select on table public.household_members to authenticated;
+grant select, update on table public.households to authenticated;
+grant select, insert, update, delete on table public.learners to authenticated;
+grant select, insert, update on table public.learner_snapshots to authenticated;
+grant select, insert on table public.question_attempts to authenticated;
+grant select, insert, update on table public.parent_preferences to authenticated;
