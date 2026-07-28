@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { restoreCloudFamily, uploadDeviceState, type CloudSyncResult } from '@/lib/cloudSync';
 import {
   normalizeAccountUsername,
@@ -15,13 +16,29 @@ import { setPlayerMode } from '@/lib/playerMode';
 type Props = {
   configured: boolean;
   initialUsername: string | null;
+  initialIsOwner: boolean;
 };
 
-export default function CloudAccount({ configured, initialUsername }: Props) {
+async function accountStatus(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<'active' | 'inactive' | 'unknown'> {
+  const { data, error } = await supabase
+    .from('parent_accounts')
+    .select('status')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error || !data) return 'unknown';
+  return data.status === 'active' ? 'active' : 'inactive';
+}
+
+export default function CloudAccount({ configured, initialUsername, initialIsOwner }: Props) {
   const [username, setUsername] = useState(initialUsername ?? '');
   const [password, setPassword] = useState('');
   const [signedInUsername, setSignedInUsername] = useState(initialUsername);
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [isOwner, setIsOwner] = useState(initialIsOwner);
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<CloudSyncResult | null>(null);
 
@@ -33,11 +50,41 @@ export default function CloudAccount({ configured, initialUsername }: Props) {
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
-    void supabase.auth.getUser().then(({ data }) => {
-      setSignedInUsername(usernameFromAuthEmail(data.user?.email));
+    void supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) {
+        setSignedInUsername(null);
+        setIsOwner(false);
+        return;
+      }
+      const status = await accountStatus(supabase, data.user.id);
+      if (status === 'inactive') {
+        await supabase.auth.signOut();
+        setActiveProfile(null);
+        setPlayerMode(null);
+        setSignedInUsername(null);
+        setIsOwner(false);
+        setNotice({
+          ok: false,
+          message: 'This parent account is no longer active.',
+          learners: 0,
+        });
+        return;
+      }
+      setSignedInUsername(usernameFromAuthEmail(data.user.email));
+      if (status === 'unknown') {
+        setNotice({
+          ok: false,
+          message: 'Cloud access could not be verified. Your local family data is still available.',
+          learners: 0,
+        });
+        return;
+      }
+      const { data: owner } = await supabase.rpc('is_platform_admin');
+      setIsOwner(owner === true);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setSignedInUsername(usernameFromAuthEmail(session?.user.email));
+      if (!session) setIsOwner(false);
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -85,31 +132,54 @@ export default function CloudAccount({ configured, initialUsername }: Props) {
     }
     setBusy(true);
     setNotice(null);
-    const result =
-      mode === 'signup'
-        ? await supabase.auth.signUp({
-            email: usernameAuthEmail(cleanUsername),
-            password,
-            options: { data: { username: cleanUsername, account_type: 'parent' } },
-          })
-        : await supabase.auth.signInWithPassword({
-            email: usernameAuthEmail(cleanUsername),
-            password,
-          });
+    const result = await supabase.auth.signInWithPassword({
+      email: usernameAuthEmail(cleanUsername),
+      password,
+    });
     if (result.error) {
-      setNotice({ ok: false, message: result.error.message, learners: 0 });
-    } else if (mode === 'signup' && !result.data.session) {
       setNotice({
         ok: false,
         message:
-          'Username-only login needs Confirm email turned off in Supabase Authentication settings. Turn it off, then create this parent again.',
+          result.error.code === 'user_banned'
+            ? 'This parent account is suspended. Ask the ISEE Arcade owner to restore access.'
+            : 'That username or password did not match an active parent account.',
+        learners: 0,
+      });
+    } else if (!result.data.user) {
+      setNotice({
+        ok: false,
+        message: 'That account could not be verified.',
         learners: 0,
       });
     } else {
-      setSignedInUsername(cleanUsername);
-      setPassword('');
-      enterParentCenter();
-      setNotice(await uploadDeviceState());
+      const status = await accountStatus(supabase, result.data.user.id);
+      if (status === 'inactive') {
+        await supabase.auth.signOut();
+        setActiveProfile(null);
+        setPlayerMode(null);
+        setSignedInUsername(null);
+        setNotice({
+          ok: false,
+          message: 'This parent account is not active.',
+          learners: 0,
+        });
+      } else if (status === 'unknown') {
+        setSignedInUsername(cleanUsername);
+        setPassword('');
+        setNotice({
+          ok: false,
+          message:
+            'Cloud access could not be verified. Try syncing again when the connection returns.',
+          learners: 0,
+        });
+      } else {
+        setSignedInUsername(cleanUsername);
+        setPassword('');
+        enterParentCenter();
+        const { data: owner } = await supabase.rpc('is_platform_admin');
+        setIsOwner(owner === true);
+        setNotice(await uploadDeviceState());
+      }
     }
     setBusy(false);
   }
@@ -135,6 +205,31 @@ export default function CloudAccount({ configured, initialUsername }: Props) {
     setPlayerMode(null);
     setSignedInUsername(null);
     setNotice({ ok: true, message: 'Signed out. Local play still works normally.', learners: 0 });
+    setBusy(false);
+  }
+
+  async function changePassword() {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || busy) return;
+    if (!/^[A-Za-z0-9]{6,64}$/.test(newPassword)) {
+      setNotice({
+        ok: false,
+        message: 'Use 6–64 characters containing only letters or numbers.',
+        learners: 0,
+      });
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setNotice({
+      ok: !error,
+      message: error ? 'Your password could not be changed.' : 'Your new password is saved.',
+      learners: 0,
+    });
+    if (!error) {
+      setNewPassword('');
+      setShowPasswordChange(false);
+    }
     setBusy(false);
   }
 
@@ -185,7 +280,53 @@ export default function CloudAccount({ configured, initialUsername }: Props) {
           >
             Restore cloud family
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowPasswordChange((current) => !current);
+              setNewPassword('');
+              setNotice(null);
+            }}
+            disabled={busy}
+            className="min-h-14 rounded-xl bg-white/[0.07] px-5 text-sm font-black text-white/70 transition hover:bg-white/10 active:scale-[.98] disabled:opacity-45"
+          >
+            Change my password
+          </button>
+          {isOwner && (
+            <Link
+              href="/owner"
+              className="flex min-h-14 items-center justify-center rounded-xl bg-fuchsia-300/16 px-5 text-center text-sm font-black text-fuchsia-100 transition hover:bg-fuchsia-300/22 active:scale-[.98]"
+            >
+              Manage parent access
+            </Link>
+          )}
         </div>
+
+        {showPasswordChange && (
+          <div className="mt-4 flex flex-wrap gap-2 rounded-xl bg-black/20 p-3">
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) =>
+                setNewPassword(event.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 64))
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void changePassword();
+              }}
+              className="min-h-11 min-w-56 flex-1 rounded-lg bg-white/[0.07] px-3 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-cyan-300"
+              placeholder="New password · 6+ letters or numbers"
+            />
+            <button
+              type="button"
+              onClick={() => void changePassword()}
+              disabled={busy || !/^[A-Za-z0-9]{6,64}$/.test(newPassword)}
+              className="min-h-11 rounded-lg bg-cyan-300 px-4 text-xs font-black text-[#0e1722] disabled:opacity-40"
+            >
+              Save password
+            </button>
+          </div>
+        )}
 
         {notice && (
           <p
@@ -203,24 +344,12 @@ export default function CloudAccount({ configured, initialUsername }: Props) {
 
   return (
     <section className="rounded-2xl bg-[#151527] p-5 shadow-[0_18px_50px_rgba(0,0,0,.3)] sm:p-7">
-      <div className="grid grid-cols-2 gap-2 rounded-xl bg-black/20 p-1" role="tablist">
-        {(['signin', 'signup'] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={mode === tab}
-            onClick={() => {
-              setMode(tab);
-              setNotice(null);
-            }}
-            className={`min-h-11 rounded-lg px-4 text-sm font-black transition ${
-              mode === tab ? 'bg-violet-300 text-[#171226]' : 'text-white/55 hover:text-white'
-            }`}
-          >
-            {tab === 'signin' ? 'Sign in' : 'Create parent account'}
-          </button>
-        ))}
+      <div className="rounded-xl border border-cyan-200/12 bg-cyan-200/[0.05] px-4 py-3">
+        <p className="text-sm font-black text-cyan-100">Private family access</p>
+        <p className="mt-1 text-xs leading-relaxed text-white/52">
+          Sign in with the username and password given to you by the ISEE Arcade owner.
+          Accounts cannot be created from this page.
+        </p>
       </div>
 
       <div className="mt-5 space-y-4">
@@ -240,7 +369,7 @@ export default function CloudAccount({ configured, initialUsername }: Props) {
           <span className="mb-1.5 block text-sm font-bold text-white/75">Password</span>
           <input
             type="password"
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             onKeyDown={(event) => {
@@ -258,7 +387,7 @@ export default function CloudAccount({ configured, initialUsername }: Props) {
         disabled={busy}
         className="mt-5 min-h-14 w-full rounded-xl bg-cyan-300 px-5 text-sm font-black text-[#101523] shadow-[0_12px_28px_rgba(34,211,238,.2)] transition hover:bg-cyan-200 active:scale-[.99] disabled:opacity-45"
       >
-        {busy ? 'Working…' : mode === 'signin' ? 'Sign in and sync' : 'Create account'}
+        {busy ? 'Signing in…' : 'Sign in and sync'}
       </button>
 
       {notice && (

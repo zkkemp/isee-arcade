@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
-import { usePlayerMode } from '@/lib/playerMode';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, type ReactNode } from 'react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { setActiveProfile } from '@/lib/profiles';
+import { setPlayerMode, usePlayerMode } from '@/lib/playerMode';
 
 const NAV = [
   { href: '/parent', label: 'Overview', icon: '⌂' },
@@ -22,7 +24,52 @@ export default function ParentShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const mode = usePlayerMode();
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    const cloudClient = supabase;
+
+    let checking = false;
+    let disposed = false;
+    async function validateCloudAccess() {
+      if (checking || disposed) return;
+      checking = true;
+      const { data } = await cloudClient.auth.getUser();
+      if (!data.user) {
+        checking = false;
+        return;
+      }
+      const { data: account, error } = await cloudClient
+        .from('parent_accounts')
+        .select('status')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+      checking = false;
+      if (disposed || error || !account || account.status === 'active') return;
+
+      await cloudClient.auth.signOut();
+      setActiveProfile(null);
+      setPlayerMode(null);
+      router.replace('/account');
+    }
+
+    void validateCloudAccess();
+    const interval = window.setInterval(() => void validateCloudAccess(), 30_000);
+    const validateWhenVisible = () => {
+      if (document.visibilityState === 'visible') void validateCloudAccess();
+    };
+    window.addEventListener('focus', validateWhenVisible);
+    document.addEventListener('visibilitychange', validateWhenVisible);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', validateWhenVisible);
+      document.removeEventListener('visibilitychange', validateWhenVisible);
+    };
+  }, [router]);
 
   if (mode !== 'parent') {
     return (

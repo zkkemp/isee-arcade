@@ -8,9 +8,12 @@ export const metadata = {
   title: 'Family Cloud · ISEE Arcade',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default async function AccountPage() {
   const configured = isSupabaseConfigured();
   let initialUsername: string | null = null;
+  let initialIsOwner = false;
 
   if (configured) {
     const supabase = await getSupabaseServerClient();
@@ -19,6 +22,10 @@ export default async function AccountPage() {
       typeof data?.claims?.email === 'string'
         ? usernameFromAuthEmail(data.claims.email)
         : null;
+    if (initialUsername) {
+      const { data: isOwner } = (await supabase?.rpc('is_platform_admin')) ?? { data: false };
+      initialIsOwner = isOwner === true;
+    }
   }
 
   return (
@@ -44,7 +51,11 @@ export default async function AccountPage() {
         </span>
       </header>
 
-      <CloudAccount configured={configured} initialUsername={initialUsername} />
+      <CloudAccount
+        configured={configured}
+        initialUsername={initialUsername}
+        initialIsOwner={initialIsOwner}
+      />
     </main>
   );
 }
