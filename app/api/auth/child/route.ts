@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createChildSession, childSessionCookie } from '@/lib/childSession';
 import { passwordHash, sha256Hex } from '@/lib/passcode';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
+import { getIseeDatabase } from '@/lib/supabase/database';
 
 type LearnerRow = {
   id: string;
@@ -19,7 +19,8 @@ type LearnerRow = {
 };
 
 export async function POST(request: Request) {
-  if (!isSupabaseAdminConfigured()) {
+  const sql = getIseeDatabase();
+  if (!sql) {
     return NextResponse.json({ error: 'Sign-in is not configured yet.' }, { status: 503 });
   }
 
@@ -39,16 +40,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'That username or password did not match.' }, { status: 401 });
   }
 
-  const admin = getSupabaseAdminClient();
-  const { data, error } = await admin!
-    .from('learners')
-    .select(
-      'id,household_id,local_profile_id,display_name,username,grade_band,avatar_id,password_hash,password_salt,daily_limit_minutes,question_block_size,smart_practice',
-    )
-    .ilike('username', username)
-    .limit(2);
-  const learners = (data ?? []) as LearnerRow[];
-  if (error || learners.length !== 1) {
+  const learners = await sql<LearnerRow[]>`
+    select id, household_id, local_profile_id, display_name, username, grade_band, avatar_id,
+      password_hash, password_salt, daily_limit_minutes, question_block_size, smart_practice
+    from public.learners
+    where lower(username) = lower(${username})
+    limit 2
+  `;
+  if (learners.length !== 1) {
     return NextResponse.json({ error: 'That username or password did not match.' }, { status: 401 });
   }
 
@@ -60,11 +59,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'That username or password did not match.' }, { status: 401 });
   }
 
-  const { data: snapshot } = await admin!
-    .from('learner_snapshots')
-    .select('progress,play_session,recent_games,painting_progress,settings')
-    .eq('learner_id', learner.id)
-    .maybeSingle();
+  const snapshots = await sql`
+    select progress, play_session, recent_games, painting_progress, settings
+    from public.learner_snapshots
+    where learner_id = ${learner.id}
+    limit 1
+  `;
+  const snapshot = snapshots[0] ?? null;
 
   const response = NextResponse.json({
     role: 'child',

@@ -1,10 +1,11 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { childSessionCookie, verifyChildSession } from '@/lib/childSession';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
+import { getIseeDatabase } from '@/lib/supabase/database';
 
 export async function POST(request: Request) {
-  if (!isSupabaseAdminConfigured()) {
+  const sql = getIseeDatabase();
+  if (!sql) {
     return NextResponse.json({ error: 'Sync is unavailable.' }, { status: 503 });
   }
   const cookieStore = await cookies();
@@ -26,30 +27,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid sync payload.' }, { status: 400 });
   }
 
-  const admin = getSupabaseAdminClient()!;
-  const { data: learner } = await admin
-    .from('learners')
-    .select('id')
-    .eq('id', session.learnerId)
-    .eq('household_id', session.householdId)
-    .maybeSingle();
-  if (!learner) return NextResponse.json({ error: 'This child account is no longer active.' }, { status: 403 });
+  const learners = await sql`
+    select id from public.learners
+    where id = ${session.learnerId} and household_id = ${session.householdId}
+    limit 1
+  `;
+  if (!learners[0]) return NextResponse.json({ error: 'This child account is no longer active.' }, { status: 403 });
 
-  const { error } = await admin.from('learner_snapshots').upsert(
-    {
-      learner_id: session.learnerId,
-      progress: body.progress ?? {},
-      play_session: body.playSession ?? {},
-      recent_games: Array.isArray(body.recentGames) ? body.recentGames : [],
-      painting_progress: {
-        pictures: body.paintings ?? {},
-        finished: body.finishedPaintings ?? [],
-      },
-      settings: { ...(body.settings ?? {}), dailyUsage: body.dailyUsage ?? {} },
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'learner_id' },
-  );
-  if (error) return NextResponse.json({ error: 'Progress could not be synced.' }, { status: 500 });
+  const progress = JSON.stringify(body.progress ?? {});
+  const playSession = JSON.stringify(body.playSession ?? {});
+  const recentGames = JSON.stringify(Array.isArray(body.recentGames) ? body.recentGames : []);
+  const paintingProgress = JSON.stringify({
+    pictures: body.paintings ?? {},
+    finished: body.finishedPaintings ?? [],
+  });
+  const settings = JSON.stringify({ ...(body.settings ?? {}), dailyUsage: body.dailyUsage ?? {} });
+  await sql`
+    insert into public.learner_snapshots (
+      learner_id, progress, play_session, recent_games, painting_progress, settings, updated_at
+    ) values (
+      ${session.learnerId}, ${progress}::jsonb, ${playSession}::jsonb, ${recentGames}::jsonb,
+      ${paintingProgress}::jsonb, ${settings}::jsonb, now()
+    )
+    on conflict (learner_id) do update set
+      progress = excluded.progress,
+      play_session = excluded.play_session,
+      recent_games = excluded.recent_games,
+      painting_progress = excluded.painting_progress,
+      settings = excluded.settings,
+      updated_at = now()
+  `;
   return NextResponse.json({ ok: true });
 }

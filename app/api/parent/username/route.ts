@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { normalizeAccountUsername } from '@/lib/accountUsername';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
+import { getIseeDatabase } from '@/lib/supabase/database';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function GET(request: Request) {
   const supabase = await getSupabaseServerClient();
   const { data } = (await supabase?.auth.getClaims()) ?? { data: null };
   const userId = typeof data?.claims?.sub === 'string' ? data.claims.sub : null;
-  if (!userId || !isSupabaseAdminConfigured()) {
+  const sql = getIseeDatabase();
+  if (!userId || !sql) {
     return NextResponse.json({ error: 'Parent access required.' }, { status: 401 });
   }
   const { data: account } = (await supabase
@@ -24,20 +25,14 @@ export async function GET(request: Request) {
   const exclude = url.searchParams.get('exclude') ?? '';
   if (username.length < 2) return NextResponse.json({ available: false });
 
-  let query = getSupabaseAdminClient()!
-    .from('learners')
-    .select('local_profile_id')
-    .ilike('username', username)
-    .limit(1);
-  if (exclude) query = query.neq('local_profile_id', exclude);
-  const { data: learner } = await query.maybeSingle();
-
-  const { data: parent } = await getSupabaseAdminClient()!
-    .from('parent_accounts')
-    .select('user_id')
-    .ilike('username', username)
-    .limit(1)
-    .maybeSingle();
-
-  return NextResponse.json({ available: !learner && !parent });
+  const matches = await sql`
+    select username from public.learners
+      where lower(username) = lower(${username})
+        and (${exclude} = '' or local_profile_id <> ${exclude})
+    union all
+    select username from public.parent_accounts
+      where lower(username) = lower(${username})
+    limit 1
+  `;
+  return NextResponse.json({ available: matches.length === 0 });
 }
