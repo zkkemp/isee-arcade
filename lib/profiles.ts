@@ -4,7 +4,8 @@ import { useMemo, useSyncExternalStore } from 'react';
 import type { CharacterId } from './characters';
 import { setCharacterId } from './characters';
 import type { GradeBand } from './questions';
-import { sha256Hex } from './passcode';
+import { newCredentialSalt, passwordHash, sha256Hex } from './passcode';
+import { setPlayerMode } from './playerMode';
 
 /**
  * Per-kid learner accounts.
@@ -21,12 +22,21 @@ import { sha256Hex } from './passcode';
 
 export type Profile = {
   id: string;
-  /** Display name and username - what the kid taps to log in. */
+  /** Friendly name shown around the arcade. */
   name: string;
+  /** Case-insensitive login name chosen by the parent. */
+  username: string;
   band: GradeBand;
   avatarId: CharacterId;
-  /** SHA-256 hex of the passcode, or '' for no passcode. */
+  /** PBKDF2 hash, or a legacy SHA-256 hash when passcodeSalt is empty. */
   passcodeHash: string;
+  passcodeSalt: string;
+  /** Total foreground learning/play time allowed per local calendar day. */
+  dailyLimitMinutes: number;
+  /** Correct answers required to earn a play window. Always 5–20. */
+  questionBlockSize: number;
+  /** Gently gives weak skills a little more practice without taking over the mix. */
+  smartPractice: boolean;
 };
 
 const PROFILES_KEY = 'isee-arcade:profiles';
@@ -50,8 +60,26 @@ function readProfiles(): Profile[] {
       cachedProfiles = EMPTY;
       return cachedProfiles;
     }
-    const parsed = JSON.parse(raw) as Profile[];
-    cachedProfiles = Array.isArray(parsed) ? parsed : EMPTY;
+    const parsed = JSON.parse(raw) as Array<Partial<Profile>>;
+    cachedProfiles = Array.isArray(parsed)
+      ? parsed
+          .filter(
+            (profile): profile is Partial<Profile> & { id: string; name: string } =>
+              typeof profile?.id === 'string' && typeof profile?.name === 'string',
+          )
+          .map((profile) => ({
+            id: profile.id,
+            name: profile.name,
+            username: cleanUsername(profile.username || profile.name),
+            band: profile.band ?? 'isee',
+            avatarId: profile.avatarId ?? 'dakota',
+            passcodeHash: profile.passcodeHash ?? '',
+            passcodeSalt: profile.passcodeSalt ?? '',
+            dailyLimitMinutes: clampDailyLimit(profile.dailyLimitMinutes),
+            questionBlockSize: clampQuestionBlockSize(profile.questionBlockSize),
+            smartPractice: profile.smartPractice !== false,
+          }))
+      : EMPTY;
     return cachedProfiles;
   } catch {
     return EMPTY;
@@ -114,6 +142,26 @@ function newId(): string {
   return `p-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
 
+export function cleanUsername(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '')
+    .slice(0, 24);
+}
+
+export function clampDailyLimit(value: unknown): number {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return 30;
+  return Math.max(5, Math.min(240, Math.round(number)));
+}
+
+export function clampQuestionBlockSize(value: unknown): number {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return 8;
+  return Math.max(5, Math.min(20, Math.round(number)));
+}
+
 // --- reads -------------------------------------------------------------------
 
 export function getProfiles(): Profile[] {
@@ -143,20 +191,66 @@ export function hasMaster(): boolean {
 
 // --- writes ------------------------------------------------------------------
 
-export function addProfile(input: { name: string; band: GradeBand; avatarId: CharacterId }): Profile {
+export function addProfile(input: {
+  name: string;
+  username?: string;
+  band: GradeBand;
+  avatarId: CharacterId;
+  dailyLimitMinutes?: number;
+  questionBlockSize?: number;
+  smartPractice?: boolean;
+}): Profile {
+  const baseUsername = cleanUsername(input.username || input.name) || 'player';
+  const used = new Set(readProfiles().map((profile) => profile.username));
+  let username = baseUsername;
+  let suffix = 2;
+  while (used.has(username)) {
+    username = `${baseUsername.slice(0, 20)}${suffix}`;
+    suffix += 1;
+  }
   const profile: Profile = {
     id: newId(),
     name: input.name.trim().slice(0, 16) || 'Player',
+    username,
     band: input.band,
     avatarId: input.avatarId,
     passcodeHash: '',
+    passcodeSalt: '',
+    dailyLimitMinutes: clampDailyLimit(input.dailyLimitMinutes),
+    questionBlockSize: clampQuestionBlockSize(input.questionBlockSize),
+    smartPractice: input.smartPractice !== false,
   };
   writeProfiles([...readProfiles(), profile]);
   return profile;
 }
 
 export function updateProfile(id: string, patch: Partial<Omit<Profile, 'id'>>): void {
-  writeProfiles(readProfiles().map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const profiles = readProfiles();
+  const requestedUsername =
+    patch.username === undefined ? undefined : cleanUsername(patch.username);
+  const usernameTaken =
+    requestedUsername !== undefined &&
+    profiles.some((profile) => profile.id !== id && profile.username === requestedUsername);
+  writeProfiles(
+    profiles.map((profile) =>
+      profile.id === id
+        ? {
+            ...profile,
+            ...patch,
+            username:
+              requestedUsername && !usernameTaken ? requestedUsername : profile.username,
+            dailyLimitMinutes:
+              patch.dailyLimitMinutes === undefined
+                ? profile.dailyLimitMinutes
+                : clampDailyLimit(patch.dailyLimitMinutes),
+            questionBlockSize:
+              patch.questionBlockSize === undefined
+                ? profile.questionBlockSize
+                : clampQuestionBlockSize(patch.questionBlockSize),
+          }
+        : profile,
+    ),
+  );
 }
 
 export function removeProfile(id: string): void {
@@ -175,6 +269,9 @@ export function setActiveProfile(id: string | null): void {
   if (id) {
     const p = readProfiles().find((x) => x.id === id);
     if (p) setCharacterId(p.avatarId);
+    setPlayerMode('learner');
+  } else {
+    setPlayerMode(null);
   }
   notify();
 }
@@ -182,14 +279,17 @@ export function setActiveProfile(id: string | null): void {
 // --- passcodes ---------------------------------------------------------------
 
 export async function setProfilePasscode(id: string, code: string): Promise<void> {
-  const hash = code ? await sha256Hex(code) : '';
-  updateProfile(id, { passcodeHash: hash });
+  const salt = code ? newCredentialSalt() : '';
+  const hash = code ? await passwordHash(code, salt) : '';
+  updateProfile(id, { passcodeHash: hash, passcodeSalt: salt });
 }
 
 /** True when the code matches, or when the profile has no passcode set. */
 export async function verifyProfilePasscode(profile: Profile, code: string): Promise<boolean> {
   if (!profile.passcodeHash) return true;
-  return (await sha256Hex(code)) === profile.passcodeHash;
+  return profile.passcodeSalt
+    ? (await passwordHash(code, profile.passcodeSalt)) === profile.passcodeHash
+    : (await sha256Hex(code)) === profile.passcodeHash;
 }
 
 export async function setMasterPasscode(code: string): Promise<void> {
@@ -210,7 +310,7 @@ export async function verifyMasterPasscode(code: string): Promise<boolean> {
 
 /** Master-only: clear a kid's passcode so they can set a new one. */
 export function resetProfilePasscode(id: string): void {
-  updateProfile(id, { passcodeHash: '' });
+  updateProfile(id, { passcodeHash: '', passcodeSalt: '' });
 }
 
 // --- hooks -------------------------------------------------------------------

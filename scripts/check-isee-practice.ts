@@ -2,6 +2,7 @@ import {
   buildPracticeSection,
   formatPracticeTime,
   ISEE_SECTIONS,
+  ISEE_SECTIONS_BY_LEVEL,
   mathStrandForTopic,
   MATH_BLUEPRINT_COUNTS,
   readingPassageGroups,
@@ -19,11 +20,40 @@ const expected = {
   essay: [1, 30],
 } as const;
 
+const middleUpperExpected = {
+  verbal: [40, 20],
+  quantitative: [37, 35],
+  reading: [36, 35],
+  math: [47, 40],
+  essay: [1, 30],
+} as const;
+
 for (const section of ISEE_SECTIONS) {
   assert(
     section.questions === expected[section.id][0] && section.minutes === expected[section.id][1],
     `${section.id} does not match the official Lower Level shape`,
   );
+}
+
+for (const level of ['middle', 'upper'] as const) {
+  for (const section of ISEE_SECTIONS_BY_LEVEL[level]) {
+    assert(
+      section.questions === middleUpperExpected[section.id][0] &&
+        section.minutes === middleUpperExpected[section.id][1],
+      `${level} ${section.id} does not match the official section shape`,
+    );
+  }
+  for (const id of ['verbal', 'quantitative', 'reading', 'math'] as const) {
+    const section = buildPracticeSection(id, 2026, undefined, level);
+    assert(
+      section.length === middleUpperExpected[id][0],
+      `${level} ${id} section has the wrong length`,
+    );
+    assert(
+      section.every((question) => question.subject === id),
+      `${level} ${id} leaked another subject`,
+    );
+  }
 }
 
 for (let seed = 1; seed <= 20; seed += 1) {
@@ -61,4 +91,7 @@ assert(formatPracticeTime(125) === '2:05', 'timer format is wrong');
 const fullPassages = readingPassageGroups().filter((group) => group.questions.length >= 5);
 assert(fullPassages.length >= 5, 'need at least five complete five-question reading passages');
 
-console.log('ISEE practice audit: official counts, timing, section mix, uniqueness, and reading passage shape passed.');
+console.log(
+  'ISEE practice audit: official Lower/Middle/Upper counts, timing, section mix, ' +
+    'uniqueness, and reading passage shape passed.',
+);

@@ -3,7 +3,8 @@ import TestPrepClient from '@/components/TestPrepClient';
 
 export const metadata = {
   title: 'ISEE Test Prep · ISEE Arcade',
-  description: 'Realistic Lower Level ISEE section practice, diagnostics, and essay preparation.',
+  description:
+    'Realistic Lower, Middle, and Upper Level ISEE section practice, diagnostics, and essay preparation.',
 };
 
 export default function PrepPage() {
@@ -19,15 +20,15 @@ export default function PrepPage() {
         </Link>
         <div>
           <div className="text-[10px] font-black uppercase tracking-[.22em] text-violet-300/70">
-            ERB Lower Level blueprint
+            ERB Lower · Middle · Upper blueprints
           </div>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-white sm:text-5xl">
             ISEE Test Prep Center
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/55 sm:text-base">
-            Learn through the arcade, then rehearse the real test shape here. Timed sections do not
-            reveal answers until the section ends, so learners practice pacing, skipping, returning,
-            and reviewing—not just recognizing answers.
+            Choose Lower, Middle, or Upper Level, then rehearse the real test shape. Timed sections
+            do not reveal answers until the section ends, so learners practice pacing, skipping,
+            returning, and reviewing—not just recognizing answers.
           </p>
         </div>
       </header>
@@ -40,11 +41,11 @@ export default function PrepPage() {
         <h2 className="mt-1 text-2xl font-black text-white">Know the rhythm before test day</h2>
         <div className="mt-5 grid gap-2 md:grid-cols-7">
           {[
-            ['Verbal', '20 min', '34'],
-            ['Quantitative', '35 min', '38'],
+            ['Verbal', '20 min', '34 Lower · 40 M/U'],
+            ['Quantitative', '35 min', '38 Lower · 37 M/U'],
             ['Break', '5–10 min', 'reset'],
-            ['Reading', '25 min', '25'],
-            ['Math', '30 min', '30'],
+            ['Reading', '25/35 min', '25 Lower · 36 M/U'],
+            ['Math', '30/40 min', '30 Lower · 47 M/U'],
             ['Break', '5–10 min', 'reset'],
             ['Essay', '30 min', '1 prompt'],
           ].map(([name, time, count], index) => (

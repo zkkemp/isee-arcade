@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { GameCanvasProps } from '@/lib/games';
 import { useActiveProfile } from '@/lib/profiles';
+import type { GradeBand } from '@/lib/questions';
 import { playSound } from '@/lib/sound';
 import { speak, stopSpeaking, toSpeakable } from '@/lib/speech';
 import { scrambleWord, wordForRound, type WordCard } from '@/lib/wordGames';
@@ -37,7 +38,7 @@ function WordScrambleGame({
   difficulty,
   band,
 }: Pick<GameCanvasProps, 'paused' | 'api' | 'restartToken' | 'difficulty'> & {
-  band: 'k' | 'grade1' | 'grade3' | 'isee';
+  band: GradeBand;
 }) {
   const [round, setRound] = useState(1);
   const initialCard = useMemo(
@@ -122,7 +123,17 @@ function WordScrambleGame({
   }
 
   const levelName =
-    band === 'k' ? 'Picture words' : band === 'grade1' ? 'Growing reader' : band === 'grade3' ? 'Word explorer' : 'ISEE word master';
+    band === 'k'
+      ? 'Picture words'
+      : band === 'grade1' || band === 'grade2'
+        ? 'Growing reader'
+        : band === 'grade3' || band === 'grade4'
+          ? 'Word explorer'
+          : band === 'iseeMiddle'
+            ? 'ISEE Middle word master'
+            : band === 'iseeUpper'
+              ? 'ISEE Upper word master'
+              : 'Vocabulary challenge';
 
   return (
     <div className="absolute inset-0 overflow-y-auto bg-[radial-gradient(circle_at_50%_-10%,#6844a6_0,#24204d_45%,#111329_100%)] p-3 text-white sm:p-5">

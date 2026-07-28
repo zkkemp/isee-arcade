@@ -1,7 +1,7 @@
 {
   "name": "ISEE Arcade",
   "short_name": "ISEE Arcade",
-  "description": "Arcade games that stop to quiz you on ISEE Lower Level practice questions.",
+  "description": "A family learning arcade with real games, adaptive study practice, and progress that follows every learner.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

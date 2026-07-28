@@ -11,6 +11,10 @@ function storageKey(): string {
   return `${BASE_STORAGE_KEY}${profileStorageSuffix()}`;
 }
 
+function storageKeyForProfile(profileId: string | null): string {
+  return `${BASE_STORAGE_KEY}${profileId ? `::${profileId}` : ''}`;
+}
+
 export type SubjectStat = { seen: number; correct: number };
 
 export type Attempt = {
@@ -82,6 +86,17 @@ export function loadProgress(): Progress {
   if (typeof window === 'undefined') return emptyProgress();
   try {
     const raw = window.localStorage.getItem(storageKey());
+    return hydrate(raw ? JSON.parse(raw) : null);
+  } catch {
+    return emptyProgress();
+  }
+}
+
+/** Parent reporting reads a learner without switching the device's active player. */
+export function loadProgressForProfile(profileId: string): Progress {
+  if (typeof window === 'undefined') return emptyProgress();
+  try {
+    const raw = window.localStorage.getItem(storageKeyForProfile(profileId));
     return hydrate(raw ? JSON.parse(raw) : null);
   } catch {
     return emptyProgress();

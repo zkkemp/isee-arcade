@@ -8,6 +8,13 @@ import { instantiate, mulberry32 } from './questions/templates';
 import type { QuestionTemplate } from './questions/templates';
 
 export type PracticeSectionId = Subject | 'essay';
+export type IseeLevel = 'lower' | 'middle' | 'upper';
+
+export const ISEE_LEVEL_LABELS: Record<IseeLevel, string> = {
+  lower: 'Lower Level — Applying to Fifth or Sixth Grade',
+  middle: 'Middle Level — Applying to Seventh or Eighth Grade',
+  upper: 'Upper Level — Applying to Ninth, Tenth, Eleventh, or Twelfth Grade',
+};
 
 export type PracticeSection = {
   id: PracticeSectionId;
@@ -20,7 +27,7 @@ export type PracticeSection = {
 };
 
 /** Official Lower Level section shape from ERB's What to Expect guide. */
-export const ISEE_SECTIONS: PracticeSection[] = [
+const LOWER_SECTIONS: PracticeSection[] = [
   {
     id: 'verbal',
     name: 'Verbal Reasoning',
@@ -67,6 +74,63 @@ export const ISEE_SECTIONS: PracticeSection[] = [
     skills: ['Plan', 'Clear beginning', 'Specific details', 'Strong ending', 'Review'],
   },
 ];
+
+const MIDDLE_UPPER_SECTIONS: PracticeSection[] = [
+  {
+    id: 'verbal',
+    name: 'Verbal Reasoning',
+    shortName: 'Verbal',
+    questions: 40,
+    minutes: 20,
+    description: 'Synonyms and sentence completions at a faster pace.',
+    skills: ['Synonyms', 'Sentence completions', 'Context', 'Roots and word parts'],
+  },
+  {
+    id: 'quantitative',
+    name: 'Quantitative Reasoning',
+    shortName: 'Quantitative',
+    questions: 37,
+    minutes: 35,
+    description: 'Multi-step reasoning, estimation, algebraic thinking, geometry, and data.',
+    skills: ['Number sense', 'Algebraic reasoning', 'Geometry', 'Data and probability'],
+  },
+  {
+    id: 'reading',
+    name: 'Reading Comprehension',
+    shortName: 'Reading',
+    questions: 36,
+    minutes: 35,
+    description: 'Longer passages across literature, humanities, science, and social studies.',
+    skills: ['Main idea', 'Evidence', 'Inference', 'Vocabulary in context', 'Organization', 'Tone'],
+  },
+  {
+    id: 'math',
+    name: 'Mathematics Achievement',
+    shortName: 'Math',
+    questions: 47,
+    minutes: 40,
+    description: 'A broad, fast-moving check of grade-level mathematics and application.',
+    skills: ['Numbers and operations', 'Algebra', 'Geometry', 'Measurement', 'Data and probability'],
+  },
+  {
+    id: 'essay',
+    name: 'Essay',
+    shortName: 'Essay',
+    questions: 1,
+    minutes: 30,
+    description: 'Plan, write, and revise one organized response in your own voice.',
+    skills: ['Plan', 'Clear position or focus', 'Specific details', 'Organization', 'Review'],
+  },
+];
+
+export const ISEE_SECTIONS_BY_LEVEL: Record<IseeLevel, PracticeSection[]> = {
+  lower: LOWER_SECTIONS,
+  middle: MIDDLE_UPPER_SECTIONS,
+  upper: MIDDLE_UPPER_SECTIONS,
+};
+
+/** Backward-compatible Lower Level export used by the existing audit scripts. */
+export const ISEE_SECTIONS = ISEE_SECTIONS_BY_LEVEL.lower;
 
 export const ESSAY_PROMPTS = [
   'Describe a time when you learned something important from making a mistake.',
@@ -150,8 +214,8 @@ export function quantStrandForTopic(topic = ''): QuantStrand {
   return 'Number Sense and Estimation';
 }
 
-export function sectionById(id: PracticeSectionId): PracticeSection {
-  const section = ISEE_SECTIONS.find((candidate) => candidate.id === id);
+export function sectionById(id: PracticeSectionId, level: IseeLevel = 'lower'): PracticeSection {
+  const section = ISEE_SECTIONS_BY_LEVEL[level].find((candidate) => candidate.id === id);
   if (!section) throw new Error(`Unknown ISEE section: ${id}`);
   return section;
 }
@@ -169,15 +233,35 @@ function seeded(seed: number): () => number {
   return mulberry32((seed >>> 0) || 1);
 }
 
-function practiceVerbal(rng: () => number, count: number): Question[] {
+function minimumDifficulty(level: IseeLevel): 1 | 2 | 3 {
+  return level === 'upper' ? 3 : level === 'middle' ? 2 : 1;
+}
+
+function practiceVerbal(
+  rng: () => number,
+  count: number,
+  level: IseeLevel,
+  excluded: Set<string>,
+): Question[] {
+  const minimum = minimumDifficulty(level);
+  const verbal = STATIC_QUESTIONS.filter(
+    (question) => question.subject === 'verbal' && !excluded.has(question.id),
+  );
+  const leveled = verbal.filter((question) => question.difficulty >= minimum);
+  // Sentence-completion coverage matters more than an artificial difficulty
+  // badge. If a higher-level slice is too small for the official 40-question
+  // shape, broaden one step while keeping the protected source items unchanged.
+  const source =
+    leveled.filter((question) => question.kind === 'sentence_completion').length >=
+    Math.floor(count / 2)
+      ? leveled
+      : verbal.filter((question) => question.difficulty >= Math.max(1, minimum - 1));
   const synonyms = shuffled(
-    STATIC_QUESTIONS.filter((question) => question.subject === 'verbal' && question.kind === 'synonym'),
+    source.filter((question) => question.kind === 'synonym'),
     rng,
   );
   const completions = shuffled(
-    STATIC_QUESTIONS.filter(
-      (question) => question.subject === 'verbal' && question.kind === 'sentence_completion',
-    ),
+    source.filter((question) => question.kind === 'sentence_completion'),
     rng,
   );
   const synonymCount = count === 34 ? 17 : Math.round(count / 2);
@@ -218,9 +302,21 @@ function takeTemplates(
   return shuffled(result, rng);
 }
 
-function practiceTemplates(subject: Extract<Subject, 'math' | 'quantitative'>, rng: () => number, count: number): Question[] {
+function practiceTemplates(
+  subject: Extract<Subject, 'math' | 'quantitative'>,
+  rng: () => number,
+  count: number,
+  level: IseeLevel,
+  excluded: Set<string>,
+): Question[] {
+  const minimum = minimumDifficulty(level);
   const templates = shuffled(
-    ALL_TEMPLATES.filter((template) => template.subject === subject),
+    ALL_TEMPLATES.filter(
+      (template) =>
+        template.subject === subject &&
+        template.difficulty >= minimum &&
+        !excluded.has(template.id),
+    ),
     rng,
   );
   if (templates.length === 0) return [];
@@ -258,9 +354,12 @@ function practiceTemplates(subject: Extract<Subject, 'math' | 'quantitative'>, r
 
 type PassageGroup = { passageId: string; questions: Question[] };
 
-export function readingPassageGroups(): PassageGroup[] {
+export function readingPassageGroups(level: IseeLevel = 'lower'): PassageGroup[] {
+  const minimum = minimumDifficulty(level);
   const byPassage = new Map<string, Question[]>();
-  for (const question of STATIC_QUESTIONS.filter((candidate) => candidate.subject === 'reading')) {
+  for (const question of STATIC_QUESTIONS.filter(
+    (candidate) => candidate.subject === 'reading' && candidate.difficulty >= minimum,
+  )) {
     const passageId = question.passageId ?? question.id;
     const group = byPassage.get(passageId) ?? [];
     group.push(question);
@@ -269,8 +368,19 @@ export function readingPassageGroups(): PassageGroup[] {
   return [...byPassage].map(([passageId, questions]) => ({ passageId, questions }));
 }
 
-function practiceReading(rng: () => number, count: number): Question[] {
-  const groups = readingPassageGroups();
+function practiceReading(
+  rng: () => number,
+  count: number,
+  level: IseeLevel,
+  excluded: Set<string>,
+): Question[] {
+  const groups = readingPassageGroups(level)
+    .filter((group) => !excluded.has(`passage:${group.passageId}`))
+    .map((group) => ({
+      ...group,
+      questions: group.questions.filter((question) => !excluded.has(question.id)),
+    }))
+    .filter((group) => group.questions.length > 0);
   const fiveQuestionGroups = shuffled(
     groups.filter((group) => group.questions.length >= 5),
     rng,
@@ -299,12 +409,15 @@ export function buildPracticeSection(
   id: Exclude<PracticeSectionId, 'essay'>,
   seed = Date.now(),
   requestedCount?: number,
+  level: IseeLevel = 'lower',
+  excludedContentKeys: string[] = [],
 ): Question[] {
   const rng = seeded(seed);
-  const count = requestedCount ?? sectionById(id).questions;
-  if (id === 'verbal') return practiceVerbal(rng, count);
-  if (id === 'reading') return practiceReading(rng, count);
-  return practiceTemplates(id, rng, count);
+  const excluded = new Set(excludedContentKeys);
+  const count = requestedCount ?? sectionById(id, level).questions;
+  if (id === 'verbal') return practiceVerbal(rng, count, level, excluded);
+  if (id === 'reading') return practiceReading(rng, count, level, excluded);
+  return practiceTemplates(id, rng, count, level, excluded);
 }
 
 export function essayPrompt(seed = Date.now()): string {

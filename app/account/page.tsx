@@ -2,6 +2,7 @@ import Link from 'next/link';
 import CloudAccount from '@/components/CloudAccount';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { usernameFromAuthEmail } from '@/lib/accountUsername';
 
 export const metadata = {
   title: 'Family Cloud · ISEE Arcade',
@@ -9,12 +10,15 @@ export const metadata = {
 
 export default async function AccountPage() {
   const configured = isSupabaseConfigured();
-  let initialEmail: string | null = null;
+  let initialUsername: string | null = null;
 
   if (configured) {
     const supabase = await getSupabaseServerClient();
     const { data } = (await supabase?.auth.getClaims()) ?? { data: null };
-    initialEmail = typeof data?.claims?.email === 'string' ? data.claims.email : null;
+    initialUsername =
+      typeof data?.claims?.email === 'string'
+        ? usernameFromAuthEmail(data.claims.email)
+        : null;
   }
 
   return (
@@ -40,7 +44,7 @@ export default async function AccountPage() {
         </span>
       </header>
 
-      <CloudAccount configured={configured} initialEmail={initialEmail} />
+      <CloudAccount configured={configured} initialUsername={initialUsername} />
     </main>
   );
 }

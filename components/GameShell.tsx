@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CelebrationCard from './CelebrationCard';
+import { useDailyLimit } from './DailyLimitProvider';
 import DPad from './DPad';
 import QuestionGate from './QuestionGate';
 import RunJumpBar from './RunJumpBar';
@@ -12,15 +13,19 @@ import { useCharacter } from '@/lib/characters';
 import { useDifficulty } from '@/lib/difficulty';
 import { clearPendingGate, loadPendingGate, savePendingGate } from '@/lib/pendingGate';
 import { InputController, bindKeyboard } from '@/lib/input';
-import { pickQuestion } from '@/lib/questions';
+import { bandHasReading, bandNeedsNarration, pickQuestion } from '@/lib/questions';
 import type { Question, QuestionKind } from '@/lib/questions/types';
 import { useActiveProfile } from '@/lib/profiles';
+import { usePlayerMode } from '@/lib/playerMode';
+import { useParentContentState } from '@/lib/parentControls';
+import { smartFocusForProgress } from '@/lib/adaptivePractice';
 import { playSound, unlockAudio, useMuted } from '@/lib/sound';
 import {
   COIN_BONUS_MS,
   COIN_STEP,
   LEVEL_BONUS_MS,
   MAX_BONUS_MS,
+  MAX_BLOCK_SIZE,
   PLAY_WINDOW_MS,
   blockComplete,
   emptySession,
@@ -85,10 +90,23 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const [difficulty] = useDifficulty();
   const [character] = useCharacter();
   const [muted, setMuted] = useMuted();
+  const { deferLock, lockAtBoundary } = useDailyLimit();
   // Which learner is signed in decides which question bank the study block draws
   // from, so a kindergartner never gets a 5th-grade ISEE question.
   const activeProfile = useActiveProfile();
+  const playerMode = usePlayerMode();
+  const parentContent = useParentContentState();
+  const parentSandbox = playerMode === 'parent';
   const band = activeProfile?.band ?? 'isee';
+  const excludedContentKeys = useMemo(
+    () =>
+      parentContent.disabled
+        .filter(
+          (item) => item.learnerId === null || item.learnerId === activeProfile?.id,
+        )
+        .map((item) => item.contentKey),
+    [activeProfile?.id, parentContent.disabled],
+  );
 
   const [score, setScore] = useState(0);
   const [gate, setGate] = useState<Gate | null>(null);
@@ -153,6 +171,18 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
 
   const [input] = useState(() => new InputController());
 
+  // A game or question block should never disappear mid-action when the daily
+  // clock reaches zero. The provider waits; a death, level/round completion, or
+  // completed study block below is the safe boundary that activates the lock.
+  useEffect(() => {
+    if (parentSandbox) {
+      deferLock(false);
+      return;
+    }
+    deferLock(true);
+    return () => deferLock(false);
+  }, [deferLock, parentSandbox]);
+
   const controlsInset = meta.controls === 'run-jump' ? RUN_JUMP_INSET : 0;
 
   const flashStatus = useCallback((text: string | null, ms = 1700) => {
@@ -183,19 +213,30 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const drawFor = useCallback(
     (b: StudyBlock, retryOf: Question | null): Question => {
     const p = progressRef.current;
+    const focus =
+      activeProfile?.smartPractice !== false && !retryOf
+        ? smartFocusForProgress(p)
+        : null;
+    // Smart Practice is deliberately a nudge, not a takeover: at most three in
+    // ten normal draws focus the weakest proven lane. The remaining mix stays
+    // broad, and the existing adaptive difficulty keeps weak-lane questions
+    // approachable.
+    const useFocus = Boolean(focus && Math.random() < 0.3);
     // Reading turns up about one draw in eight, at most once per block, and never
     // on a retry. Only the ISEE bank has reading passages - the younger grade
     // banks are all short templated questions, so skip the reading logic there.
+    const hasReading = bandHasReading(band);
     const wantReading =
-      band === 'isee' && !retryOf && !b.readingServed && Math.random() < READING_CHANCE;
+      hasReading && !retryOf && !b.readingServed && Math.random() < READING_CHANCE;
     const avoid: QuestionKind[] = [];
     if (!wantReading && !retryOf) {
-      if (band === 'isee') avoid.push('reading');
+      if (hasReading) avoid.push('reading');
       if (lastKindRef.current) avoid.push(lastKindRef.current);
     }
 
     const question = pickQuestion({
       band,
+      subjects: useFocus && focus ? [focus.subject] : undefined,
       recentIds: seenIdsRef.current,
       recentPassageIds: seenPassagesRef.current,
       missed: p.missed,
@@ -204,7 +245,16 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       vocabularyClock: p.totalSeen,
       sameKindAs: retryOf,
       forceKind: wantReading ? 'reading' : null,
+      ...(useFocus && focus?.kind && !wantReading ? { forceKind: focus.kind } : {}),
+      focusTopic: useFocus ? focus?.topic : null,
+      targetDifficulty:
+        useFocus && focus
+          ? focus.accuracy < 0.5
+            ? 1
+            : 2
+          : undefined,
       avoidKind: avoid.length > 0 ? avoid : null,
+      excludedContentKeys,
     });
 
     // Keep a deep history (larger than the biggest bank) so the least-recently-
@@ -215,12 +265,13 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     }
     return question;
     },
-    [band],
+    [activeProfile?.smartPractice, band, excludedContentKeys],
   );
 
   /** Opens the study block. Idempotent, so a tick and a death cannot double-fire it. */
   const openStudy = useCallback(
     (restored?: { question: Question; attempt: number }) => {
+      if (parentSandbox) return;
       if (gateOpenRef.current) return;
       // Drop held keys so play does not resume mid-move after answering.
       input.clear();
@@ -244,7 +295,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       }
       setGate({ question: q, attempt: restored?.attempt ?? 1, isRetry: false });
     },
-    [drawFor, input, persist],
+    [drawFor, input, parentSandbox, persist],
   );
 
   // Hydrate progress and the play session, then either restore an owed question
@@ -254,6 +305,14 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     progressRef.current = p;
     setProgress(p);
     setBest(p.highScores[meta.id] ?? 0);
+
+    if (parentSandbox) {
+      gateOpenRef.current = false;
+      setGate(null);
+      setBlock(null);
+      setMsLeft(0);
+      return;
+    }
 
     const s = loadSession();
     sessionRef.current = s;
@@ -271,7 +330,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       openStudy();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot hydration; openStudy is stable and re-running would reopen the gate
-  }, [meta.id]);
+  }, [meta.id, parentSandbox]);
 
   useEffect(() => bindKeyboard(input), [input]);
 
@@ -306,7 +365,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
    * should not silently burn a window the kid never got to use.
    */
   useEffect(() => {
-    if (paused) return;
+    if (paused || parentSandbox) return;
     let last = Date.now();
     const id = setInterval(() => {
       const now = Date.now();
@@ -332,11 +391,12 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       }
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [paused, openStudy, persist]);
+  }, [parentSandbox, paused, openStudy, persist]);
 
   /** Adds play time, respecting the per-window bonus ceiling. Returns what was granted. */
   const grantBonus = useCallback(
     (ms: number): number => {
+      if (parentSandbox) return 0;
       const s = sessionRef.current;
       const room = Math.max(0, MAX_BONUS_MS - s.bonusMs);
       const give = Math.min(ms, room);
@@ -346,7 +406,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       persist();
       return give;
     },
-    [persist],
+    [parentSandbox, persist],
   );
 
   const api = useMemo<GameApi>(
@@ -374,18 +434,30 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       // Dying is free inside a window. That is the point of the redesign: a kid
       // who dies a lot used to face a question every few seconds.
       died: (label = 'You crashed') => {
+        if (parentSandbox) {
+          playSound('gameOver');
+          flashStatus(`${label} - keep going`, 1500);
+          return;
+        }
+        if (lockAtBoundary()) return;
         playSound('gameOver');
         flashStatus(`${label} - keep going`, 1500);
       },
       // Clearing a level tops the clock up instead of interrupting with a question.
       requestGate: (label) => {
+        if (parentSandbox) {
+          playSound('levelClear');
+          celebrate(label, 'Parent free play');
+          return;
+        }
+        if (lockAtBoundary()) return;
         playSound('levelClear');
         const given = grantBonus(LEVEL_BONUS_MS);
         celebrate(label, given > 0 ? `+${Math.round(given / 1000)} seconds of play time` : null);
       },
       setStatus: (text) => flashStatus(text),
     }),
-    [celebrate, flashStatus, grantBonus],
+    [celebrate, flashStatus, grantBonus, lockAtBoundary, parentSandbox],
   );
 
   const handleAnswered = useCallback(
@@ -418,7 +490,13 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
         // questions. This is what makes reading carefully worth it, in place of
         // the old "get it right and skip the block" shortcut.
         if (wasReading) {
-          next = { ...next, penalty: next.penalty + READING_MISS_PENALTY };
+          next = {
+            ...next,
+            penalty: Math.min(
+              MAX_BLOCK_SIZE - next.target,
+              next.penalty + READING_MISS_PENALTY,
+            ),
+          };
           flashStatus(
             `Missed the reading - ${READING_MISS_PENALTY} more questions added.`,
             2800,
@@ -427,7 +505,10 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           // Three wrong in a row adds a question. The bar lives on the block so a
           // restart cannot shake it off.
           wrongStreakRef.current = 0;
-          next = { ...next, penalty: next.penalty + 1 };
+          next = {
+            ...next,
+            penalty: Math.min(MAX_BLOCK_SIZE - next.target, next.penalty + 1),
+          };
           flashStatus('Three missed - one extra question added.', 2600);
         }
         sessionRef.current = { ...sessionRef.current, study: next };
@@ -487,13 +568,14 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       gateOpenRef.current = false;
       setGate(null);
       clearPendingGate();
+      if (lockAtBoundary()) return;
       playSound('pass');
       flashStatus(
         `Study block done - ${Math.round(PLAY_WINDOW_MS / 60_000)} minutes of play!`,
         2800,
       );
     },
-    [drawFor, flashStatus, gate, meta.id, persist],
+    [drawFor, flashStatus, gate, lockAtBoundary, meta.id, persist],
   );
 
   const restart = useCallback(() => {
@@ -611,19 +693,19 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
                   ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
                   : 'border-emerald-400/40 bg-emerald-400/10'
               }`}
-              title="Play time left. Answer questions to earn more."
+              title={parentSandbox ? 'Parent sandbox has unlimited play.' : 'Play time left. Answer questions to earn more.'}
             >
-              <span className="text-sm sm:text-base">⏱</span>
+              <span className="text-sm sm:text-base">{parentSandbox ? '∞' : '⏱'}</span>
               <span className="text-right">
                 <span className="block text-[8px] font-bold uppercase tracking-widest text-white/45">
-                  play time
+                  {parentSandbox ? 'parent mode' : 'play time'}
                 </span>
                 <span
                   className={`block text-sm font-black leading-none tabular-nums sm:text-lg ${
                     clockLow ? 'text-amber-300' : 'text-emerald-300'
                   }`}
                 >
-                  {formatClock(msLeft)}
+                  {parentSandbox ? 'Unlimited' : formatClock(msLeft)}
                 </span>
               </span>
             </div>
@@ -726,7 +808,9 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
                 Paused
               </div>
               <div className="text-xs text-white/40 sm:text-base">
-                Clock stopped - {formatClock(msLeft)} of play left
+                {parentSandbox
+                  ? 'Parent sandbox — no questions or time limit'
+                  : `Clock stopped - ${formatClock(msLeft)} of play left`}
               </div>
               <button
                 type="button"
@@ -767,7 +851,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               subhead={subhead}
               reward={CORRECT_REWARD}
               // Offer on-demand listening support for the pre-reading grades.
-              narrate={band === 'k' || band === 'grade1'}
+              narrate={bandNeedsNarration(band)}
               onAnswered={handleAnswered}
             />
           )}
@@ -835,8 +919,9 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               {controlsHelp}
             </p>
             <p className="mt-3 text-xs leading-relaxed text-white/40">
-              Answer a short study block to earn play time. Dying is free until the clock runs out.
-              Tap an answer, or press its number key, to answer a question.
+              {parentSandbox
+                ? 'Parent sandbox is active. Play as long as you want; no questions, time limits, or child progress are used.'
+                : 'Answer a short study block to earn play time. Dying is free until the clock runs out. Tap an answer, or press its number key, to answer a question.'}
             </p>
             <button
               type="button"

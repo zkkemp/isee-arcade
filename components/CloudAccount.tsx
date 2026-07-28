@@ -1,30 +1,43 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { restoreCloudFamily, uploadDeviceState, type CloudSyncResult } from '@/lib/cloudSync';
+import {
+  normalizeAccountUsername,
+  usernameAuthEmail,
+  usernameFromAuthEmail,
+} from '@/lib/accountUsername';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { setActiveProfile } from '@/lib/profiles';
+import { setPlayerMode } from '@/lib/playerMode';
 
 type Props = {
   configured: boolean;
-  initialEmail: string | null;
+  initialUsername: string | null;
 };
 
-export default function CloudAccount({ configured, initialEmail }: Props) {
-  const [email, setEmail] = useState(initialEmail ?? '');
+export default function CloudAccount({ configured, initialUsername }: Props) {
+  const [username, setUsername] = useState(initialUsername ?? '');
   const [password, setPassword] = useState('');
-  const [signedInEmail, setSignedInEmail] = useState(initialEmail);
+  const [signedInUsername, setSignedInUsername] = useState(initialUsername);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<CloudSyncResult | null>(null);
+
+  function enterParentCenter() {
+    setActiveProfile(null);
+    setPlayerMode('parent');
+  }
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     void supabase.auth.getUser().then(({ data }) => {
-      setSignedInEmail(data.user?.email ?? null);
+      setSignedInUsername(usernameFromAuthEmail(data.user?.email));
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSignedInEmail(session?.user.email ?? null);
+      setSignedInUsername(usernameFromAuthEmail(session?.user.email));
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -61,11 +74,11 @@ export default function CloudAccount({ configured, initialEmail }: Props) {
   async function submitAuth() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || busy) return;
-    const cleanEmail = email.trim();
-    if (!cleanEmail || password.length < 8) {
+    const cleanUsername = normalizeAccountUsername(username);
+    if (cleanUsername.length < 3 || password.length < 6) {
       setNotice({
         ok: false,
-        message: 'Enter a valid email and a password with at least 8 characters.',
+        message: 'Use a username with at least 3 characters and a password with at least 6.',
         learners: 0,
       });
       return;
@@ -75,22 +88,27 @@ export default function CloudAccount({ configured, initialEmail }: Props) {
     const result =
       mode === 'signup'
         ? await supabase.auth.signUp({
-            email: cleanEmail,
+            email: usernameAuthEmail(cleanUsername),
             password,
-            options: { emailRedirectTo: `${window.location.origin}/account` },
+            options: { data: { username: cleanUsername, account_type: 'parent' } },
           })
-        : await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+        : await supabase.auth.signInWithPassword({
+            email: usernameAuthEmail(cleanUsername),
+            password,
+          });
     if (result.error) {
       setNotice({ ok: false, message: result.error.message, learners: 0 });
     } else if (mode === 'signup' && !result.data.session) {
       setNotice({
-        ok: true,
-        message: 'Check your email to confirm the new parent account, then return here.',
+        ok: false,
+        message:
+          'Username-only login needs Confirm email turned off in Supabase Authentication settings. Turn it off, then create this parent again.',
         learners: 0,
       });
     } else {
-      setSignedInEmail(result.data.user?.email ?? cleanEmail);
+      setSignedInUsername(cleanUsername);
       setPassword('');
+      enterParentCenter();
       setNotice(await uploadDeviceState());
     }
     setBusy(false);
@@ -113,12 +131,14 @@ export default function CloudAccount({ configured, initialEmail }: Props) {
     if (!supabase || busy) return;
     setBusy(true);
     await supabase.auth.signOut();
-    setSignedInEmail(null);
+    setActiveProfile(null);
+    setPlayerMode(null);
+    setSignedInUsername(null);
     setNotice({ ok: true, message: 'Signed out. Local play still works normally.', learners: 0 });
     setBusy(false);
   }
 
-  if (signedInEmail) {
+  if (signedInUsername) {
     return (
       <section className="rounded-2xl bg-[#151527] p-5 shadow-[0_18px_50px_rgba(0,0,0,.3)] sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -126,7 +146,7 @@ export default function CloudAccount({ configured, initialEmail }: Props) {
             <span className="inline-flex rounded-full bg-emerald-300/12 px-3 py-1 text-xs font-black text-emerald-200">
               Cloud connected
             </span>
-            <h2 className="mt-3 text-xl font-black text-white">{signedInEmail}</h2>
+            <h2 className="mt-3 text-xl font-black text-white">@{signedInUsername}</h2>
             <p className="mt-1 text-sm text-white/55">
               Changes sync automatically after local saves.
             </p>
@@ -142,6 +162,13 @@ export default function CloudAccount({ configured, initialEmail }: Props) {
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/parent"
+            onClick={enterParentCenter}
+            className="flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-5 text-center text-sm font-black text-[#211704] shadow-[0_12px_28px_rgba(251,191,36,.18)] transition hover:bg-amber-200 active:scale-[.98]"
+          >
+            Open parent center
+          </Link>
           <button
             type="button"
             onClick={() => runSync('upload')}
@@ -198,14 +225,15 @@ export default function CloudAccount({ configured, initialEmail }: Props) {
 
       <div className="mt-5 space-y-4">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-bold text-white/75">Parent email</span>
+          <span className="mb-1.5 block text-sm font-bold text-white/75">Parent username</span>
           <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            type="text"
+            autoCapitalize="none"
+            autoComplete="username"
+            value={username}
+            onChange={(event) => setUsername(normalizeAccountUsername(event.target.value))}
             className="min-h-12 w-full rounded-xl bg-white/[0.07] px-4 text-base text-white outline-none ring-1 ring-white/10 transition placeholder:text-white/28 focus:ring-2 focus:ring-cyan-300"
-            placeholder="parent@example.com"
+            placeholder="familyname"
           />
         </label>
         <label className="block">
@@ -219,7 +247,7 @@ export default function CloudAccount({ configured, initialEmail }: Props) {
               if (event.key === 'Enter') void submitAuth();
             }}
             className="min-h-12 w-full rounded-xl bg-white/[0.07] px-4 text-base text-white outline-none ring-1 ring-white/10 transition placeholder:text-white/28 focus:ring-2 focus:ring-cyan-300"
-            placeholder="At least 8 characters"
+            placeholder="At least 6 characters"
           />
         </label>
       </div>

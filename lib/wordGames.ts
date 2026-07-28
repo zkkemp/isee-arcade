@@ -7,7 +7,7 @@ export type WordCard = {
   picture?: string;
 };
 
-export const WORD_BANKS: Record<GradeBand, WordCard[]> = {
+const BASE_WORD_BANKS = {
   k: [
     { word: 'CAT', hint: 'A pet that says meow', picture: '🐱' },
     { word: 'DOG', hint: 'A pet that can bark', picture: '🐶' },
@@ -84,6 +84,59 @@ export const WORD_BANKS: Record<GradeBand, WordCard[]> = {
     { word: 'IMPARTIAL', hint: 'Fair; not favoring either side' },
     { word: 'TENACIOUS', hint: 'Not giving up easily' },
   ],
+} satisfies Record<'k' | 'grade1' | 'grade3' | 'isee', WordCard[]>;
+
+const MIDDLE_WORDS: WordCard[] = [
+  { word: 'ANALYZE', hint: 'To examine something carefully and explain its parts' },
+  { word: 'COHERENT', hint: 'Logical, connected, and easy to understand' },
+  { word: 'CONTRAST', hint: 'To show how two things are different' },
+  { word: 'DEDUCE', hint: 'To reach an answer by using evidence and reasoning' },
+  { word: 'EXPLICIT', hint: 'Stated clearly and directly' },
+  { word: 'FEASIBLE', hint: 'Possible and practical to accomplish' },
+  { word: 'HYPOTHESIS', hint: 'A testable explanation or prediction' },
+  { word: 'IMPLICIT', hint: 'Suggested without being stated directly' },
+  { word: 'INFER', hint: 'To figure out what is likely true from clues' },
+  { word: 'JUSTIFY', hint: 'To support an answer with reasons or evidence' },
+  { word: 'PRECISE', hint: 'Exact and carefully stated' },
+  { word: 'RELEVANT', hint: 'Closely connected to the topic or question' },
+  { word: 'SEQUENCE', hint: 'A set of things arranged in a particular order' },
+  { word: 'SIGNIFICANT', hint: 'Important enough to matter' },
+  { word: 'SYNTHESIZE', hint: 'To combine ideas into a new understanding' },
+  { word: 'VALID', hint: 'Well-supported or logically sound' },
+];
+
+const UPPER_WORDS: WordCard[] = [
+  { word: 'ABERRATION', hint: 'Something that departs from what is normal or expected' },
+  { word: 'BOLSTER', hint: 'To support, strengthen, or improve' },
+  { word: 'CANDID', hint: 'Truthful and direct, even when the truth is uncomfortable' },
+  { word: 'CONCISE', hint: 'Brief but complete and clear' },
+  { word: 'DISPARATE', hint: 'So different that comparison is difficult' },
+  { word: 'EMPIRICAL', hint: 'Based on observation or experiment' },
+  { word: 'EQUIVOCAL', hint: 'Uncertain or open to more than one interpretation' },
+  { word: 'EXACERBATE', hint: 'To make a problem or condition worse' },
+  { word: 'INCONGRUOUS', hint: 'Out of place or not in harmony with its surroundings' },
+  { word: 'LUCID', hint: 'Clear and easy to understand' },
+  { word: 'MITIGATE', hint: 'To make something harmful less severe' },
+  { word: 'NUANCED', hint: 'Showing subtle distinctions or fine shades of meaning' },
+  { word: 'PRAGMATIC', hint: 'Focused on practical results rather than theory' },
+  { word: 'REFUTE', hint: 'To prove a statement or argument wrong' },
+  { word: 'SUBSTANTIATE', hint: 'To support a claim with evidence' },
+  { word: 'TENUOUS', hint: 'Weak, slight, or not strongly supported' },
+];
+
+export const WORD_BANKS: Record<GradeBand, WordCard[]> = {
+  k: BASE_WORD_BANKS.k,
+  grade1: BASE_WORD_BANKS.grade1,
+  grade2: [...BASE_WORD_BANKS.grade1, ...BASE_WORD_BANKS.grade3.slice(0, 8)],
+  grade3: BASE_WORD_BANKS.grade3,
+  grade4: [...BASE_WORD_BANKS.grade3, ...BASE_WORD_BANKS.isee.slice(0, 8)],
+  grade5: [...BASE_WORD_BANKS.grade3.slice(8), ...BASE_WORD_BANKS.isee],
+  grade6: [...BASE_WORD_BANKS.isee, ...MIDDLE_WORDS.slice(0, 8)],
+  grade7: [...BASE_WORD_BANKS.isee, ...MIDDLE_WORDS],
+  grade8: [...MIDDLE_WORDS, ...UPPER_WORDS.slice(0, 8)],
+  isee: BASE_WORD_BANKS.isee,
+  iseeMiddle: [...BASE_WORD_BANKS.isee, ...MIDDLE_WORDS],
+  iseeUpper: [...MIDDLE_WORDS, ...UPPER_WORDS],
 };
 
 function hash(text: string): number {

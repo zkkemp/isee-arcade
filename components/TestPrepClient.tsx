@@ -2,16 +2,21 @@
 
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { ScratchPaper, shouldOfferScratch } from '@/components/QuestionGate';
+import { useDailyLimit } from '@/components/DailyLimitProvider';
 import {
   buildPracticeSection,
   essayPrompt,
   formatPracticeTime,
-  ISEE_SECTIONS,
+  ISEE_LEVEL_LABELS,
+  ISEE_SECTIONS_BY_LEVEL,
   sectionById,
+  type IseeLevel,
   type PracticeSectionId,
 } from '@/lib/iseePractice';
 import { loadProgress, recordAnswer, saveProgress } from '@/lib/progress';
 import type { Question, Subject } from '@/lib/questions';
+import { useParentContentState } from '@/lib/parentControls';
+import { useActiveProfile } from '@/lib/profiles';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 const QUICK_COUNTS: Record<Subject, number> = {
@@ -22,6 +27,7 @@ const QUICK_COUNTS: Record<Subject, number> = {
 };
 
 type SectionResult = {
+  level: IseeLevel;
   section: Subject;
   questions: Question[];
   answers: Array<number | null>;
@@ -31,6 +37,7 @@ type SectionResult = {
 };
 
 type ActiveRun = {
+  level: IseeLevel;
   section: Subject;
   questions: Question[];
   answers: Array<number | null>;
@@ -60,14 +67,38 @@ function sectionColor(section: PracticeSectionId): string {
 }
 
 export default function TestPrepClient() {
+  const { deferLock } = useDailyLimit();
+  const activeProfile = useActiveProfile();
+  const parentContent = useParentContentState();
+  const excludedContentKeys = useMemo(
+    () =>
+      parentContent.disabled
+        .filter(
+          (item) => item.learnerId === null || item.learnerId === activeProfile?.id,
+        )
+        .map((item) => item.contentKey),
+    [activeProfile?.id, parentContent.disabled],
+  );
+  const [level, setLevel] = useState<IseeLevel>('lower');
   const [active, setActive] = useState<ActiveRun | null>(null);
   const [sessionSeed] = useState(() => Date.now());
   const [result, setResult] = useState<SectionResult | null>(null);
   const [fullResults, setFullResults] = useState<SectionResult[]>([]);
   const [essay, setEssay] = useState<{ prompt: string; remaining: number; text: string } | null>(null);
+  const hasActivePrep = Boolean(active || essay);
 
-  function makeRun(section: Subject, plan: Subject[], quick = false): ActiveRun {
-    const definition = sectionById(section);
+  useEffect(() => {
+    deferLock(hasActivePrep);
+    return () => deferLock(false);
+  }, [deferLock, hasActivePrep]);
+
+  function makeRun(
+    section: Subject,
+    plan: Subject[],
+    quick = false,
+    runLevel: IseeLevel = level,
+  ): ActiveRun {
+    const definition = sectionById(section, runLevel);
     const count = quick ? QUICK_COUNTS[section] : definition.questions;
     const minutes = quick
       ? Math.max(6, Math.ceil((definition.minutes * count) / definition.questions))
@@ -76,8 +107,11 @@ export default function TestPrepClient() {
       section,
       sessionSeed + section.length * 997 + fullResults.length * 7919,
       count,
+      runLevel,
+      excludedContentKeys,
     );
     return {
+      level: runLevel,
       section,
       questions,
       answers: Array.from({ length: questions.length }, () => null),
@@ -116,6 +150,7 @@ export default function TestPrepClient() {
 
   function finishSection(run: ActiveRun) {
     const completed: SectionResult = {
+      level: run.level,
       section: run.section,
       questions: run.questions,
       answers: run.answers,
@@ -181,7 +216,7 @@ export default function TestPrepClient() {
     const question = active.questions[active.index];
     const picked = active.answers[active.index];
     const answeredCount = active.answers.filter((answer) => answer !== null).length;
-    const definition = sectionById(active.section);
+    const definition = sectionById(active.section, active.level);
     return (
       <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#141426] shadow-2xl">
         <div className="sticky top-0 z-20 border-b border-white/10 bg-[#141426]/95 p-4 backdrop-blur sm:p-5">
@@ -319,7 +354,7 @@ export default function TestPrepClient() {
   }
 
   if (result) {
-    const definition = sectionById(result.section);
+    const definition = sectionById(result.section, result.level);
     const pct = Math.round((result.correct / result.questions.length) * 100);
     const nextSection = result.plan[0];
     return (
@@ -376,12 +411,14 @@ export default function TestPrepClient() {
               type="button"
               onClick={() => {
                 setResult(null);
-                setActive(makeRun(nextSection, result.plan.slice(1), result.quick));
+                setActive(
+                  makeRun(nextSection, result.plan.slice(1), result.quick, result.level),
+                );
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className="rounded-2xl bg-emerald-300 px-5 py-3 font-black text-[#10251d]"
             >
-              Continue to {sectionById(nextSection).shortName} →
+              Continue to {sectionById(nextSection, result.level).shortName} →
             </button>
           )}
           {!nextSection && !result.quick && fullResults.length === 4 && (
@@ -419,6 +456,41 @@ export default function TestPrepClient() {
 
   return (
     <div className="space-y-8">
+      <section className="rounded-[2rem] border border-cyan-200/15 bg-cyan-200/[.035] p-4 sm:p-5">
+        <div className="text-[10px] font-black uppercase tracking-[.2em] text-cyan-200/65">
+          Choose the exam
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3" role="group" aria-label="ISEE level">
+          {(['lower', 'middle', 'upper'] as IseeLevel[]).map((candidate) => (
+            <button
+              key={candidate}
+              type="button"
+              aria-pressed={level === candidate}
+              onClick={() => {
+                setLevel(candidate);
+                setResult(null);
+                setFullResults([]);
+              }}
+              className={`rounded-2xl border px-4 py-3 text-left transition ${
+                level === candidate
+                  ? 'border-cyan-200/55 bg-cyan-200/12'
+                  : 'border-white/10 bg-black/15 hover:border-white/25'
+              }`}
+            >
+              <span className="block text-sm font-black capitalize text-white">{candidate} Level</span>
+              <span className="mt-1 block text-[11px] leading-relaxed text-white/48">
+                {candidate === 'lower'
+                  ? 'Applying to Fifth or Sixth Grade'
+                  : candidate === 'middle'
+                    ? 'Applying to Seventh or Eighth Grade'
+                    : 'Applying to Ninth through Twelfth Grade'}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs font-bold text-cyan-100/65">{ISEE_LEVEL_LABELS[level]}</p>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <button
           type="button"
@@ -428,10 +500,13 @@ export default function TestPrepClient() {
           <span className="text-[10px] font-black uppercase tracking-[.22em] text-violet-200/70">
             Most realistic
           </span>
-          <span className="mt-1 block text-2xl font-black text-white">Full Lower Level practice</span>
+          <span className="mt-1 block text-2xl font-black capitalize text-white">
+            Full {level} Level practice
+          </span>
           <span className="mt-2 block text-sm leading-relaxed text-white/55">
             All four scored sections in official order and at official time limits, with a review
-            after each section. Add the Essay Lab afterward for the complete 2-hour-20-minute format.
+            after each section. Add the Essay Lab afterward for the complete{' '}
+            {level === 'lower' ? '2-hour-20-minute' : '2-hour-40-minute'} format.
           </span>
           <span className="mt-5 inline-flex rounded-full bg-violet-300 px-4 py-2 text-sm font-black text-[#1d1730]">
             Begin Verbal Reasoning →
@@ -460,35 +535,42 @@ export default function TestPrepClient() {
       <section>
         <div className="mb-4">
           <div className="text-[10px] font-black uppercase tracking-[.22em] text-white/35">
-            Official Lower Level blueprint
+            Official {level} Level blueprint
           </div>
           <h2 className="mt-1 text-2xl font-black text-white">Practice one complete section</h2>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          {ISEE_SECTIONS.filter((section) => section.id !== 'essay').map((section) => (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => beginSection(section.id as Subject)}
-              className="rounded-3xl border border-white/10 bg-white/[.035] p-5 text-left transition hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[.06]"
-            >
-              <span
-                className="text-[10px] font-black uppercase tracking-[.18em]"
-                style={{ color: sectionColor(section.id) }}
+          {ISEE_SECTIONS_BY_LEVEL[level]
+            .filter((section) => section.id !== 'essay')
+            .map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => beginSection(section.id as Subject)}
+                className="rounded-3xl border border-white/10 bg-white/[.035] p-5 text-left transition hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[.06]"
               >
-                {section.questions} questions · {section.minutes} minutes
-              </span>
-              <span className="mt-1 block text-xl font-black text-white">{section.name}</span>
-              <span className="mt-2 block text-sm leading-relaxed text-white/50">{section.description}</span>
-              <span className="mt-4 flex flex-wrap gap-1.5">
-                {section.skills.map((skill) => (
-                  <span key={skill} className="rounded-full border border-white/10 bg-black/15 px-2.5 py-1 text-[10px] font-bold text-white/50">
-                    {skill}
-                  </span>
-                ))}
-              </span>
-            </button>
-          ))}
+                <span
+                  className="text-[10px] font-black uppercase tracking-[.18em]"
+                  style={{ color: sectionColor(section.id) }}
+                >
+                  {section.questions} questions · {section.minutes} minutes
+                </span>
+                <span className="mt-1 block text-xl font-black text-white">{section.name}</span>
+                <span className="mt-2 block text-sm leading-relaxed text-white/50">
+                  {section.description}
+                </span>
+                <span className="mt-4 flex flex-wrap gap-1.5">
+                  {section.skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full border border-white/10 bg-black/15 px-2.5 py-1 text-[10px] font-bold text-white/50"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
         </div>
       </section>
 

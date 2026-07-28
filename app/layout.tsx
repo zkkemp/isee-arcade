@@ -1,10 +1,34 @@
 import type { Metadata, Viewport } from 'next';
 import PasscodeGate from '@/components/PasscodeGate';
+import DailyLimitProvider from '@/components/DailyLimitProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ISEE Arcade',
-  description: 'Arcade games that stop to quiz you on ISEE Lower Level practice questions.',
+  metadataBase: new URL('https://isee-arcade.vercel.app'),
+  title: {
+    default: 'ISEE Arcade',
+    template: '%s · ISEE Arcade',
+  },
+  description:
+    'A family learning arcade with real games, adaptive study practice, and progress that follows every learner.',
+  applicationName: 'ISEE Arcade',
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    siteName: 'ISEE Arcade',
+    title: 'ISEE Arcade · Real games. Smarter practice.',
+    description:
+      'Study, play, and build progress that follows every learner in one family learning arcade.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ISEE Arcade · Real games. Smarter practice.',
+    description:
+      'Study, play, and build progress that follows every learner in one family learning arcade.',
+  },
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
@@ -39,7 +63,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
-        <PasscodeGate>{children}</PasscodeGate>
+        <PasscodeGate>
+          <DailyLimitProvider>{children}</DailyLimitProvider>
+        </PasscodeGate>
       </body>
     </html>
   );

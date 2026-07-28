@@ -26,10 +26,11 @@
  * quitting the app must not refill the clock or shake off an owed study block.
  */
 
-import { profileStorageSuffix } from './profiles';
+import { clampQuestionBlockSize, getActiveProfile, profileStorageSuffix } from './profiles';
 
-/** Questions in one study block. */
+/** Default questions in one study block. Parents can choose 5–20 per learner. */
 export const BLOCK_SIZE = 8;
+export const MAX_BLOCK_SIZE = 20;
 
 /**
  * Play granted by finishing a study block. Six minutes is long enough to reach a
@@ -59,6 +60,8 @@ export const MAX_BONUS_MS = 5 * 60_000;
  * reading.
  */
 export type StudyBlock = {
+  /** Parent-selected base target captured when this block begins. */
+  target: number;
   /** Correct answers so far in this block. */
   correct: number;
   /**
@@ -84,8 +87,17 @@ export type PlaySession = {
   study: StudyBlock | null;
 };
 
-export function newBlock(): StudyBlock {
-  return { correct: 0, penalty: 0, readingServed: false };
+function activeBlockTarget(): number {
+  return clampQuestionBlockSize(getActiveProfile()?.questionBlockSize ?? BLOCK_SIZE);
+}
+
+export function newBlock(target = activeBlockTarget()): StudyBlock {
+  return {
+    target: clampQuestionBlockSize(target),
+    correct: 0,
+    penalty: 0,
+    readingServed: false,
+  };
 }
 
 /**
@@ -104,12 +116,12 @@ export function emptySession(): PlaySession {
 
 /** True once the block has been satisfied. */
 export function blockComplete(b: StudyBlock): boolean {
-  return b.correct >= BLOCK_SIZE + b.penalty;
+  return b.correct >= Math.min(MAX_BLOCK_SIZE, b.target + b.penalty);
 }
 
 /** Questions still to answer, for the "3 to go" line. */
 export function questionsLeft(b: StudyBlock): number {
-  return Math.max(0, BLOCK_SIZE + b.penalty - b.correct);
+  return Math.max(0, Math.min(MAX_BLOCK_SIZE, b.target + b.penalty) - b.correct);
 }
 
 const BASE_KEY = 'isee-arcade:play-session';
@@ -139,8 +151,16 @@ export function loadSession(): PlaySession {
       study:
         s.study && typeof s.study.correct === 'number'
           ? {
+              target: clampQuestionBlockSize(s.study.target ?? activeBlockTarget()),
               correct: Math.max(0, s.study.correct),
-              penalty: Math.max(0, s.study.penalty ?? 0),
+              penalty: Math.max(
+                0,
+                Math.min(
+                  s.study.penalty ?? 0,
+                  MAX_BLOCK_SIZE -
+                    clampQuestionBlockSize(s.study.target ?? activeBlockTarget()),
+                ),
+              ),
               readingServed: s.study.readingServed === true,
             }
           : null,

@@ -2,6 +2,10 @@
 
 import type { Profile } from './profiles';
 import type { Progress } from './progress';
+import {
+  parentContentSnapshot,
+  restoreParentContentSnapshot,
+} from './parentControls';
 import { getSupabaseBrowserClient } from './supabase/client';
 
 const PROFILE_KEY = 'isee-arcade:profiles';
@@ -10,6 +14,7 @@ const PROGRESS_KEY = 'isee-arcade:v1';
 const SESSION_KEY = 'isee-arcade:play-session';
 const PAINTING_KEY = 'isee-arcade:color-by-number:v1';
 const PAINTING_FINISHED_KEY = 'isee-arcade:color-by-number:finished:v1';
+const DAILY_USAGE_KEY = 'isee-arcade:daily-usage';
 const SETTINGS_KEYS = [
   'isee-arcade:difficulty',
   'isee-arcade:character',
@@ -29,6 +34,12 @@ type RemoteLearner = {
   display_name: string;
   grade_band: Profile['band'];
   avatar_id: Profile['avatarId'];
+  username: string;
+  password_hash: string;
+  password_salt: string;
+  daily_limit_minutes: number;
+  question_block_size: number;
+  smart_practice: boolean;
 };
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -46,15 +57,29 @@ function parseJson<T>(raw: string | null, fallback: T): T {
 function readProfiles(): Profile[] {
   const parsed = parseJson<unknown>(window.localStorage.getItem(PROFILE_KEY), []);
   return Array.isArray(parsed)
-    ? parsed.filter(
-        (profile): profile is Profile =>
-          Boolean(
-            profile &&
-              typeof profile === 'object' &&
-              typeof (profile as Profile).id === 'string' &&
-              typeof (profile as Profile).name === 'string',
-          ),
-      )
+    ? parsed.flatMap((candidate) => {
+        const profile = candidate as Partial<Profile> | null;
+        if (!profile || typeof profile.id !== 'string' || typeof profile.name !== 'string') {
+          return [];
+        }
+        return [
+          {
+            id: profile.id,
+            name: profile.name,
+            username:
+              profile.username ||
+              profile.name.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24) ||
+              'player',
+            band: profile.band ?? 'isee',
+            avatarId: profile.avatarId ?? 'dakota',
+            passcodeHash: profile.passcodeHash ?? '',
+            passcodeSalt: profile.passcodeSalt ?? '',
+            dailyLimitMinutes: Math.max(5, Math.min(240, profile.dailyLimitMinutes ?? 30)),
+            questionBlockSize: Math.max(5, Math.min(20, profile.questionBlockSize ?? 8)),
+            smartPractice: profile.smartPractice !== false,
+          } satisfies Profile,
+        ];
+      })
     : [];
 }
 
@@ -113,8 +138,14 @@ export async function uploadDeviceState(): Promise<CloudSyncResult> {
         household_id: familyId,
         local_profile_id: profile.id,
         display_name: profile.name.slice(0, 32),
+        username: profile.username,
         grade_band: profile.band,
         avatar_id: profile.avatarId,
+        password_hash: profile.passcodeHash,
+        password_salt: profile.passcodeSalt,
+        daily_limit_minutes: profile.dailyLimitMinutes,
+        question_block_size: profile.questionBlockSize,
+        smart_practice: profile.smartPractice,
         updated_at: new Date().toISOString(),
       }));
       const { data: remoteLearners, error: learnerError } = await supabase
@@ -153,6 +184,10 @@ export async function uploadDeviceState(): Promise<CloudSyncResult> {
             window.localStorage.getItem(PAINTING_FINISHED_KEY),
           [],
         );
+        const dailyUsage = parseJson<Record<string, unknown>>(
+          window.localStorage.getItem(`${DAILY_USAGE_KEY}::${profile.id}`),
+          {},
+        );
         return [
           {
             learner_id: learnerId,
@@ -160,7 +195,7 @@ export async function uploadDeviceState(): Promise<CloudSyncResult> {
             play_session: playSession,
             recent_games: recent,
             painting_progress: { pictures: paintings, finished: finishedPaintings },
-            settings,
+            settings: { ...settings, dailyUsage },
             updated_at: new Date().toISOString(),
           },
         ];
@@ -187,6 +222,18 @@ export async function uploadDeviceState(): Promise<CloudSyncResult> {
           .upsert(attempts, { onConflict: 'attempt_key', ignoreDuplicates: true });
         if (attemptError) throw attemptError;
       }
+
+      const { error: preferencesError } = await supabase
+        .from('parent_preferences')
+        .upsert(
+          {
+            household_id: familyId,
+            content_controls: parentContentSnapshot(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'household_id' },
+        );
+      if (preferencesError) throw preferencesError;
 
       return {
         ok: true,
@@ -236,7 +283,9 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
     if (!familyId) throw new Error('No family household was available.');
     const { data: learners, error: learnerError } = await supabase
       .from('learners')
-      .select('id,local_profile_id,display_name,grade_band,avatar_id')
+      .select(
+        'id,local_profile_id,display_name,username,grade_band,avatar_id,password_hash,password_salt,daily_limit_minutes,question_block_size,smart_practice',
+      )
       .eq('household_id', familyId)
       .order('created_at');
     if (learnerError) throw learnerError;
@@ -261,9 +310,14 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
       existingById.set(learner.local_profile_id, {
         id: learner.local_profile_id,
         name: learner.display_name,
+        username: learner.username,
         band: learner.grade_band,
         avatarId: learner.avatar_id,
-        passcodeHash: prior?.passcodeHash ?? '',
+        passcodeHash: learner.password_hash || prior?.passcodeHash || '',
+        passcodeSalt: learner.password_salt || prior?.passcodeSalt || '',
+        dailyLimitMinutes: learner.daily_limit_minutes ?? prior?.dailyLimitMinutes ?? 30,
+        questionBlockSize: learner.question_block_size ?? prior?.questionBlockSize ?? 8,
+        smartPractice: learner.smart_practice ?? prior?.smartPractice ?? true,
       });
       const snapshot = snapshotsByLearner.get(learner.id);
       if (!snapshot) return;
@@ -290,6 +344,15 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
           JSON.stringify(painting.finished),
         );
       }
+      const learnerSettings = snapshot.settings as
+        | (Record<string, string> & { dailyUsage?: Record<string, unknown> })
+        | null;
+      if (learnerSettings?.dailyUsage) {
+        window.localStorage.setItem(
+          `${DAILY_USAGE_KEY}::${learner.local_profile_id}`,
+          JSON.stringify(learnerSettings.dailyUsage),
+        );
+      }
     });
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify([...existingById.values()]));
 
@@ -302,6 +365,16 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
       SETTINGS_KEYS.forEach((key) => {
         if (settings?.[key] !== undefined) window.localStorage.setItem(key, settings[key]);
       });
+    }
+
+    const { data: parentPreferences, error: preferencesError } = await supabase
+      .from('parent_preferences')
+      .select('content_controls')
+      .eq('household_id', familyId)
+      .maybeSingle();
+    if (preferencesError) throw preferencesError;
+    if (parentPreferences?.content_controls) {
+      restoreParentContentSnapshot(parentPreferences.content_controls);
     }
 
     return {

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { GameCanvasProps } from '@/lib/games';
 import { ALPHABET, wordForRound, type WordCard } from '@/lib/wordGames';
 import { useActiveProfile } from '@/lib/profiles';
+import type { GradeBand } from '@/lib/questions';
 import { playSound } from '@/lib/sound';
 
 const MAX_MISSES = 7;
@@ -35,7 +36,7 @@ function HangmanGame({
   difficulty,
   band,
 }: Pick<GameCanvasProps, 'paused' | 'api' | 'restartToken' | 'difficulty'> & {
-  band: 'k' | 'grade1' | 'grade3' | 'isee';
+  band: GradeBand;
 }) {
   const [round, setRound] = useState(1);
   const [card, setCard] = useState<WordCard>(() => wordForRound(band, difficulty, 1, restartToken));

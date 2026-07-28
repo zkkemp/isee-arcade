@@ -23,3 +23,41 @@ export async function sha256Hex(input: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Kid passwords are deliberately simple, so a fast unsalted digest is not
+ * appropriate once the credential can sync. PBKDF2 makes an offline guess much
+ * more expensive while keeping the password itself off the device and cloud.
+ */
+export function newCredentialSalt(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return bytesToHex(bytes);
+}
+
+export async function passwordHash(password: string, salt: string): Promise<string> {
+  const material = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  );
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      salt: new TextEncoder().encode(salt),
+      iterations: 120_000,
+    },
+    material,
+    256,
+  );
+  return bytesToHex(new Uint8Array(derived));
+}
