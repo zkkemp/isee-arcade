@@ -6,6 +6,7 @@ import {
   parentContentSnapshot,
   restoreParentContentSnapshot,
 } from './parentControls';
+import { readPlayerMode } from './playerMode';
 import { getSupabaseBrowserClient } from './supabase/client';
 
 const PROFILE_KEY = 'isee-arcade:profiles';
@@ -15,6 +16,7 @@ const SESSION_KEY = 'isee-arcade:play-session';
 const PAINTING_KEY = 'isee-arcade:color-by-number:v1';
 const PAINTING_FINISHED_KEY = 'isee-arcade:color-by-number:finished:v1';
 const DAILY_USAGE_KEY = 'isee-arcade:daily-usage';
+const LAST_SYNC_SCHEDULED_KEY = 'isee-arcade:last-sync-scheduled';
 const SETTINGS_KEYS = [
   'isee-arcade:difficulty',
   'isee-arcade:character',
@@ -44,6 +46,8 @@ type RemoteLearner = {
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncInFlight: Promise<CloudSyncResult> | null = null;
+const FIRST_SYNC_DELAY_MS = 1800;
+const MIN_SYNC_INTERVAL_MS = 10_000;
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -258,13 +262,25 @@ export async function uploadDeviceState(): Promise<CloudSyncResult> {
 
 export function queueCloudSync(): void {
   if (typeof window === 'undefined' || !getSupabaseBrowserClient()) return;
-  if (syncTimer) clearTimeout(syncTimer);
+  const now = Date.now();
+  const lastScheduledAt = Number(
+    window.sessionStorage.getItem(LAST_SYNC_SCHEDULED_KEY) ?? '0',
+  );
+  if (Number.isFinite(lastScheduledAt) && now - lastScheduledAt < MIN_SYNC_INTERVAL_MS) {
+    return;
+  }
+  window.sessionStorage.setItem(LAST_SYNC_SCHEDULED_KEY, String(now));
+  if (syncTimer) return;
   syncTimer = setTimeout(() => {
     syncTimer = null;
+    if (readPlayerMode() === 'learner') {
+      void uploadSignedInChildState();
+      return;
+    }
     void uploadDeviceState().then((result) => {
       if (!result.ok) return uploadSignedInChildState();
     });
-  }, 1800);
+  }, FIRST_SYNC_DELAY_MS);
 }
 
 export async function uploadSignedInChildState(): Promise<void> {

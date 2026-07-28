@@ -7,7 +7,7 @@ export type PlayerMode = 'learner' | 'parent' | null;
 const MODE_KEY = 'isee-arcade:player-mode';
 const listeners = new Set<() => void>();
 
-function readMode(): PlayerMode {
+export function readPlayerMode(): PlayerMode {
   if (typeof window === 'undefined') return null;
   const value = window.sessionStorage.getItem(MODE_KEY);
   return value === 'learner' || value === 'parent' ? value : null;
@@ -30,9 +30,9 @@ export function setPlayerMode(mode: PlayerMode): void {
 }
 
 export function usePlayerMode(): PlayerMode {
-  return useSyncExternalStore(subscribe, readMode, () => null);
+  return useSyncExternalStore(subscribe, readPlayerMode, () => null);
 }
 
 export function isParentMode(): boolean {
-  return readMode() === 'parent';
+  return readPlayerMode() === 'parent';
 }

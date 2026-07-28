@@ -73,17 +73,18 @@ export default function ConstellationConnect({
 
   useEffect(() => {
     if (paused || finished) return;
-    const timer = window.setInterval(() => {
-      setSecondsLeft((current) => {
-        if (current > 1) return current - 1;
-        playSound('wrong');
-        api.died('The constellation faded');
-        setNextStar(1);
-        return timeForRound(round, difficulty);
-      });
+    const timer = window.setTimeout(() => {
+      if (secondsLeft > 1) {
+        setSecondsLeft(secondsLeft - 1);
+        return;
+      }
+      playSound('wrong');
+      api.died('The constellation faded');
+      setNextStar(1);
+      setSecondsLeft(timeForRound(round, difficulty));
     }, 1000);
-    return () => window.clearInterval(timer);
-  }, [api, difficulty, finished, paused, round]);
+    return () => window.clearTimeout(timer);
+  }, [api, difficulty, finished, paused, round, secondsLeft]);
 
   function choose(star: ConstellationStar) {
     if (paused || finished) return;
