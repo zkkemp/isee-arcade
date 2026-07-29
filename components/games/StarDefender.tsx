@@ -3,6 +3,11 @@
 import { useEffect, useRef } from 'react';
 import type { Difficulty } from '@/lib/difficulty';
 import type { GameCanvasProps } from '@/lib/games';
+import {
+  useKenneySpaceSprites,
+  type KenneySpaceSprites,
+  type KenneySpaceSpriteName,
+} from '@/lib/kenneySpace';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
 
@@ -43,6 +48,7 @@ function fresh(): State {
 
 export default function StarDefender({ paused, input, api, restartToken, difficulty, controlsInset }: GameCanvasProps) {
   const stateRef = useRef<State>(fresh());
+  const sprites = useKenneySpaceSprites();
   useEffect(() => { stateRef.current = fresh(); }, [restartToken]);
   const { canvasRef } = useCanvasGame({
     active: !paused,
@@ -100,28 +106,34 @@ export default function StarDefender({ paused, input, api, restartToken, difficu
         s.wave += 1; s.invaders = makeFormation(s.wave); s.bolts = []; s.inv = 1.2;
         api.requestGate(`Star defense wave ${s.wave - 1} cleared!`);
       }
-      draw(ctx, s, cw, ch, playH);
+      draw(ctx, s, cw, ch, playH, sprites);
     },
   });
   return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />;
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: State, cw: number, ch: number, playH: number) {
+function draw(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  cw: number,
+  ch: number,
+  playH: number,
+  sprites: KenneySpaceSprites | null,
+) {
   const scale = Math.min(cw / W, playH / H), ox = (cw - W * scale) / 2;
   ctx.fillStyle = '#030615'; ctx.fillRect(0, 0, cw, ch);
   ctx.save(); ctx.translate(ox, 0); ctx.scale(scale, scale);
   const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#171552'); bg.addColorStop(.6, '#081b39'); bg.addColorStop(1, '#061321');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   for (let i = 0; i < 70; i += 1) { ctx.fillStyle = `rgba(210,235,255,${.25 + (i % 3) * .2})`; ctx.fillRect((i * 83) % W, (i * 47 + s.time * (4 + i % 4)) % H, i % 8 === 0 ? 2 : 1, i % 8 === 0 ? 2 : 1); }
-  for (const invader of s.invaders) if (invader.alive) drawInvader(ctx, invader, s.time);
+  for (const invader of s.invaders) {
+    if (invader.alive) drawInvader(ctx, invader, s.time, sprites);
+  }
   for (const bolt of s.bolts) {
     ctx.shadowColor = bolt.enemy ? '#ff6c9e' : '#73f6ff'; ctx.shadowBlur = 10; ctx.fillStyle = bolt.enemy ? '#ff9abc' : '#d6ffff';
     ctx.fillRect(bolt.x - 2, bolt.y - 7, 4, 14); ctx.shadowBlur = 0;
   }
-  if (s.inv <= 0 || Math.floor(s.inv * 12) % 2 === 0) {
-    ctx.save(); ctx.translate(s.shipX, H - 58); ctx.shadowColor = '#71efff'; ctx.shadowBlur = 15; ctx.fillStyle = '#a9f6ff';
-    ctx.beginPath(); ctx.moveTo(0, -19); ctx.lineTo(21, 14); ctx.lineTo(8, 9); ctx.lineTo(0, 15); ctx.lineTo(-8, 9); ctx.lineTo(-21, 14); ctx.closePath(); ctx.fill(); ctx.restore();
-  }
+  drawPlayerShip(ctx, s, sprites);
   ctx.fillStyle = 'rgba(4,7,28,.8)'; ctx.beginPath(); ctx.roundRect(13, 13, W - 26, 42, 15); ctx.fill();
   ctx.font = '900 14px ui-rounded, system-ui, sans-serif'; ctx.textBaseline = 'middle';
   ctx.textAlign = 'left'; ctx.fillStyle = '#75efff'; ctx.fillText(`WAVE ${s.wave}`, 27, 34);
@@ -130,9 +142,66 @@ function draw(ctx: CanvasRenderingContext2D, s: State, cw: number, ch: number, p
   ctx.restore(); ctx.fillStyle = '#02040e'; ctx.fillRect(0, playH, cw, Math.max(0, ch - playH));
 }
 
-function drawInvader(ctx: CanvasRenderingContext2D, i: Invader, time: number) {
+const ENEMY_SPRITES: KenneySpaceSpriteName[] = ['enemy-red', 'enemy-blue', 'enemy-green'];
+
+function drawPlayerShip(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  sprites: KenneySpaceSprites | null,
+) {
+  ctx.save();
+  ctx.translate(s.shipX, H - 58);
+  if (sprites) {
+    ctx.shadowColor = '#71efff';
+    ctx.shadowBlur = 15;
+    ctx.drawImage(sprites['player-ship-blue'], -24, -19, 48, 36);
+    ctx.shadowBlur = 0;
+    if (s.inv > 0) {
+      ctx.globalAlpha = 0.26 + Math.sin(s.time * 8) * 0.08;
+      ctx.drawImage(sprites.shield, -31, -31, 62, 62);
+    }
+  } else {
+    ctx.shadowColor = '#71efff';
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = '#a9f6ff';
+    ctx.beginPath();
+    ctx.moveTo(0, -19);
+    ctx.lineTo(21, 14);
+    ctx.lineTo(8, 9);
+    ctx.lineTo(0, 15);
+    ctx.lineTo(-8, 9);
+    ctx.lineTo(-21, 14);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawInvader(
+  ctx: CanvasRenderingContext2D,
+  i: Invader,
+  time: number,
+  sprites: KenneySpaceSprites | null,
+) {
   const colors = [['#fbc85f', '#ff7a7a'], ['#70e5ff', '#6d7cff'], ['#f58fe1', '#a66ee8']][i.kind];
-  ctx.save(); ctx.translate(i.x, i.y + Math.sin(time * 5 + i.x) * 2); ctx.fillStyle = colors[0]; ctx.shadowColor = colors[0]; ctx.shadowBlur = 9;
-  ctx.beginPath(); ctx.roundRect(-15, -10, 30, 20, 7); ctx.fill(); ctx.shadowBlur = 0; ctx.fillStyle = colors[1];
-  ctx.fillRect(-20, -4, 6, 12); ctx.fillRect(14, -4, 6, 12); ctx.fillStyle = '#121633'; ctx.fillRect(-8, -4, 4, 5); ctx.fillRect(4, -4, 4, 5); ctx.restore();
+  ctx.save();
+  ctx.translate(i.x, i.y + Math.sin(time * 5 + i.x) * 2);
+  ctx.shadowColor = colors[0];
+  ctx.shadowBlur = 9;
+  if (sprites) {
+    ctx.drawImage(sprites[ENEMY_SPRITES[i.kind]], -18, -16, 36, 33);
+  } else {
+    ctx.fillStyle = colors[0];
+    ctx.beginPath();
+    ctx.roundRect(-15, -10, 30, 20, 7);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = colors[1];
+    ctx.fillRect(-20, -4, 6, 12);
+    ctx.fillRect(14, -4, 6, 12);
+    ctx.fillStyle = '#121633';
+    ctx.fillRect(-8, -4, 4, 5);
+    ctx.fillRect(4, -4, 4, 5);
+  }
+  ctx.restore();
 }

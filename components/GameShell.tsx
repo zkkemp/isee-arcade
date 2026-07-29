@@ -695,8 +695,10 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               }`}
               title={parentSandbox ? 'Parent free play has no time limit.' : 'Play time left. Answer questions to earn more.'}
             >
-              <span className="text-sm sm:text-base">{parentSandbox ? '∞' : '⏱'}</span>
-              <span className="text-right">
+              <span className={parentSandbox ? 'text-xl font-black sm:text-base' : 'text-sm sm:text-base'}>
+                {parentSandbox ? '∞' : '⏱'}
+              </span>
+              <span className={parentSandbox ? 'hidden text-right min-[500px]:inline' : 'text-right'}>
                 <span className="block text-[8px] font-bold uppercase tracking-widest text-white/45">
                   {parentSandbox ? 'parent mode' : 'play time'}
                 </span>

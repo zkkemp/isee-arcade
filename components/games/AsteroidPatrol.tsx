@@ -3,13 +3,18 @@
 import { useEffect, useRef } from 'react';
 import type { Difficulty } from '@/lib/difficulty';
 import type { GameCanvasProps } from '@/lib/games';
+import {
+  useKenneySpaceSprites,
+  type KenneySpaceSprites,
+  type KenneySpaceSpriteName,
+} from '@/lib/kenneySpace';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
 
 const W = 360;
 const H = 520;
 const TAU = Math.PI * 2;
-type Rock = { x: number; y: number; vx: number; vy: number; r: number; spin: number };
+type Rock = { x: number; y: number; vx: number; vy: number; r: number; spin: number; kind?: number };
 type Shot = { x: number; y: number; vx: number; vy: number; life: number };
 type State = {
   x: number; y: number; vx: number; vy: number; angle: number;
@@ -31,6 +36,7 @@ export function splitRock(rock: Rock): Rock[] {
     vy: rock.vy * 0.55 - dir * 35,
     r: rock.r * 0.58,
     spin: rock.spin + dir,
+    kind: ((rock.kind ?? 0) + (dir === 1 ? 1 : 2)) % 6,
   }));
 }
 
@@ -49,6 +55,7 @@ export function makeWave(wave: number): Rock[] {
       vy: rawY === 0 ? -29 : rawY,
       r: 22 + (i % 3) * 5,
       spin: i * 0.7,
+      kind: i % 6,
     };
   });
 }
@@ -65,6 +72,7 @@ function near(a: { x: number; y: number }, b: { x: number; y: number }, d: numbe
 
 export default function AsteroidPatrol({ paused, input, api, restartToken, difficulty, controlsInset }: GameCanvasProps) {
   const stateRef = useRef<State>(fresh());
+  const sprites = useKenneySpaceSprites();
   useEffect(() => { stateRef.current = fresh(); }, [restartToken]);
   const { canvasRef } = useCanvasGame({
     active: !paused,
@@ -151,13 +159,20 @@ export default function AsteroidPatrol({ paused, input, api, restartToken, diffi
         s.inv = 1.2;
         api.requestGate(`Asteroid field ${s.wave - 1} cleared!`);
       }
-      draw(ctx, s, cw, ch, playH);
+      draw(ctx, s, cw, ch, playH, sprites);
     },
   });
   return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />;
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: State, cw: number, ch: number, playH: number) {
+function draw(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  cw: number,
+  ch: number,
+  playH: number,
+  sprites: KenneySpaceSprites | null,
+) {
   const scale = Math.min(cw / W, playH / H);
   const ox = (cw - W * scale) / 2;
   ctx.fillStyle = '#050719'; ctx.fillRect(0, 0, cw, ch);
@@ -174,8 +189,8 @@ function draw(ctx: CanvasRenderingContext2D, s: State, cw: number, ch: number, p
     ctx.shadowColor = '#8cf5ff'; ctx.shadowBlur = 10; ctx.fillStyle = '#d9ffff';
     ctx.beginPath(); ctx.arc(shot.x, shot.y, 2.5, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
   }
-  for (const r of s.rocks) drawRock(ctx, r);
-  if (s.inv <= 0 || Math.floor(s.inv * 10) % 2 === 0) drawShip(ctx, s);
+  for (const r of s.rocks) drawRock(ctx, r, sprites);
+  drawShip(ctx, s, sprites);
   ctx.fillStyle = 'rgba(5,8,28,.76)'; ctx.beginPath(); ctx.roundRect(12, 12, W - 24, 40, 15); ctx.fill();
   ctx.font = '900 14px ui-rounded, system-ui, sans-serif'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#8cf5ff'; ctx.textAlign = 'left'; ctx.fillText(`FIELD ${s.wave}`, 25, 32);
@@ -187,28 +202,81 @@ function draw(ctx: CanvasRenderingContext2D, s: State, cw: number, ch: number, p
   ctx.fillStyle = '#030512'; ctx.fillRect(0, playH, cw, Math.max(0, ch - playH));
 }
 
-function drawRock(ctx: CanvasRenderingContext2D, r: Rock) {
+const BIG_METEORS: KenneySpaceSpriteName[] = [
+  'meteor-big-1',
+  'meteor-big-2',
+  'meteor-big-3',
+  'meteor-big-4',
+];
+
+function drawRock(
+  ctx: CanvasRenderingContext2D,
+  r: Rock,
+  sprites: KenneySpaceSprites | null,
+) {
   ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.spin);
-  ctx.fillStyle = '#3a4668'; ctx.strokeStyle = '#93a7c9'; ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i < 9; i += 1) {
-    const a = (i / 9) * TAU; const rr = r.r * (.78 + (i % 3) * .1);
-    const x = Math.cos(a) * rr; const y = Math.sin(a) * rr;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  if (sprites) {
+    const name =
+      r.r > 18
+        ? BIG_METEORS[(r.kind ?? 0) % BIG_METEORS.length]
+        : r.r > 11
+          ? 'meteor-medium'
+          : 'meteor-small';
+    const size = r.r * 2.15;
+    ctx.shadowColor = 'rgba(147, 167, 201, 0.34)';
+    ctx.shadowBlur = 7;
+    ctx.drawImage(sprites[name], -size / 2, -size / 2, size, size);
+  } else {
+    ctx.fillStyle = '#3a4668'; ctx.strokeStyle = '#93a7c9'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 9; i += 1) {
+      const a = (i / 9) * TAU; const rr = r.r * (.78 + (i % 3) * .1);
+      const x = Math.cos(a) * rr; const y = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#242d4c';
+    ctx.beginPath(); ctx.arc(-r.r * .24, -r.r * .15, r.r * .2, 0, TAU); ctx.fill();
   }
-  ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#242d4c';
-  ctx.beginPath(); ctx.arc(-r.r * .24, -r.r * .15, r.r * .2, 0, TAU); ctx.fill();
   ctx.restore();
 }
 
-function drawShip(ctx: CanvasRenderingContext2D, s: State) {
+function drawShip(
+  ctx: CanvasRenderingContext2D,
+  s: State,
+  sprites: KenneySpaceSprites | null,
+) {
   ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.angle);
-  ctx.shadowColor = '#74e9ff'; ctx.shadowBlur = 12; ctx.fillStyle = '#e8fbff';
-  ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-12, -11); ctx.lineTo(-7, 0); ctx.lineTo(-12, 11); ctx.closePath(); ctx.fill();
-  ctx.shadowBlur = 0; ctx.fillStyle = '#57bde9'; ctx.beginPath(); ctx.arc(1, 0, 4, 0, TAU); ctx.fill();
+  if (sprites && s.inv > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.24 + Math.sin(s.time * 8) * 0.07;
+    ctx.drawImage(sprites.shield, -28, -28, 56, 56);
+    ctx.restore();
+  }
   if (s.thrust > 0) {
     ctx.fillStyle = '#ffd56b'; ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(-23 - Math.sin(s.time * 35) * 4, 0); ctx.lineTo(-10, 5); ctx.closePath(); ctx.fill();
+  }
+  ctx.shadowColor = '#74e9ff';
+  ctx.shadowBlur = 12;
+  if (sprites) {
+    ctx.save();
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(sprites['player-ship-blue'], -22, -17, 44, 34);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#e8fbff';
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(-12, -11);
+    ctx.lineTo(-7, 0);
+    ctx.lineTo(-12, 11);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#57bde9';
+    ctx.beginPath();
+    ctx.arc(1, 0, 4, 0, TAU);
+    ctx.fill();
   }
   ctx.restore();
 }

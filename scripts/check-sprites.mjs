@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const SPRITE_DIR = join(ROOT, 'public', 'assets', 'sprites');
+const KENNEY_SPACE_DIR = join(ROOT, 'public', 'assets', 'kenney', 'space-shooter');
 const GAME_DIR = join(ROOT, 'components', 'games');
 
 // --- what exists ---
@@ -78,4 +79,27 @@ if (missing.length) {
   process.exit(1);
 }
 
+// Space games use a small set of standalone Kenney images instead of an atlas.
+// Keep the loader and checked-in files in lockstep, and make the CC0 record
+// impossible to drop accidentally during a cleanup.
+const spaceLoader = readFileSync(join(ROOT, 'lib', 'kenneySpace.ts'), 'utf8');
+const spriteList = spaceLoader.slice(
+  spaceLoader.indexOf('export const KENNEY_SPACE_SPRITES'),
+  spaceLoader.indexOf('] as const;'),
+);
+const requestedSpace = [...spriteList.matchAll(/'([a-z0-9-]+)'/g)].map((match) => match[1]);
+const missingSpace = requestedSpace.filter(
+  (name) => !readdirSync(KENNEY_SPACE_DIR).includes(`${name}.png`),
+);
+if (missingSpace.length) {
+  console.error(`\nKenney space sprites missing: ${missingSpace.join(', ')}`);
+  process.exit(1);
+}
+const spaceLicense = readFileSync(join(KENNEY_SPACE_DIR, 'KENNEY-LICENSE.txt'), 'utf8');
+if (!spaceLicense.includes('License (CC0)')) {
+  console.error('\nKenney space sprite license is missing or no longer records CC0.');
+  process.exit(1);
+}
+
+console.log(`standalone Kenney space sprites: ${requestedSpace.length}, CC0 license present`);
 console.log('\nEvery referenced sprite exists.');
