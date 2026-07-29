@@ -193,7 +193,7 @@ export default function ProgressPage() {
                       >
                         {SUBJECT_LABELS[q.subject]}
                       </div>
-                      <div className="text-sm text-white/85">{q.prompt}</div>
+                      <div className="whitespace-pre-line text-sm text-white/85">{q.prompt}</div>
                       <div className="mt-1 text-xs text-emerald-300/90">
                         Answer: {q.choices[q.answer]}
                       </div>

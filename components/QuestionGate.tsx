@@ -446,7 +446,9 @@ export default function QuestionGate({
           )}
 
           <div className="mb-4 flex items-start gap-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="flex-1 text-xl font-bold leading-snug text-white sm:text-2xl">{question.prompt}</p>
+            <p className="flex-1 whitespace-pre-line text-xl font-bold leading-snug text-white sm:text-2xl">
+              {question.prompt}
+            </p>
             {canSpeak && (
               <button
                 type="button"

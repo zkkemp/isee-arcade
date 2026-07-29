@@ -330,7 +330,7 @@ export default function ParentCurriculumLibrary({
                         </span>
                       )}
                     </span>
-                    <span className="mt-2 block text-sm font-bold leading-relaxed text-white sm:text-base">
+                    <span className="mt-2 block whitespace-pre-line text-sm font-bold leading-relaxed text-white sm:text-base">
                       {sample.prompt}
                     </span>
                     {family.topic && (

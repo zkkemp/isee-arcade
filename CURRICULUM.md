@@ -32,6 +32,36 @@ machine-generated vocabulary.
 The word-list sources guide headword selection. The app does not copy commercial
 test-prep questions, proprietary explanations, or source examples.
 
+### Idiom item contract
+
+The idiom bank follows the [Common Core Grade 3 Language standards][ccss-l3],
+which require sentence-level context and distinguishing literal from nonliteral
+meaning in context. Its teaching shape also follows the
+[ReadWriteThink grades 3–5 idiom lesson][rwt-idioms]: children encounter an idiom
+in a natural sentence, interpret its figurative meaning, and receive an
+explanation that connects the context to that meaning.
+
+Every idiom item must:
+
+- show a complete context sentence before asking for the meaning;
+- ask what the idiom means **in that sentence**, not as isolated trivia;
+- have one defensible best answer and three plausible, parallel distractors;
+- use distractors based on a likely nearby misunderstanding, not random or silly
+  definitions from unrelated phrases;
+- explain both the context clue and the difference between figurative and literal
+  meaning;
+- progress from familiar/context-rich items to meanings that require inference.
+
+The option-writing rules follow published assessment guidance: distractors must
+be plausible, similar in form, mutually exclusive, and free of clues. See the
+[Australian Curriculum formative-assessment guidance][acara-mcq] and
+[TIMSS item-writing guidelines][timss-items].
+
+[ccss-l3]: https://www.thecorestandards.org/ELA-Literacy/L/3/
+[rwt-idioms]: https://www.readwritethink.org/classroom-resources/lesson-plans/figurative-language-teaching-idioms
+[acara-mcq]: https://www.australiancurriculum.edu.au/resources/formative-assessment/designing-formative-assessment/multiple-choice-questions
+[timss-items]: https://timss2019.org/timssandpirls.bc.edu/timss2019/methods/pdf/T19-item-writing-guidelines.pdf
+
 ## Breadth targets
 
 - Every generic grade route: at least 500 vocabulary/word-meaning exposures.
