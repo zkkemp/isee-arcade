@@ -6,8 +6,9 @@ import UnifiedLogin from '@/components/UnifiedLogin';
 import DifficultyPicker from '@/components/DifficultyPicker';
 import ProgressStrip from '@/components/ProgressStrip';
 import GameLibrary from '@/components/GameLibrary';
+import PracticePlaytimeCard from '@/components/PracticePlaytimeCard';
 import RecentlyPlayed from '@/components/RecentlyPlayed';
-import { TEMPLATE_COUNT, TOTAL_FAMILIES, countBySubject } from '@/lib/questions';
+import { countBySubject } from '@/lib/questions';
 import { SUBJECT_LABELS, type Subject } from '@/lib/questions/types';
 import { childSessionCookie, verifyChildSession } from '@/lib/childSession';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
@@ -117,28 +118,7 @@ export default async function Home({
           </div>
         </div>
 
-        <div className="arcade-info-panel p-5">
-          <h2 className="text-xl font-black text-white">Practice buys play time</h2>
-          <p className="mt-1 text-sm text-white/48">One simple loop keeps learning and play in balance.</p>
-          <div className="how-it-works mt-5 grid gap-4 text-sm text-white/64 sm:grid-cols-3">
-            <div>
-              <span className="how-it-works__number">1</span>
-              Answer <strong className="text-white/90">8 questions</strong>.
-            </div>
-            <div>
-              <span className="how-it-works__number">2</span>
-              Earn <strong className="text-white/85">6 minutes</strong> of play.
-            </div>
-            <div>
-              <span className="how-it-works__number">3</span>
-              Scores and levels add bonus time.
-            </div>
-          </div>
-          <p className="mt-4 text-xs leading-relaxed text-white/30">
-            {TOTAL_FAMILIES} question families · {TEMPLATE_COUNT} generate fresh numbers · progress
-            stays on this device
-          </p>
-        </div>
+        <PracticePlaytimeCard />
       </section>
 
       <p className="mt-7 text-center sm:hidden">

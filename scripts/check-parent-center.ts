@@ -145,6 +145,17 @@ assert(
   'formal test-prep answers must save when chosen instead of waiting for section completion',
 );
 
+const playtimeCardSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'PracticePlaytimeCard.tsx'),
+  'utf8',
+);
+assert(
+  playtimeCardSource.includes('profile?.questionBlockSize') &&
+    playtimeCardSource.includes('6 minutes') &&
+    playtimeCardSource.includes('5 bonus minutes'),
+  'the arcade must explain the learner-specific practice-to-play exchange clearly',
+);
+
 const localAnswer = recordAnswer(emptyProgress(), {
   id: mathId,
   subject: 'math',

@@ -10,7 +10,7 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabas
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 export const metadata = {
-  title: 'Owner Access · ISEE Arcade',
+  title: 'Parents · ISEE Arcade',
 };
 
 export const dynamic = 'force-dynamic';
@@ -71,11 +71,11 @@ export default async function OwnerPage() {
             Private owner console
           </div>
           <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white sm:text-5xl">
-            Family access
+            Parents
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/58 sm:text-base">
-            You decide who can enter. Issue parent usernames, reset passwords, and stop access
-            without exposing one family’s children or progress to another.
+            Create parent sign-ins, see everyone you have invited, and reset a forgotten password
+            without opening another family’s records.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -83,6 +83,12 @@ export default async function OwnerPage() {
             <p className="text-[10px] font-black text-fuchsia-200/65">SIGNED IN AS OWNER</p>
             <p className="mt-0.5 text-sm font-black text-white">@{ownerUsername}</p>
           </div>
+          <Link
+            href="/parent/account"
+            className="inline-flex min-h-12 items-center rounded-xl bg-white/[0.06] px-4 text-sm font-black text-white/65 transition hover:bg-white/10 hover:text-white"
+          >
+            My account
+          </Link>
           <AccountSignOutButton
             className="min-h-12 rounded-xl bg-white/[0.06] px-4 text-sm font-black text-white/65 transition hover:bg-white/10 hover:text-white disabled:opacity-45"
           />

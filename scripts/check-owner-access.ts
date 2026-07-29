@@ -10,6 +10,18 @@ const accountSource = fs.readFileSync(
   path.join(root, 'components', 'CloudAccount.tsx'),
   'utf8',
 );
+const accountSettingsSource = fs.readFileSync(
+  path.join(root, 'components', 'parent', 'ParentAccountSettings.tsx'),
+  'utf8',
+);
+const parentShellSource = fs.readFileSync(
+  path.join(root, 'components', 'parent', 'ParentShell.tsx'),
+  'utf8',
+);
+const ownerManagerSource = fs.readFileSync(
+  path.join(root, 'components', 'owner', 'OwnerAccountManager.tsx'),
+  'utf8',
+);
 const ownerRoute = fs.readFileSync(
   path.join(root, 'app', 'api', 'owner', 'parents', 'route.ts'),
   'utf8',
@@ -42,8 +54,30 @@ assert(
   'existing sessions must be rejected when an owner suspends or removes access',
 );
 assert(
+  accountSettingsSource.includes('signInWithPassword') &&
+    accountSettingsSource.includes('currentPassword') &&
+    accountSettingsSource.includes('updateUser({ password: newPassword })'),
+  'every signed-in parent must verify the current password before changing their own password',
+);
+assert(
+  parentShellSource.includes("href: '/parent/account'") &&
+    parentShellSource.includes("href: '/owner'"),
+  'parent navigation must expose self-service account settings and owner-only parent management',
+);
+assert(
+  ownerManagerSource.includes('Parents you have added') &&
+    ownerManagerSource.includes('visibleParents') &&
+    ownerManagerSource.includes("'reset_password'"),
+  'the owner needs a searchable parent directory with per-parent password resets',
+);
+assert(
   ownerRoute.includes('getOwnerSession()') && ownerTargetRoute.includes('getOwnerSession()'),
   'every owner account route must re-check owner authorization on the server',
+);
+assert(
+  ownerRoute.includes(".eq('account_role', 'parent')") &&
+    !ownerRoute.includes(".eq('status',"),
+  'the owner directory must return every issued parent, including suspended and removed accounts',
 );
 assert(
   ownerRoute.includes('hasSameOrigin(request)') &&
@@ -86,6 +120,7 @@ assert(
 );
 
 console.log(
-  'Owner access audit: no public signup, server-only authorization, same-origin mutations, ' +
-    'database invitation gate, active-account RLS, and isolated-project boundary passed.',
+  'Owner access audit: self-service password changes, complete parent directory, owner resets, ' +
+    'no public signup, server-only authorization, same-origin mutations, database invitation gate, ' +
+    'active-account RLS, and isolated-project boundary passed.',
 );

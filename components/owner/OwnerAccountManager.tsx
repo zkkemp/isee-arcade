@@ -75,11 +75,21 @@ export default function OwnerAccountManager({
   const [resetting, setResetting] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState('');
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [parentSearch, setParentSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ParentAccount['status']>('all');
 
   const activeCount = useMemo(
     () => parents.filter((parent) => parent.status === 'active').length,
     [parents],
   );
+  const visibleParents = useMemo(() => {
+    const query = normalizeAccountUsername(parentSearch);
+    return parents.filter(
+      (parent) =>
+        (statusFilter === 'all' || parent.status === statusFilter) &&
+        (!query || parent.username.includes(query)),
+    );
+  }, [parentSearch, parents, statusFilter]);
 
   const loadParents = useCallback(async () => {
     if (!adminConfigured) return;
@@ -234,9 +244,12 @@ export default function OwnerAccountManager({
               </p>
             </div>
             <div className="rounded-2xl bg-black/20 px-4 py-3 text-right">
-              <p className="text-2xl font-black text-white">{activeCount}</p>
+              <p className="text-2xl font-black text-white">{parents.length}</p>
               <p className="text-[10px] font-black uppercase tracking-[.14em] text-white/38">
-                active parents
+                parents added
+              </p>
+              <p className="mt-1 text-[11px] font-bold text-emerald-100/65">
+                {activeCount} active
               </p>
             </div>
           </div>
@@ -324,9 +337,13 @@ export default function OwnerAccountManager({
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[.18em] text-violet-200">
-              Family access
+              Parent directory
             </p>
-            <h2 className="mt-2 text-2xl font-black text-white">Parent accounts</h2>
+            <h2 className="mt-2 text-2xl font-black text-white">Parents you have added</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/50">
+              Every parent sign-in you issue appears here. Resetting a password does not expose or
+              change that parent’s children.
+            </p>
           </div>
           <button
             type="button"
@@ -338,6 +355,38 @@ export default function OwnerAccountManager({
           </button>
         </div>
 
+        {parents.length > 0 && (
+          <div className="mt-6 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <label className="block">
+              <span className="sr-only">Find a parent by username</span>
+              <input
+                type="search"
+                value={parentSearch}
+                onChange={(event) => setParentSearch(event.target.value)}
+                placeholder="Find a parent by username"
+                className="min-h-11 w-full rounded-xl bg-white/[0.06] px-4 text-sm text-white outline-none ring-1 ring-white/10 placeholder:text-white/32 focus:ring-2 focus:ring-violet-200"
+              />
+            </label>
+            <div className="grid grid-cols-4 gap-1 rounded-xl bg-black/20 p-1" aria-label="Filter parents">
+              {(['all', 'active', 'suspended', 'removed'] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setStatusFilter(status)}
+                  aria-pressed={statusFilter === status}
+                  className={`min-h-9 rounded-lg px-2 text-[11px] font-black capitalize transition ${
+                    statusFilter === status
+                      ? 'bg-violet-200 text-[#171226]'
+                      : 'text-white/48 hover:bg-white/[0.06] hover:text-white'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {busy === 'load' && parents.length === 0 ? (
           <p className="mt-6 rounded-2xl bg-white/[0.04] px-5 py-8 text-center text-sm text-white/45">
             Loading parent accounts…
@@ -348,9 +397,23 @@ export default function OwnerAccountManager({
             <p className="mt-3 text-sm font-black text-white">No parent accounts yet</p>
             <p className="mt-1 text-xs text-white/42">Create the first private sign-in above.</p>
           </div>
+        ) : visibleParents.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
+            <p className="text-sm font-black text-white">No parents match this view</p>
+            <button
+              type="button"
+              onClick={() => {
+                setParentSearch('');
+                setStatusFilter('all');
+              }}
+              className="mt-3 min-h-10 rounded-xl bg-white/[0.07] px-4 text-xs font-black text-violet-100"
+            >
+              Show every parent
+            </button>
+          </div>
         ) : (
           <div className="mt-6 space-y-3">
-            {parents.map((parent) => {
+            {visibleParents.map((parent) => {
               const rowBusy = busy !== null;
               const resettingThis = resetting === parent.user_id;
               const removingThis = confirmRemove === parent.user_id;

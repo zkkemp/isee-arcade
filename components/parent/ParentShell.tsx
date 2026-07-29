@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import AccountSignOutButton from '@/components/AccountSignOutButton';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { setActiveProfile } from '@/lib/profiles';
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/parent/reports', label: 'Reports', icon: '↗' },
   { href: '/parent/curriculum', label: 'Curriculum', icon: '▤' },
   { href: '/parent/controls', label: 'Controls', icon: '⚙' },
+  { href: '/parent/account', label: 'My account', icon: '◇' },
 ] as const;
 
 export default function ParentShell({
@@ -27,6 +28,7 @@ export default function ParentShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -48,8 +50,16 @@ export default function ParentShell({
         .select('status')
         .eq('user_id', data.user.id)
         .maybeSingle();
-      checking = false;
-      if (disposed || error || !account || account.status === 'active') return;
+      if (disposed || error || !account) {
+        checking = false;
+        return;
+      }
+      if (account.status === 'active') {
+        const { data: owner } = await cloudClient.rpc('is_platform_admin');
+        if (!disposed) setIsOwner(owner === true);
+        checking = false;
+        return;
+      }
 
       await cloudClient.auth.signOut();
       setActiveProfile(null);
@@ -71,6 +81,10 @@ export default function ParentShell({
       document.removeEventListener('visibilitychange', validateWhenVisible);
     };
   }, [router]);
+
+  const navItems = isOwner
+    ? [...NAV, { href: '/owner', label: 'Parents', icon: '♙' } as const]
+    : NAV;
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-5 sm:px-8 sm:pt-9">
@@ -104,9 +118,11 @@ export default function ParentShell({
 
       <nav
         aria-label="Parent center"
-        className="mb-7 flex gap-1 overflow-x-auto rounded-2xl bg-black/25 p-1.5 sm:grid sm:grid-cols-5"
+        className={`mb-7 grid grid-cols-3 gap-1 rounded-2xl bg-black/25 p-1.5 ${
+          isOwner ? 'lg:grid-cols-7' : 'lg:grid-cols-6'
+        }`}
       >
-        {NAV.map((item) => {
+        {navItems.map((item) => {
           const active =
             item.href === '/parent' ? pathname === item.href : pathname.startsWith(item.href);
           return (
@@ -114,7 +130,7 @@ export default function ParentShell({
               key={item.href}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-12 min-w-24 items-center justify-center gap-2 rounded-xl px-3 text-xs font-black transition sm:min-w-0 sm:text-sm ${
+              className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-black transition sm:gap-2 sm:px-3 sm:text-sm ${
                 active
                   ? 'bg-violet-300 text-[#171226]'
                   : 'text-white/52 hover:bg-white/[0.06] hover:text-white'
