@@ -1,19 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import CharacterFace from '@/components/CharacterFace';
+import ParentSyncStatus from '@/components/parent/ParentSyncStatus';
+import { useParentCloudRefresh } from '@/components/parent/useParentCloudRefresh';
+import { getCharacter } from '@/lib/characters';
 import { GRADE_BAND_LABELS } from '@/lib/questions';
 import { loadProgressForProfile, type Progress } from '@/lib/progress';
 import { useProfiles } from '@/lib/profiles';
 
-export default function ParentOverview() {
+export default function ParentOverview({ isOwner = false }: { isOwner?: boolean }) {
   const profiles = useProfiles();
-  const progress = useMemo<Record<string, Progress>>(
-    () =>
-      Object.fromEntries(
-        profiles.map((profile) => [profile.id, loadProgressForProfile(profile.id)]),
-      ),
-    [profiles],
+  const sync = useParentCloudRefresh();
+  const progress: Record<string, Progress> = Object.fromEntries(
+    profiles.map((profile) => [profile.id, loadProgressForProfile(profile.id)]),
   );
 
   const totalAnswers = Object.values(progress).reduce((sum, item) => sum + item.totalSeen, 0);
@@ -22,6 +22,13 @@ export default function ParentOverview() {
 
   return (
     <>
+      <ParentSyncStatus
+        refreshing={sync.refreshing}
+        updatedAt={sync.updatedAt}
+        error={sync.error}
+        onRefresh={sync.refresh}
+      />
+
       <section className="mb-7 grid gap-3 sm:grid-cols-3">
         {[
           { label: 'Children', value: profiles.length, note: 'family learners' },
@@ -62,8 +69,12 @@ export default function ParentOverview() {
                 item?.totalSeen > 0 ? Math.round((item.totalCorrect / item.totalSeen) * 100) : null;
               return (
                 <div key={profile.id} className="flex flex-wrap items-center gap-4 p-5">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-300/12 text-xl">
-                    🎯
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-violet-300/12 ring-1 ring-white/10">
+                    <CharacterFace
+                      character={getCharacter(profile.avatarId)}
+                      size={48}
+                      className="h-12 w-12"
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-black text-white">{profile.name}</div>
@@ -92,6 +103,27 @@ export default function ParentOverview() {
           </div>
         )}
       </section>
+
+      {isOwner && (
+        <section className="mb-7 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-fuchsia-200/15 bg-[linear-gradient(135deg,rgba(244,114,182,.1),rgba(167,139,250,.08))] p-5">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[.16em] text-fuchsia-200">
+              Owner tools
+            </p>
+            <h2 className="mt-1 text-lg font-black text-white">Invite another parent family</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-white/48">
+              Create a private username and temporary password, then copy the sign-in details to
+              share. Each parent gets their own separate family.
+            </p>
+          </div>
+          <Link
+            href="/owner"
+            className="inline-flex min-h-11 items-center rounded-xl bg-fuchsia-200 px-4 text-sm font-black text-[#241225] transition hover:bg-fuchsia-100"
+          >
+            Manage parent accounts
+          </Link>
+        </section>
+      )}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[

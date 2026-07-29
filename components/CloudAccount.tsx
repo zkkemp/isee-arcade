@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { restoreCloudFamily, uploadDeviceState, type CloudSyncResult } from '@/lib/cloudSync';
+import { refreshCloudFamily, uploadDeviceState, type CloudSyncResult } from '@/lib/cloudSync';
 import {
   normalizeAccountUsername,
   usernameAuthEmail,
@@ -178,7 +178,7 @@ export default function CloudAccount({ configured, initialUsername, initialIsOwn
         enterParentCenter();
         const { data: owner } = await supabase.rpc('is_platform_admin');
         setIsOwner(owner === true);
-        setNotice(await uploadDeviceState());
+        setNotice(await refreshCloudFamily());
       }
     }
     setBusy(false);
@@ -188,7 +188,7 @@ export default function CloudAccount({ configured, initialUsername, initialIsOwn
     if (busy) return;
     setBusy(true);
     setNotice(null);
-    const result = kind === 'upload' ? await uploadDeviceState() : await restoreCloudFamily();
+    const result = kind === 'upload' ? await uploadDeviceState() : await refreshCloudFamily();
     setNotice(result);
     setBusy(false);
     if (kind === 'restore' && result.ok && result.learners > 0) {

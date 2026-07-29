@@ -6,7 +6,7 @@ import {
   GRADE_BANDS,
   questionById,
 } from '../lib/questions';
-import { emptyProgress, recordAnswer } from '../lib/progress';
+import { emptyProgress, mergeProgressSnapshots, recordAnswer } from '../lib/progress';
 import { buildPracticeSection } from '../lib/iseePractice';
 
 function assert(value: unknown, message: string): asserts value {
@@ -67,6 +67,24 @@ assert(
 );
 assert(shellSource.includes('Math.random() < 0.3'), 'Smart Practice must remain a gentle 30% nudge');
 assert(shellSource.includes('focusTopic:'), 'Smart Practice must target concrete skill topics');
+assert(
+  shellSource.includes('ms = 2800'),
+  'the level-clear celebration must remain visible long enough to read',
+);
+
+const celebrationSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'CelebrationCard.tsx'),
+  'utf8',
+);
+assert(
+  celebrationSource.includes('character: Character') &&
+    celebrationSource.includes('character={character}'),
+  'celebrations must render the active learner avatar',
+);
+assert(
+  !celebrationSource.includes("getCharacter('marty')"),
+  'celebrations must never fall back to a hard-coded boy avatar',
+);
 
 const modeSource = fs.readFileSync(
   path.join(process.cwd(), 'lib', 'playerMode.ts'),
@@ -82,6 +100,66 @@ const reportSource = fs.readFileSync(
   'utf8',
 );
 assert(reportSource.includes('setHours(0, 0, 0, 0)'), 'report days must align to local midnight');
+assert(
+  reportSource.includes('useParentCloudRefresh'),
+  'open parent reports must keep checking for newly synced answers',
+);
+
+const overviewSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'parent', 'ParentOverview.tsx'),
+  'utf8',
+);
+assert(
+  overviewSource.includes('Manage parent accounts') && overviewSource.includes('href="/owner"'),
+  'the owner dashboard must expose parent account management',
+);
+
+const loginSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'UnifiedLogin.tsx'),
+  'utf8',
+);
+assert(
+  loginSource.includes('mergeProgressSnapshots(localProgress, data.snapshot.progress)') &&
+    loginSource.includes('await uploadSignedInChildState()'),
+  'child sign-in must preserve and immediately upload newer on-device answers',
+);
+
+const childSyncSource = fs.readFileSync(
+  path.join(process.cwd(), 'app', 'api', 'child', 'sync', 'route.ts'),
+  'utf8',
+);
+assert(
+  childSyncSource.includes('insert into public.question_attempts') &&
+    childSyncSource.includes('on conflict (attempt_key) do nothing'),
+  'child sync must persist deduplicated attempt history as well as the report snapshot',
+);
+
+const prepSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'TestPrepClient.tsx'),
+  'utf8',
+);
+assert(
+  prepSource.includes('function chooseAnswer') &&
+    prepSource.includes('saveProgress(progress)') &&
+    !prepSource.includes('run.questions.forEach((question, index)'),
+  'formal test-prep answers must save when chosen instead of waiting for section completion',
+);
+
+const localAnswer = recordAnswer(emptyProgress(), {
+  id: mathId,
+  subject: 'math',
+  correct: true,
+});
+const remoteAnswer = recordAnswer(emptyProgress(), {
+  id: excludedVerbal,
+  subject: 'verbal',
+  correct: false,
+});
+const mergedProgress = mergeProgressSnapshots(localAnswer, remoteAnswer);
+assert(
+  mergedProgress.totalSeen === 2 && mergedProgress.history.length === 2,
+  'cloud restore must preserve answers that exist on only one device',
+);
 
 const curriculumSource = fs.readFileSync(
   path.join(process.cwd(), 'components', 'parent', 'ParentCurriculumLibrary.tsx'),
@@ -105,5 +183,6 @@ assert(migration.includes('parent_preferences'), 'parent preferences need cloud 
 
 console.log(
   'Parent center audit: catalogs, valid answer previews, gentle Smart Practice, ' +
+    'avatar-consistent celebrations, live reports, safe progress merging, owner access, ' +
     'unlimited parent sandbox, and isolated cloud preferences passed.',
 );

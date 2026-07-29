@@ -8,8 +8,9 @@ import { getCharacter } from '@/lib/characters';
 import { normalizeAccountUsername, usernameAuthEmail } from '@/lib/accountUsername';
 import { setPlayerMode } from '@/lib/playerMode';
 import { setActiveProfile } from '@/lib/profiles';
+import { mergeProgressSnapshots } from '@/lib/progress';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
-import { restoreCloudFamily } from '@/lib/cloudSync';
+import { refreshCloudFamily, uploadSignedInChildState } from '@/lib/cloudSync';
 
 type ChildResponse = {
   role?: 'child';
@@ -30,7 +31,18 @@ function storeChild(data: ChildResponse) {
   window.localStorage.setItem('isee-arcade:profiles', JSON.stringify([profile]));
   window.localStorage.setItem('isee-arcade:active-profile', profile.id);
   if (data.snapshot?.progress) {
-    window.localStorage.setItem(`isee-arcade:v1::${profile.id}`, JSON.stringify(data.snapshot.progress));
+    const key = `isee-arcade:v1::${profile.id}`;
+    let localProgress: unknown = null;
+    try {
+      const raw = window.localStorage.getItem(key);
+      localProgress = raw ? JSON.parse(raw) : null;
+    } catch {
+      localProgress = null;
+    }
+    window.localStorage.setItem(
+      key,
+      JSON.stringify(mergeProgressSnapshots(localProgress, data.snapshot.progress)),
+    );
   }
   if (data.snapshot?.play_session) {
     window.localStorage.setItem(
@@ -92,7 +104,7 @@ export default function UnifiedLogin() {
             .eq('user_id', data.user.id)
             .maybeSingle();
           if (account?.status === 'active') {
-            const restored = await restoreCloudFamily();
+            const restored = await refreshCloudFamily();
             if (!restored.ok) {
               setError(`Signed in, but the family could not load: ${restored.message}`);
               setBusy(false);
@@ -118,6 +130,7 @@ export default function UnifiedLogin() {
       }))) as ChildResponse;
       if (response.ok && result.role === 'child' && result.profile) {
         storeChild(result);
+        await uploadSignedInChildState();
         router.replace('/');
         router.refresh();
         return;

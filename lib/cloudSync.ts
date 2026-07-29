@@ -1,7 +1,7 @@
 'use client';
 
-import type { Profile } from './profiles';
-import type { Progress } from './progress';
+import { refreshProfilesFromStorage, type Profile } from './profiles';
+import { mergeProgressSnapshots, type Progress } from './progress';
 import {
   parentContentSnapshot,
   restoreParentContentSnapshot,
@@ -28,6 +28,8 @@ export type CloudSyncResult = {
   ok: boolean;
   message: string;
   learners: number;
+  /** A restore merged newer local answers that should be uploaded again. */
+  needsUpload?: boolean;
 };
 
 type RemoteLearner = {
@@ -46,8 +48,8 @@ type RemoteLearner = {
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncInFlight: Promise<CloudSyncResult> | null = null;
-const FIRST_SYNC_DELAY_MS = 1800;
-const MIN_SYNC_INTERVAL_MS = 10_000;
+const FIRST_SYNC_DELAY_MS = 800;
+const MIN_SYNC_INTERVAL_MS = 5_000;
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -266,13 +268,13 @@ export function queueCloudSync(): void {
   const lastScheduledAt = Number(
     window.sessionStorage.getItem(LAST_SYNC_SCHEDULED_KEY) ?? '0',
   );
-  if (Number.isFinite(lastScheduledAt) && now - lastScheduledAt < MIN_SYNC_INTERVAL_MS) {
-    return;
-  }
-  window.sessionStorage.setItem(LAST_SYNC_SCHEDULED_KEY, String(now));
   if (syncTimer) return;
+  const cooldown =
+    Number.isFinite(lastScheduledAt) ? Math.max(0, MIN_SYNC_INTERVAL_MS - (now - lastScheduledAt)) : 0;
+  const delay = Math.max(FIRST_SYNC_DELAY_MS, cooldown);
   syncTimer = setTimeout(() => {
     syncTimer = null;
+    window.sessionStorage.setItem(LAST_SYNC_SCHEDULED_KEY, String(Date.now()));
     if (readPlayerMode() === 'learner') {
       void uploadSignedInChildState();
       return;
@@ -280,38 +282,53 @@ export function queueCloudSync(): void {
     void uploadDeviceState().then((result) => {
       if (!result.ok) return uploadSignedInChildState();
     });
-  }, FIRST_SYNC_DELAY_MS);
+  }, delay);
 }
 
-export async function uploadSignedInChildState(): Promise<void> {
-  if (typeof window === 'undefined') return;
+export async function uploadSignedInChildState(): Promise<CloudSyncResult> {
+  if (typeof window === 'undefined') {
+    return { ok: false, message: 'Child sync runs in the browser.', learners: 0 };
+  }
   const profiles = readProfiles();
   const activeId = window.localStorage.getItem('isee-arcade:active-profile');
   const profile = profiles.find((candidate) => candidate.id === activeId);
-  if (!profile) return;
+  if (!profile) return { ok: false, message: 'No active child was available to sync.', learners: 0 };
   const settings = settingsSnapshot();
-  await fetch('/api/child/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      progress: parseJson(window.localStorage.getItem(`${PROGRESS_KEY}::${profile.id}`), {}),
-      playSession: parseJson(window.localStorage.getItem(`${SESSION_KEY}::${profile.id}`), {}),
-      recentGames: parseJson(window.localStorage.getItem(RECENT_KEY), []),
-      paintings: parseJson(
-        window.localStorage.getItem(`${PAINTING_KEY}::${profile.id}`),
-        {},
-      ),
-      finishedPaintings: parseJson(
-        window.localStorage.getItem(`${PAINTING_FINISHED_KEY}::${profile.id}`),
-        [],
-      ),
-      dailyUsage: parseJson(
-        window.localStorage.getItem(`${DAILY_USAGE_KEY}::${profile.id}`),
-        {},
-      ),
-      settings,
-    }),
-  });
+  try {
+    const response = await fetch('/api/child/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        progress: parseJson(window.localStorage.getItem(`${PROGRESS_KEY}::${profile.id}`), {}),
+        playSession: parseJson(window.localStorage.getItem(`${SESSION_KEY}::${profile.id}`), {}),
+        recentGames: parseJson(window.localStorage.getItem(RECENT_KEY), []),
+        paintings: parseJson(
+          window.localStorage.getItem(`${PAINTING_KEY}::${profile.id}`),
+          {},
+        ),
+        finishedPaintings: parseJson(
+          window.localStorage.getItem(`${PAINTING_FINISHED_KEY}::${profile.id}`),
+          [],
+        ),
+        dailyUsage: parseJson(
+          window.localStorage.getItem(`${DAILY_USAGE_KEY}::${profile.id}`),
+          {},
+        ),
+        settings,
+      }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      return {
+        ok: false,
+        message: payload?.error ?? 'Child progress could not sync yet.',
+        learners: 0,
+      };
+    }
+    return { ok: true, message: `${profile.name}'s progress is up to date.`, learners: 1 };
+  } catch {
+    return { ok: false, message: 'Child progress will retry after the next answer.', learners: 0 };
+  }
 }
 
 export async function restoreCloudFamily(): Promise<CloudSyncResult> {
@@ -354,6 +371,7 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
 
     const existing = readProfiles();
     const existingById = new Map(existing.map((profile) => [profile.id, profile]));
+    let needsUpload = false;
     remote.forEach((learner) => {
       const prior = existingById.get(learner.local_profile_id);
       existingById.set(learner.local_profile_id, {
@@ -370,9 +388,21 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
       });
       const snapshot = snapshotsByLearner.get(learner.id);
       if (!snapshot) return;
+      const localProgress = parseJson<unknown>(
+        window.localStorage.getItem(`${PROGRESS_KEY}::${learner.local_profile_id}`),
+        null,
+      );
+      const remoteProgress = mergeProgressSnapshots(null, snapshot.progress);
+      const mergedProgress = mergeProgressSnapshots(localProgress, remoteProgress);
+      if (
+        mergedProgress.totalSeen > remoteProgress.totalSeen ||
+        mergedProgress.history.length > remoteProgress.history.length
+      ) {
+        needsUpload = true;
+      }
       window.localStorage.setItem(
         `${PROGRESS_KEY}::${learner.local_profile_id}`,
-        JSON.stringify(snapshot.progress ?? {}),
+        JSON.stringify(mergedProgress),
       );
       window.localStorage.setItem(
         `${SESSION_KEY}::${learner.local_profile_id}`,
@@ -404,6 +434,7 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
       }
     });
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify([...existingById.values()]));
+    refreshProfilesFromStorage();
 
     const firstSnapshot = remote
       .map((learner) => snapshotsByLearner.get(learner.id))
@@ -430,6 +461,7 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
       ok: true,
       message: `Restored ${remote.length} learner${remote.length === 1 ? '' : 's'} from the cloud.`,
       learners: remote.length,
+      needsUpload,
     };
   } catch (error) {
     return {
@@ -438,4 +470,21 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
       learners: 0,
     };
   }
+}
+
+/**
+ * Pulls current child snapshots for parent views, then preserves and republishes
+ * any newer answers that only existed on this device.
+ */
+export async function refreshCloudFamily(): Promise<CloudSyncResult> {
+  const restored = await restoreCloudFamily();
+  if (!restored.ok || !restored.needsUpload) return restored;
+  const uploaded = await uploadDeviceState();
+  return uploaded.ok
+    ? {
+        ok: true,
+        message: `Updated ${restored.learners} learner${restored.learners === 1 ? '' : 's'}.`,
+        learners: restored.learners,
+      }
+    : uploaded;
 }

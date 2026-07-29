@@ -124,6 +124,12 @@ function notify(): void {
   listeners.forEach((l) => l());
 }
 
+/** Refreshes mounted profile readers after cloud restore writes localStorage. */
+export function refreshProfilesFromStorage(): void {
+  cachedRaw = null;
+  notify();
+}
+
 function subscribe(cb: () => void): () => void {
   listeners.add(cb);
   return () => {

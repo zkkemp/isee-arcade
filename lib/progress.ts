@@ -82,6 +82,69 @@ function hydrate(raw: unknown): Progress {
   };
 }
 
+/**
+ * Keeps the strongest parts of two device snapshots without erasing attempts
+ * that only exist on one device. This is deliberately conservative: progress
+ * may move forward across devices, but an older empty cloud snapshot can never
+ * wipe a child's answered questions from the current device.
+ */
+export function mergeProgressSnapshots(localRaw: unknown, remoteRaw: unknown): Progress {
+  const local = hydrate(localRaw);
+  const remote = hydrate(remoteRaw);
+  const primary = local.totalSeen >= remote.totalSeen ? local : remote;
+  const attempts = new Map<string, Attempt>();
+  [...local.history, ...remote.history].forEach((attempt) => {
+    attempts.set(
+      `${attempt.t}:${attempt.id}:${attempt.subject}:${attempt.correct ? 1 : 0}`,
+      attempt,
+    );
+  });
+  const mergedHistory = [...attempts.values()]
+    .sort((a, b) => a.t - b.t)
+    .slice(-HISTORY_CAP);
+  const historyIsComplete =
+    local.totalSeen <= HISTORY_CAP &&
+    remote.totalSeen <= HISTORY_CAP &&
+    mergedHistory.length >= Math.max(local.totalSeen, remote.totalSeen);
+
+  const bySubject = historyIsComplete
+    ? structuredClone(EMPTY_SUBJECTS)
+    : {
+        verbal: { ...primary.bySubject.verbal },
+        quantitative: { ...primary.bySubject.quantitative },
+        reading: { ...primary.bySubject.reading },
+        math: { ...primary.bySubject.math },
+      };
+  if (historyIsComplete) {
+    mergedHistory.forEach((attempt) => {
+      bySubject[attempt.subject].seen += 1;
+      if (attempt.correct) bySubject[attempt.subject].correct += 1;
+    });
+  }
+
+  const highScores = { ...local.highScores };
+  Object.entries(remote.highScores).forEach(([gameId, score]) => {
+    highScores[gameId] = Math.max(highScores[gameId] ?? 0, score);
+  });
+
+  return {
+    ...primary,
+    bySubject,
+    missed: { ...primary.missed },
+    mastered: [...primary.mastered],
+    highScores,
+    totalSeen: historyIsComplete
+      ? mergedHistory.length
+      : Math.max(local.totalSeen, remote.totalSeen),
+    totalCorrect: historyIsComplete
+      ? mergedHistory.filter((attempt) => attempt.correct).length
+      : Math.max(local.totalCorrect, remote.totalCorrect),
+    bestStreak: Math.max(local.bestStreak, remote.bestStreak),
+    history: mergedHistory,
+    vocabulary: { ...local.vocabulary, ...remote.vocabulary },
+  };
+}
+
 export function loadProgress(): Progress {
   if (typeof window === 'undefined') return emptyProgress();
   try {

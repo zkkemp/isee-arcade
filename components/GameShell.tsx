@@ -145,7 +145,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       // Private browsing: they just do not get the auto-open. The ⓘ button remains.
     }
   }, [meta.id]);
-  /** Level-clear card: Marty's face and a congratulations. */
+  /** Level-clear card: the active learner's avatar and a congratulations. */
   const [celebration, setCelebration] = useState<{ headline: string; note: string | null } | null>(
     null,
   );
@@ -191,7 +191,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
     if (text) statusTimer.current = setTimeout(() => setStatus(null), ms);
   }, []);
 
-  const celebrate = useCallback((headline: string, note: string | null, ms = 1000) => {
+  const celebrate = useCallback((headline: string, note: string | null, ms = 2800) => {
     setCelebration({ headline, note });
     if (celebrateTimer.current) clearTimeout(celebrateTimer.current);
     celebrateTimer.current = setTimeout(() => setCelebration(null), ms);
@@ -831,6 +831,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               headline={celebration.headline}
               note={celebration.note}
               accent={meta.accent}
+              character={character}
             />
           )}
 

@@ -7,18 +7,20 @@
  */
 import ParentOverview from '@/components/parent/ParentOverview';
 import ParentShell from '@/components/parent/ParentShell';
+import { getOwnerSession } from '@/lib/ownerAccess';
 import { requireActiveParent } from '@/lib/parentAccess';
 
 export const metadata = { title: 'Parent Center' };
 
 export default async function ParentPage() {
   await requireActiveParent();
+  const owner = await getOwnerSession();
   return (
     <ParentShell
       title="Family overview"
       description="See how everyone is doing, inspect what they are learning, and adjust support without changing the child experience by accident."
     >
-      <ParentOverview />
+      <ParentOverview isOwner={Boolean(owner)} />
     </ParentShell>
   );
 }

@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { childSessionCookie, verifyChildSession } from '@/lib/childSession';
 import { getIseeDatabase } from '@/lib/supabase/database';
 
+const SUBJECTS = new Set(['verbal', 'quantitative', 'reading', 'math']);
+
 export async function POST(request: Request) {
   const sql = getIseeDatabase();
   if (!sql) {
@@ -57,5 +59,64 @@ export async function POST(request: Request) {
       settings = excluded.settings,
       updated_at = now()
   `;
+
+  const history =
+    body.progress && typeof body.progress === 'object'
+      ? (body.progress as { history?: unknown }).history
+      : null;
+  const attempts = (Array.isArray(history) ? history : []).slice(-500).flatMap((candidate) => {
+    const attempt = candidate as {
+      t?: unknown;
+      id?: unknown;
+      subject?: unknown;
+      correct?: unknown;
+    };
+    if (
+      typeof attempt.t !== 'number' ||
+      !Number.isFinite(attempt.t) ||
+      attempt.t < 946_684_800_000 ||
+      attempt.t > Date.now() + 86_400_000 ||
+      typeof attempt.id !== 'string' ||
+      attempt.id.length < 1 ||
+      attempt.id.length > 128 ||
+      typeof attempt.subject !== 'string' ||
+      !SUBJECTS.has(attempt.subject) ||
+      typeof attempt.correct !== 'boolean'
+    ) {
+      return [];
+    }
+    return [
+      {
+        attempt_key: `${session.learnerId}:${attempt.t}:${attempt.id}`,
+        question_id: attempt.id,
+        subject: attempt.subject,
+        correct: attempt.correct,
+        answered_at: new Date(attempt.t).toISOString(),
+      },
+    ];
+  });
+  if (attempts.length > 0) {
+    const attemptsJson = JSON.stringify(attempts);
+    await sql`
+      insert into public.question_attempts (
+        attempt_key, learner_id, question_id, subject, correct, answered_at
+      )
+      select
+        attempt.attempt_key,
+        ${session.learnerId}::uuid,
+        attempt.question_id,
+        attempt.subject,
+        attempt.correct,
+        attempt.answered_at::timestamptz
+      from jsonb_to_recordset(${attemptsJson}::jsonb) as attempt(
+        attempt_key text,
+        question_id text,
+        subject text,
+        correct boolean,
+        answered_at text
+      )
+      on conflict (attempt_key) do nothing
+    `;
+  }
   return NextResponse.json({ ok: true });
 }

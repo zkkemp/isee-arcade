@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { ScratchPaper, shouldOfferScratch } from '@/components/QuestionGate';
 import { useDailyLimit } from '@/components/DailyLimitProvider';
 import {
@@ -85,6 +85,7 @@ export default function TestPrepClient() {
   const [result, setResult] = useState<SectionResult | null>(null);
   const [fullResults, setFullResults] = useState<SectionResult[]>([]);
   const [essay, setEssay] = useState<{ prompt: string; remaining: number; text: string } | null>(null);
+  const recordedPrepAnswers = useRef(new Set<string>());
   const hasActivePrep = Boolean(active || essay);
 
   useEffect(() => {
@@ -125,6 +126,7 @@ export default function TestPrepClient() {
   }
 
   function beginSection(section: Subject) {
+    recordedPrepAnswers.current.clear();
     setResult(null);
     setFullResults([]);
     setEssay(null);
@@ -133,6 +135,7 @@ export default function TestPrepClient() {
   }
 
   function beginDiagnostic() {
+    recordedPrepAnswers.current.clear();
     setResult(null);
     setFullResults([]);
     setEssay(null);
@@ -141,6 +144,7 @@ export default function TestPrepClient() {
   }
 
   function beginFullTest() {
+    recordedPrepAnswers.current.clear();
     setResult(null);
     setFullResults([]);
     setEssay(null);
@@ -158,22 +162,27 @@ export default function TestPrepClient() {
       plan: run.plan,
       quick: run.quick,
     };
-    let progress = loadProgress();
-    run.questions.forEach((question, index) => {
-      const picked = run.answers[index];
-      if (picked === null) return;
-      progress = recordAnswer(progress, {
-        id: question.id,
-        subject: question.subject,
-        correct: picked === question.answer,
-        vocabulary: question.kind === 'synonym',
-      });
-    });
-    saveProgress(progress);
     setFullResults((previous) => [...previous, completed]);
     setResult(completed);
     setActive(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function chooseAnswer(question: Question, index: number) {
+    if (!active) return;
+    const attemptKey = `${active.section}:${active.index}:${question.id}`;
+    const answers = [...active.answers];
+    answers[active.index] = index;
+    setActive({ ...active, answers });
+    if (recordedPrepAnswers.current.has(attemptKey)) return;
+    recordedPrepAnswers.current.add(attemptKey);
+    const progress = recordAnswer(loadProgress(), {
+      id: question.id,
+      subject: question.subject,
+      correct: index === question.answer,
+      vocabulary: question.kind === 'synonym',
+    });
+    saveProgress(progress);
   }
 
   useEffect(() => {
@@ -275,14 +284,7 @@ export default function TestPrepClient() {
               <button
                 key={`${question.id}-${index}`}
                 type="button"
-                onClick={() =>
-                  setActive((current) => {
-                    if (!current) return current;
-                    const answers = [...current.answers];
-                    answers[current.index] = index;
-                    return { ...current, answers };
-                  })
-                }
+                onClick={() => chooseAnswer(question, index)}
                 className={`flex min-h-16 items-center gap-3 rounded-2xl border px-4 py-3 text-left text-base font-bold transition active:scale-[.99] sm:text-lg ${
                   picked === index
                     ? 'border-sky-300/60 bg-sky-300/15 text-white'

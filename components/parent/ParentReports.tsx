@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import ParentSyncStatus from '@/components/parent/ParentSyncStatus';
+import { useParentCloudRefresh } from '@/components/parent/useParentCloudRefresh';
 import { smartFocusForProgress } from '@/lib/adaptivePractice';
 import { GRADE_BAND_LABELS, questionById } from '@/lib/questions';
 import { SUBJECT_LABELS, type QuestionKind, type Subject } from '@/lib/questions/types';
@@ -47,12 +49,10 @@ function trend(progress: Progress) {
 
 export default function ParentReports() {
   const profiles = useProfiles();
+  const sync = useParentCloudRefresh();
   const [selectedId, setSelectedId] = useState('');
   const effectiveId = selectedId || profiles[0]?.id || '';
-  const progress = useMemo<Progress | null>(
-    () => (effectiveId ? loadProgressForProfile(effectiveId) : null),
-    [effectiveId],
-  );
+  const progress: Progress | null = effectiveId ? loadProgressForProfile(effectiveId) : null;
   const profile = profiles.find((item) => item.id === effectiveId) ?? null;
   const report = useMemo(() => {
     if (!progress) return null;
@@ -111,6 +111,13 @@ export default function ParentReports() {
 
   return (
     <div>
+      <ParentSyncStatus
+        refreshing={sync.refreshing}
+        updatedAt={sync.updatedAt}
+        error={sync.error}
+        onRefresh={sync.refresh}
+      />
+
       <label className="mb-6 block max-w-lg">
         <span className="mb-2 block text-xs font-black text-white/50">Report for</span>
         <select

@@ -188,7 +188,7 @@ export default function OwnerAccountManager({
     if (!credentials) return;
     try {
       await navigator.clipboard.writeText(
-        `ISEE Arcade\nUsername: ${credentials.username}\nPassword: ${credentials.password}`,
+        `ISEE Arcade\nSign in: https://isee-arcade.vercel.app\nUsername: ${credentials.username}\nTemporary password: ${credentials.password}`,
       );
       setNotice({ tone: 'success', message: 'Sign-in details copied.' });
     } catch {
@@ -229,7 +229,8 @@ export default function OwnerAccountManager({
                 Create a parent sign-in
               </h2>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/52">
-                Parents can add and manage only their own children. No email address is needed.
+                Choose a username, make a temporary password, then create and copy the sign-in.
+                Each parent can add and manage only their own children.
               </p>
             </div>
             <div className="rounded-2xl bg-black/20 px-4 py-3 text-right">
@@ -289,6 +290,9 @@ export default function OwnerAccountManager({
         <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-200/15 bg-emerald-200/[0.07] px-5 py-4">
           <div>
             <p className="text-sm font-black text-emerald-100">Ready to share with the parent</p>
+            <p className="mt-1 text-xs text-emerald-100/55">
+              They can sign in at isee-arcade.vercel.app and add their own family.
+            </p>
             <p className="mt-1 font-mono text-sm text-white/70">
               @{credentials.username} · {credentials.password}
             </p>
