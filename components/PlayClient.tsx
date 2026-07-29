@@ -1,117 +1,80 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import GameShell from './GameShell';
-import Frogger from './games/Frogger';
-import SnakeV2 from './games/SnakeV2';
-import Platformer from './games/Platformer';
-import PlatformerV2 from './games/PlatformerV2';
-import KingdomQuest from './games/KingdomQuest';
-import DiamondDerby from './games/DiamondDerby';
-import PaperRoute from './games/PaperRoute';
-import PyramidHop from './games/PyramidHop';
-import Reversi from './games/Reversi';
-import Backgammon from './games/Backgammon';
-import SeaBattle from './games/SeaBattle';
-import PaddleDuel from './games/PaddleDuel';
-import AsteroidPatrol from './games/AsteroidPatrol';
-import StarDefender from './games/StarDefender';
-import LunarLander from './games/LunarLander';
-import Runner from './games/Runner';
-import Breakout from './games/Breakout';
-import Climber from './games/Climber';
-import Maze from './games/Maze';
-import Match3 from './games/Match3';
-import Blocks from './games/Blocks';
-import Tetra from './games/Tetra';
-import TicTacToe from './games/TicTacToe';
-import MemoryMatch from './games/MemoryMatch';
-import NumberMerge from './games/NumberMerge';
-import BubblePop from './games/BubblePop';
-import Checkers from './games/Checkers';
-import Echo from './games/Echo';
-import FruitCatch from './games/FruitCatch';
-import FruitCatchV2 from './games/FruitCatchV2';
-import Chess from './games/Chess';
-import TapAttack from './games/TapAttack';
-import TapAttackV2 from './games/TapAttackV2';
-import Sudoku from './games/Sudoku';
-import DotsBoxes from './games/DotsBoxes';
-import CardMatch from './games/CardMatch';
-import WordHunt from './games/WordHunt';
-import SpellingZap from './games/SpellingZap';
-import SkyStack from './games/SkyStack';
-import StarfallSquadron from './games/StarfallSquadron';
-import FireflyOrbit from './games/FireflyOrbit';
-import MysteryFaces from './games/MysteryFaces';
-import ColorByNumber from './games/ColorByNumber';
-import Hangman from './games/Hangman';
-import WordScramble from './games/WordScramble';
-import DiceRoyale from './games/DiceRoyale';
-import StarlineFour from './games/StarlineFour';
-import Mancala from './games/Mancala';
-import GemCode from './games/GemCode';
-import ConstellationConnect from './games/ConstellationConnect';
-import LanternGarden from './games/LanternGarden';
-import { GAMES, type GameComponent, type GameId } from '@/lib/games';
+import { GAMES, type GameCanvasProps, type GameComponent, type GameId } from '@/lib/games';
 import { recordRecentlyPlayed } from '@/lib/recentGames';
+
+function GameLoading() {
+  return (
+    <div
+      className="absolute inset-0 grid place-items-center bg-[#08101f] text-center text-lg font-black text-white"
+      role="status"
+    >
+      <span className="animate-pulse">Loading game…</span>
+    </div>
+  );
+}
 
 /**
  * Maps a game id to its canvas component. Lives on the client because a
- * component reference cannot cross the server/client boundary as a prop.
+ * component reference cannot cross the server/client boundary as a prop. Each
+ * explicit dynamic import gives the game its own chunk so an iPhone opening one
+ * title does not download the code for every game in the arcade.
  */
 const COMPONENTS: Record<GameId, GameComponent> = {
-  frogger: Frogger,
-  snake2: SnakeV2,
-  platformer: Platformer,
-  platformer2: PlatformerV2,
-  platformer3: KingdomQuest,
-  diamond: DiamondDerby,
-  paperroute: PaperRoute,
-  pyramidhop: PyramidHop,
-  reversi: Reversi,
-  backgammon: Backgammon,
-  seabattle: SeaBattle,
-  paddleduel: PaddleDuel,
-  asteroids: AsteroidPatrol,
-  stardefender: StarDefender,
-  lunarlander: LunarLander,
-  runner: Runner,
-  breakout: Breakout,
-  climber: Climber,
-  maze: Maze,
-  match3: Match3,
-  blocks: Blocks,
-  tetris: Tetra,
-  tictactoe: TicTacToe,
-  memory: MemoryMatch,
-  merge: NumberMerge,
-  bubble: BubblePop,
-  checkers: Checkers,
-  echo: Echo,
-  fruit: FruitCatch,
-  fruit2: FruitCatchV2,
-  chess: Chess,
-  tapattack: TapAttack,
-  tapattack2: TapAttackV2,
-  sudoku: Sudoku,
-  dots: DotsBoxes,
-  cards: CardMatch,
-  wordhunt: WordHunt,
-  spelling: SpellingZap,
-  skystack: SkyStack,
-  starfall: StarfallSquadron,
-  firefly: FireflyOrbit,
-  mysteryfaces: MysteryFaces,
-  colorbynumber: ColorByNumber,
-  hangman: Hangman,
-  wordscramble: WordScramble,
-  diceroyale: DiceRoyale,
-  starlinefour: StarlineFour,
-  mancala: Mancala,
-  gemcode: GemCode,
-  constellation: ConstellationConnect,
-  lanterns: LanternGarden,
+  frogger: dynamic<GameCanvasProps>(() => import('./games/Frogger'), { loading: GameLoading }),
+  snake2: dynamic<GameCanvasProps>(() => import('./games/SnakeV2'), { loading: GameLoading }),
+  platformer: dynamic<GameCanvasProps>(() => import('./games/Platformer'), { loading: GameLoading }),
+  platformer2: dynamic<GameCanvasProps>(() => import('./games/PlatformerV2'), { loading: GameLoading }),
+  platformer3: dynamic<GameCanvasProps>(() => import('./games/KingdomQuest'), { loading: GameLoading }),
+  diamond: dynamic<GameCanvasProps>(() => import('./games/DiamondDerby'), { loading: GameLoading }),
+  paperroute: dynamic<GameCanvasProps>(() => import('./games/PaperRoute'), { loading: GameLoading }),
+  pyramidhop: dynamic<GameCanvasProps>(() => import('./games/PyramidHop'), { loading: GameLoading }),
+  reversi: dynamic<GameCanvasProps>(() => import('./games/Reversi'), { loading: GameLoading }),
+  backgammon: dynamic<GameCanvasProps>(() => import('./games/Backgammon'), { loading: GameLoading }),
+  seabattle: dynamic<GameCanvasProps>(() => import('./games/SeaBattle'), { loading: GameLoading }),
+  paddleduel: dynamic<GameCanvasProps>(() => import('./games/PaddleDuel'), { loading: GameLoading }),
+  asteroids: dynamic<GameCanvasProps>(() => import('./games/AsteroidPatrol'), { loading: GameLoading }),
+  stardefender: dynamic<GameCanvasProps>(() => import('./games/StarDefender'), { loading: GameLoading }),
+  lunarlander: dynamic<GameCanvasProps>(() => import('./games/LunarLander'), { loading: GameLoading }),
+  runner: dynamic<GameCanvasProps>(() => import('./games/Runner'), { loading: GameLoading }),
+  breakout: dynamic<GameCanvasProps>(() => import('./games/Breakout'), { loading: GameLoading }),
+  climber: dynamic<GameCanvasProps>(() => import('./games/Climber'), { loading: GameLoading }),
+  maze: dynamic<GameCanvasProps>(() => import('./games/Maze'), { loading: GameLoading }),
+  match3: dynamic<GameCanvasProps>(() => import('./games/Match3'), { loading: GameLoading }),
+  blocks: dynamic<GameCanvasProps>(() => import('./games/Blocks'), { loading: GameLoading }),
+  tetris: dynamic<GameCanvasProps>(() => import('./games/Tetra'), { loading: GameLoading }),
+  tictactoe: dynamic<GameCanvasProps>(() => import('./games/TicTacToe'), { loading: GameLoading }),
+  memory: dynamic<GameCanvasProps>(() => import('./games/MemoryMatch'), { loading: GameLoading }),
+  merge: dynamic<GameCanvasProps>(() => import('./games/NumberMerge'), { loading: GameLoading }),
+  bubble: dynamic<GameCanvasProps>(() => import('./games/BubblePop'), { loading: GameLoading }),
+  checkers: dynamic<GameCanvasProps>(() => import('./games/Checkers'), { loading: GameLoading }),
+  echo: dynamic<GameCanvasProps>(() => import('./games/Echo'), { loading: GameLoading }),
+  fruit: dynamic<GameCanvasProps>(() => import('./games/FruitCatch'), { loading: GameLoading }),
+  fruit2: dynamic<GameCanvasProps>(() => import('./games/FruitCatchV2'), { loading: GameLoading }),
+  chess: dynamic<GameCanvasProps>(() => import('./games/Chess'), { loading: GameLoading }),
+  tapattack: dynamic<GameCanvasProps>(() => import('./games/TapAttack'), { loading: GameLoading }),
+  tapattack2: dynamic<GameCanvasProps>(() => import('./games/TapAttackV2'), { loading: GameLoading }),
+  sudoku: dynamic<GameCanvasProps>(() => import('./games/Sudoku'), { loading: GameLoading }),
+  dots: dynamic<GameCanvasProps>(() => import('./games/DotsBoxes'), { loading: GameLoading }),
+  cards: dynamic<GameCanvasProps>(() => import('./games/CardMatch'), { loading: GameLoading }),
+  wordhunt: dynamic<GameCanvasProps>(() => import('./games/WordHunt'), { loading: GameLoading }),
+  spelling: dynamic<GameCanvasProps>(() => import('./games/SpellingZap'), { loading: GameLoading }),
+  skystack: dynamic<GameCanvasProps>(() => import('./games/SkyStack'), { loading: GameLoading }),
+  starfall: dynamic<GameCanvasProps>(() => import('./games/StarfallSquadron'), { loading: GameLoading }),
+  firefly: dynamic<GameCanvasProps>(() => import('./games/FireflyOrbit'), { loading: GameLoading }),
+  mysteryfaces: dynamic<GameCanvasProps>(() => import('./games/MysteryFaces'), { loading: GameLoading }),
+  colorbynumber: dynamic<GameCanvasProps>(() => import('./games/ColorByNumber'), { loading: GameLoading }),
+  hangman: dynamic<GameCanvasProps>(() => import('./games/Hangman'), { loading: GameLoading }),
+  wordscramble: dynamic<GameCanvasProps>(() => import('./games/WordScramble'), { loading: GameLoading }),
+  diceroyale: dynamic<GameCanvasProps>(() => import('./games/DiceRoyale'), { loading: GameLoading }),
+  starlinefour: dynamic<GameCanvasProps>(() => import('./games/StarlineFour'), { loading: GameLoading }),
+  mancala: dynamic<GameCanvasProps>(() => import('./games/Mancala'), { loading: GameLoading }),
+  gemcode: dynamic<GameCanvasProps>(() => import('./games/GemCode'), { loading: GameLoading }),
+  constellation: dynamic<GameCanvasProps>(() => import('./games/ConstellationConnect'), { loading: GameLoading }),
+  lanterns: dynamic<GameCanvasProps>(() => import('./games/LanternGarden'), { loading: GameLoading }),
 };
 
 export default function PlayClient({ game }: { game: GameId }) {

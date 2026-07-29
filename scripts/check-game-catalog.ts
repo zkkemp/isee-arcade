@@ -38,21 +38,20 @@ const componentBlock = playClient.slice(
   playClient.indexOf('const COMPONENTS'),
   playClient.indexOf('export default function PlayClient'),
 );
-const mappedIds = [...componentBlock.matchAll(/^\s{2}([a-z0-9]+):\s*([A-Za-z0-9]+),$/gm)];
+const mappedIds = [
+  ...componentBlock.matchAll(
+    /^\s{2}([a-z0-9]+):\s*dynamic<GameCanvasProps>\(\(\) => import\('\.\/games\/([^']+)'\), \{ loading: GameLoading \}\),$/gm,
+  ),
+];
 const mappedGameIds = mappedIds.map((match) => match[1] as GameId);
 const missingMappings = allIds.filter((id) => !mappedGameIds.includes(id));
 if (missingMappings.length || mappedGameIds.length !== allIds.length) {
-  fail(`component mapping mismatch: ${missingMappings.join(', ') || 'duplicate mapping'}`);
+  fail(`dynamic component mapping mismatch: ${missingMappings.join(', ') || 'duplicate mapping'}`);
 }
-
-const imports = new Map(
-  [...playClient.matchAll(/^import\s+([A-Za-z0-9]+)\s+from\s+'\.\/games\/([^']+)';$/gm)].map(
-    (match) => [match[1], match[2]],
-  ),
-);
-for (const [, , componentName] of mappedIds) {
-  const fileName = imports.get(componentName);
-  if (!fileName) fail(`missing game import for ${componentName}`);
+if (/^import\s+\w+\s+from\s+'\.\/games\//m.test(playClient)) {
+  fail('games must use dynamic imports so one title does not load the entire arcade');
+}
+for (const [, , fileName] of mappedIds) {
   const source = readFileSync(resolve(`components/games/${fileName}.tsx`), 'utf8');
   const canvasGame = source.includes('<canvas');
   const fullDomGame = source.includes('className="absolute inset-0');
