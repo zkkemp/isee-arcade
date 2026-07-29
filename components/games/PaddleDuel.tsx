@@ -257,7 +257,7 @@ export default function PaddleDuel({ paused, input, api, restartToken, difficult
                 key={choice}
                 type="button"
                 onClick={() => selectSpeed(choice)}
-                className={`rounded-xl border px-2 py-2 text-xs font-black capitalize ${
+                className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-black capitalize ${
                   speed === choice
                     ? 'border-amber-200 bg-amber-200 text-[#241a0c]'
                     : 'border-white/15 bg-white/[.04] text-white/65'

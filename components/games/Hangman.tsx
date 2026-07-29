@@ -114,7 +114,7 @@ function HangmanGame({
                 </button>
               </div>
             ) : (
-              <div className="mt-5 grid grid-cols-7 gap-1.5">
+              <div className="mt-5 grid grid-cols-6 gap-1 sm:grid-cols-7 sm:gap-1.5">
                 {ALPHABET.map((letter) => {
                   const used = guessed.includes(letter);
                   const hit = used && card.word.includes(letter);
@@ -124,7 +124,7 @@ function HangmanGame({
                       type="button"
                       onClick={() => guess(letter)}
                       disabled={paused || used}
-                      className={`aspect-square rounded-xl border text-sm font-black transition active:scale-90 sm:text-base ${
+                      className={`min-h-11 rounded-xl border text-sm font-black transition active:scale-90 sm:aspect-square sm:text-base ${
                         hit
                           ? 'border-emerald-300/30 bg-emerald-300/12 text-emerald-200'
                           : used
@@ -148,7 +148,7 @@ function HangmanGame({
 function RescueScene({ misses }: { misses: number }) {
   const cloudX = 250 - misses * 22;
   return (
-    <svg viewBox="0 0 320 320" className="mx-auto max-h-[34vh] w-full max-w-sm drop-shadow-2xl" aria-label={`Storm is ${misses} of ${MAX_MISSES} steps closer`}>
+    <svg viewBox="0 0 320 320" className="mx-auto max-h-[24vh] w-full max-w-sm drop-shadow-2xl sm:max-h-[34vh]" aria-label={`Storm is ${misses} of ${MAX_MISSES} steps closer`}>
       <defs>
         <linearGradient id="rescue-island" x1="0" y1="0" x2="0" y2="1">
           <stop stopColor="#65e6b4" />

@@ -86,7 +86,15 @@ type Gate = {
   isRetry: boolean;
 };
 
-export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameComponent }) {
+export default function GameShell({
+  meta,
+  Game,
+  parentAccount = false,
+}: {
+  meta: GameMeta;
+  Game: GameComponent;
+  parentAccount?: boolean;
+}) {
   const [difficulty] = useDifficulty();
   const [character] = useCharacter();
   const [muted, setMuted] = useMuted();
@@ -96,7 +104,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const activeProfile = useActiveProfile();
   const playerMode = usePlayerMode();
   const parentContent = useParentContentState();
-  const parentSandbox = playerMode === 'parent';
+  const parentSandbox = parentAccount || playerMode === 'parent';
   const band = activeProfile?.band ?? 'isee';
   const excludedContentKeys = useMemo(
     () =>
@@ -119,6 +127,7 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
   const [correctStreak, setCorrectStreak] = useState(0);
   const [manualPause, setManualPause] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   // The games are laid out for portrait. On a touch device held sideways they
   // squash unusably, so we pause and ask for a rotate. Gated on `pointer: coarse`
   // so a desktop in a wide window (which plays fine) never sees the nag.
@@ -647,19 +656,137 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
       style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none', userSelect: 'none' }}
       onPointerDown={unlockAudio}
     >
-      {/* HUD - two rows so a long game name and the stats never fight the
-          buttons for space. Row 1: back, title, clock, score. Row 2: stats and
-          the action buttons. */}
+      {/* Phone play gets one compact row so the game begins near the top of the
+          screen. Secondary tools move behind one clearly labelled menu. Wider
+          screens keep the roomy two-row HUD. */}
       <header
-        className="relative flex flex-shrink-0 flex-col gap-1 overflow-hidden border-b border-white/8 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 shadow-xl sm:gap-1.5 sm:px-5 sm:pb-3"
+        className="relative z-40 flex flex-shrink-0 flex-col border-b border-white/8 px-2 pt-[max(0.375rem,env(safe-area-inset-top))] pb-1.5 shadow-xl sm:gap-1.5 sm:px-5 sm:pt-[max(0.5rem,env(safe-area-inset-top))] sm:pb-3"
         style={{
           background: `radial-gradient(circle at 72% -30%, ${meta.accent}24, transparent 48%), linear-gradient(180deg, rgba(25,22,43,.98), rgba(12,11,22,.96))`,
         }}
       >
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:hidden">
           <Link
             href="/"
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] text-white/75 shadow-lg transition hover:bg-white/10 active:scale-95 sm:text-lg"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.07] text-white/75 shadow-lg transition active:scale-95"
+            aria-label="Back to game list"
+          >
+            ←
+          </Link>
+
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span
+              className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border text-base shadow-lg min-[350px]:flex"
+              style={{ borderColor: `${meta.accent}4d`, background: `${meta.accent}1f` }}
+              aria-hidden="true"
+            >
+              {meta.icon}
+            </span>
+            <div className="truncate text-sm font-black leading-tight text-white">
+              {meta.name}
+            </div>
+          </div>
+
+          {!gate && (
+            <div
+              className={`flex h-11 min-w-11 flex-shrink-0 items-center justify-center rounded-xl border px-1.5 shadow-lg ${
+                clockLow
+                  ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
+                  : 'border-emerald-400/40 bg-emerald-400/10'
+              }`}
+              title={parentSandbox ? 'Parent free play has no time limit.' : 'Play time left. Answer questions to earn more.'}
+            >
+              <span
+                className={`text-sm font-black leading-none tabular-nums ${
+                  clockLow ? 'text-amber-300' : 'text-emerald-300'
+                }`}
+              >
+                {parentSandbox ? '∞' : formatClock(msLeft)}
+              </span>
+            </div>
+          )}
+
+          <div className="flex h-11 min-w-11 flex-shrink-0 flex-col items-center justify-center rounded-xl bg-black/20 px-1">
+            <div className="text-lg font-bold leading-none" style={{ color: meta.accent }}>
+              {score}
+            </div>
+            <div className="text-[7px] font-bold uppercase tracking-wider text-white/35">score</div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileToolsOpen((open) => !open)}
+            aria-label="Game tools"
+            aria-expanded={mobileToolsOpen}
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-lg font-black tracking-widest text-white/75 transition active:scale-95"
+          >
+            •••
+          </button>
+        </div>
+
+        {mobileToolsOpen && (
+          <>
+            <button
+              type="button"
+              aria-label="Close game tools"
+              className="fixed inset-0 z-40 cursor-default bg-transparent"
+              onClick={() => setMobileToolsOpen(false)}
+            />
+            <div className="absolute right-2 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-white/15 bg-[#171528] p-2 text-sm text-white shadow-2xl">
+              <div className="flex min-h-11 items-center justify-between rounded-xl bg-white/[0.055] px-3 text-white/60">
+                <span>Best score</span>
+                <strong className="text-white">{best}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInfoOpen(true);
+                  setMobileToolsOpen(false);
+                }}
+                className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left font-semibold text-white/80 active:bg-white/10"
+              >
+                <span aria-hidden="true">ⓘ</span> How to play
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMuted(!muted);
+                  setMobileToolsOpen(false);
+                }}
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left font-semibold text-white/80 active:bg-white/10"
+              >
+                <span aria-hidden="true">{muted ? '🔇' : '🔊'}</span>
+                {muted ? 'Turn sound on' : 'Mute sound'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setManualPause((value) => !value);
+                  setMobileToolsOpen(false);
+                }}
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left font-semibold text-white/80 active:bg-white/10"
+              >
+                <span aria-hidden="true">{manualPause ? '▶' : '❚❚'}</span>
+                {manualPause ? 'Resume game' : 'Pause game'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  restart();
+                  setMobileToolsOpen(false);
+                }}
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left font-semibold text-white/80 active:bg-white/10"
+              >
+                <span aria-hidden="true">↻</span> Restart game
+              </button>
+            </div>
+          </>
+        )}
+
+        <div className="hidden items-center gap-3 sm:flex">
+          <Link
+            href="/"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] text-lg text-white/75 shadow-lg transition hover:bg-white/10 active:scale-95"
             aria-label="Back to game list"
           >
             ←
@@ -674,36 +801,31 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
               {meta.icon}
             </span>
             <div className="min-w-0">
-              <div className="truncate text-base font-black leading-tight text-white sm:text-xl">
-                {meta.name}
-              </div>
+              <div className="truncate text-xl font-black leading-tight text-white">{meta.name}</div>
               {isRemaster && (
-                <div className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-300 sm:text-[9px]">
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-300">
                   New edition · original preserved
                 </div>
               )}
             </div>
           </div>
 
-          {/* Play clock. The one thing that ends a window, so it is never hidden. */}
           {!gate && (
             <div
-              className={`flex flex-shrink-0 items-center gap-1.5 rounded-2xl border px-2.5 py-1 shadow-lg sm:px-3.5 sm:py-1.5 ${
+              className={`flex flex-shrink-0 items-center gap-1.5 rounded-2xl border px-3.5 py-1.5 shadow-lg ${
                 clockLow
                   ? 'animate-pulse border-amber-400/50 bg-amber-400/15'
                   : 'border-emerald-400/40 bg-emerald-400/10'
               }`}
               title={parentSandbox ? 'Parent free play has no time limit.' : 'Play time left. Answer questions to earn more.'}
             >
-              <span className={parentSandbox ? 'text-xl font-black sm:text-base' : 'text-sm sm:text-base'}>
-                {parentSandbox ? '∞' : '⏱'}
-              </span>
-              <span className={parentSandbox ? 'hidden text-right min-[500px]:inline' : 'text-right'}>
+              <span className="text-base font-black">{parentSandbox ? '∞' : '⏱'}</span>
+              <span className="text-right">
                 <span className="block text-[8px] font-bold uppercase tracking-widest text-white/45">
                   {parentSandbox ? 'parent mode' : 'play time'}
                 </span>
                 <span
-                  className={`block text-sm font-black leading-none tabular-nums sm:text-lg ${
+                  className={`block text-lg font-black leading-none tabular-nums ${
                     clockLow ? 'text-amber-300' : 'text-emerald-300'
                   }`}
                 >
@@ -714,16 +836,14 @@ export default function GameShell({ meta, Game }: { meta: GameMeta; Game: GameCo
           )}
 
           <div className="flex-shrink-0 rounded-xl bg-black/20 px-2 py-1 text-right">
-            <div className="text-xl font-bold leading-none sm:text-3xl" style={{ color: meta.accent }}>
+            <div className="text-3xl font-bold leading-none" style={{ color: meta.accent }}>
               {score}
             </div>
-            <div className="text-[10px] uppercase tracking-widest text-white/35 sm:text-xs">
-              score
-            </div>
+            <div className="text-xs uppercase tracking-widest text-white/35">score</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-0.5">
+        <div className="hidden items-center gap-2 pt-0.5 sm:flex">
           <div className="flex min-w-0 flex-1 items-center gap-3 truncate text-[11px] leading-tight text-white/40 sm:text-sm">
             <span className="rounded-full bg-white/[0.055] px-2 py-1">🏆 best {best}</span>
             {asked > 0 && (

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import GameShell from './GameShell';
 import { GAMES, type GameCanvasProps, type GameComponent, type GameId } from '@/lib/games';
+import { setPlayerMode } from '@/lib/playerMode';
 import { recordRecentlyPlayed } from '@/lib/recentGames';
 
 function GameLoading() {
@@ -77,10 +78,17 @@ const COMPONENTS: Record<GameId, GameComponent> = {
   lanterns: dynamic<GameCanvasProps>(() => import('./games/LanternGarden'), { loading: GameLoading }),
 };
 
-export default function PlayClient({ game }: { game: GameId }) {
+export default function PlayClient({
+  game,
+  parentAccount = false,
+}: {
+  game: GameId;
+  parentAccount?: boolean;
+}) {
   useEffect(() => {
+    if (parentAccount) setPlayerMode('parent');
     recordRecentlyPlayed(game);
-  }, [game]);
+  }, [game, parentAccount]);
 
-  return <GameShell meta={GAMES[game]} Game={COMPONENTS[game]} />;
+  return <GameShell meta={GAMES[game]} Game={COMPONENTS[game]} parentAccount={parentAccount} />;
 }

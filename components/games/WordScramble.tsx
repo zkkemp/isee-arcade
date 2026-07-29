@@ -173,7 +173,7 @@ function WordScrambleGame({
                   key={index}
                   type="button"
                   onClick={undo}
-                  className={`flex h-12 w-10 items-center justify-center rounded-xl border text-2xl font-black shadow-[0_4px_0_rgba(0,0,0,.28)] sm:h-14 sm:w-12 sm:text-3xl ${
+                  className={`flex h-12 w-11 items-center justify-center rounded-xl border text-2xl font-black shadow-[0_4px_0_rgba(0,0,0,.28)] sm:h-14 sm:w-12 sm:text-3xl ${
                     tile ? 'border-[#d49b31] bg-[#ffd166] text-[#281a05]' : 'border-white/20 bg-white/[.035] text-transparent'
                   }`}
                   aria-label={tile ? `Remove ${tile.letter}` : `Empty letter ${index + 1}`}
@@ -222,13 +222,13 @@ function WordScrambleGame({
                 ))}
               </div>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
-                <button type="button" onClick={undo} disabled={chosen.length === 0} className="rounded-xl border border-white/15 bg-white/[.05] px-4 py-2.5 text-sm font-black text-white/70 disabled:opacity-30">
+                <button type="button" onClick={undo} disabled={chosen.length === 0} className="min-h-11 rounded-xl border border-white/15 bg-white/[.05] px-4 py-2.5 text-sm font-black text-white/70 disabled:opacity-30">
                   ↶ Undo
                 </button>
-                <button type="button" onClick={reshuffle} className="rounded-xl border border-white/15 bg-white/[.05] px-4 py-2.5 text-sm font-black text-white/70">
+                <button type="button" onClick={reshuffle} className="min-h-11 rounded-xl border border-white/15 bg-white/[.05] px-4 py-2.5 text-sm font-black text-white/70">
                   ↻ Shuffle
                 </button>
-                <button type="button" onClick={hint} className="rounded-xl border border-amber-200/20 bg-amber-200/[.08] px-4 py-2.5 text-sm font-black text-amber-100">
+                <button type="button" onClick={hint} className="min-h-11 rounded-xl border border-amber-200/20 bg-amber-200/[.08] px-4 py-2.5 text-sm font-black text-amber-100">
                   💡 Place a letter
                 </button>
               </div>
