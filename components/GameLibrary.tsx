@@ -71,12 +71,13 @@ export default function GameLibrary() {
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
   const matchedIds = useMemo(() => {
-    const scoped =
-      sectionId === 'all'
-        ? GAME_SECTIONS.flatMap((section) => section.ids)
+    const allIds = GAME_SECTIONS.flatMap((section) => section.ids);
+    if (!needle) {
+      return sectionId === 'all'
+        ? allIds
         : GAME_SECTIONS.find((section) => section.id === sectionId)?.ids ?? [];
-    if (!needle) return scoped;
-    return scoped.filter((id) => {
+    }
+    return allIds.filter((id) => {
       const game = GAMES[id];
       const section = GAME_SECTIONS.find((candidate) => candidate.ids.includes(id));
       return `${game.name} ${game.tagline} ${section?.title ?? ''} ${section?.eyebrow ?? ''}`
@@ -105,7 +106,11 @@ export default function GameLibrary() {
           <input
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value.slice(0, 48))}
+            onChange={(event) => {
+              const nextQuery = event.target.value.slice(0, 48);
+              setQuery(nextQuery);
+              if (nextQuery.trim()) setSectionId('all');
+            }}
             placeholder="Search games — try “word,” “space,” or “puzzle”"
             className="min-h-12 w-full rounded-xl bg-white/[0.055] pl-9 pr-4 text-sm font-bold text-white outline-none ring-1 ring-white/10 placeholder:text-white/45 focus:ring-2 focus:ring-cyan-200"
           />
@@ -124,16 +129,21 @@ export default function GameLibrary() {
         )}
       </div>
 
-      <div className="mb-5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Game shelf">
+      <div
+        className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
+        role="group"
+        aria-label="Game shelf"
+      >
         <button
           type="button"
           aria-pressed={sectionId === 'all'}
           onClick={() => setSectionId('all')}
-          className={`min-h-11 flex-shrink-0 rounded-xl px-4 text-xs font-black transition ${
+          className={`min-h-12 rounded-xl px-3 text-xs font-black transition ${
             sectionId === 'all' ? 'bg-cyan-200 text-[#08202a]' : 'bg-white/[0.055] text-white/68 hover:bg-white/10'
           }`}
         >
-          All 51
+          <span className="block text-sm">All games</span>
+          <span className="mt-0.5 block text-[10px] opacity-65">51 games</span>
         </button>
         {GAME_SECTIONS.map((section) => (
           <button
@@ -141,11 +151,12 @@ export default function GameLibrary() {
             type="button"
             aria-pressed={sectionId === section.id}
             onClick={() => setSectionId(section.id)}
-            className={`min-h-11 flex-shrink-0 rounded-xl px-4 text-xs font-black transition ${
+            className={`min-h-12 rounded-xl px-2 py-2 text-xs font-black leading-tight transition ${
               sectionId === section.id ? 'bg-cyan-200 text-[#08202a]' : 'bg-white/[0.055] text-white/68 hover:bg-white/10'
             }`}
           >
-            {section.icon} {section.title} <span className="opacity-60">{section.ids.length}</span>
+            <span className="block">{section.icon} {section.title}</span>
+            <span className="mt-0.5 block text-[10px] opacity-60">{section.ids.length} games</span>
           </button>
         ))}
       </div>
@@ -163,7 +174,7 @@ export default function GameLibrary() {
             <div className="rounded-2xl bg-white/[0.04] px-5 py-12 text-center ring-1 ring-white/[0.08]">
               <div aria-hidden="true" className="text-4xl">🕹️</div>
               <h3 className="mt-3 text-lg font-black text-white">No games match “{query}”</h3>
-              <p className="mt-1 text-sm text-white/58">Try a shorter word or open another shelf.</p>
+              <p className="mt-1 text-sm text-white/58">Try a shorter word or a different game name.</p>
             </div>
           )}
         </>

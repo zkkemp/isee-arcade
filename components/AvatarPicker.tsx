@@ -76,7 +76,7 @@ export default function AvatarPicker({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value.slice(0, 32))}
-            placeholder="Search by name or personality"
+            placeholder="Search avatar styles"
             className="min-h-11 w-full rounded-xl bg-white/[0.055] pl-9 pr-4 text-sm font-bold text-white outline-none ring-1 ring-white/10 placeholder:text-white/42 focus:ring-2 focus:ring-cyan-200"
           />
         </label>
@@ -108,7 +108,7 @@ export default function AvatarPicker({
                 aria-pressed={selected}
                 aria-label={`Choose ${character.name}: ${character.blurb}`}
                 onClick={() => onChange(character.id)}
-                className={`group relative flex min-h-20 min-w-0 flex-col items-center rounded-xl px-1.5 py-2 text-center outline-none transition focus-visible:ring-2 focus-visible:ring-cyan-200 ${
+                className={`group relative flex min-w-0 items-center justify-center rounded-xl p-2 text-center outline-none transition focus-visible:ring-2 focus-visible:ring-cyan-200 ${
                   selected
                     ? 'bg-white/[0.12] shadow-[0_10px_28px_rgba(0,0,0,.24)] ring-2 ring-cyan-200'
                     : 'bg-white/[0.035] ring-1 ring-white/[0.08] hover:bg-white/[0.075] hover:ring-white/20'
@@ -119,13 +119,6 @@ export default function AvatarPicker({
                   size={compact ? 38 : 48}
                   className="rounded-lg transition duration-200 group-hover:scale-105"
                 />
-                <span
-                  className={`mt-1.5 max-w-full truncate text-[10px] font-black ${
-                    selected ? 'text-cyan-100' : 'text-white/62'
-                  }`}
-                >
-                  {character.name}
-                </span>
                 {selected && (
                   <span
                     aria-hidden="true"
