@@ -29,7 +29,11 @@ export default function RecentlyPlayed() {
           </h2>
           <div className="mt-1 text-xs text-cyan-100/50">Your quickest way back into the fun.</div>
         </div>
-        <span className="text-[11px] font-semibold text-white/35">Last 6 games</span>
+        {recent.length > 0 && (
+          <span className="text-[11px] font-semibold text-white/45">
+            {recent.length} recent {recent.length === 1 ? 'game' : 'games'}
+          </span>
+        )}
       </div>
 
       {recent.length === 0 ? (

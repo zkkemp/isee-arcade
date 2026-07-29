@@ -59,16 +59,16 @@ assert(
   'question answers must stay silent; correct/wrong sounds belong to games only',
 );
 
-const accordionSource = fs.readFileSync(
-  path.join(process.cwd(), 'components', 'StableGameCategory.tsx'),
+const librarySource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'GameLibrary.tsx'),
   'utf8',
 );
 assert(
-  accordionSource.includes("scrollIntoView({ block: 'start'"),
-  'game categories must keep the newly opened shelf heading in view',
+  !librarySource.includes('<details') && !librarySource.includes('StableGameCategory'),
+  'game tabs must render direct card grids without duplicate accordion groupings',
 );
 
 console.log(
   `Learning audit: ${all.length} explanations, ${fractions.length} fraction walkthroughs, ` +
-    'scratch criteria, vocabulary spacing, silent answers, and stable category scrolling passed.',
+    'scratch criteria, vocabulary spacing, silent answers, and direct game grids passed.',
 );

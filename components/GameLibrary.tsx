@@ -3,7 +3,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import GameArtwork from '@/components/GameArtwork';
-import StableGameCategory from '@/components/StableGameCategory';
 import { GAMES, type GameId } from '@/lib/games';
 
 type GameSection = {
@@ -85,8 +84,6 @@ export default function GameLibrary() {
         .includes(needle);
     });
   }, [needle, sectionId]);
-  const showFilteredGrid = sectionId !== 'all' || Boolean(needle);
-
   return (
     <section aria-labelledby="game-library-title">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4 px-1">
@@ -161,43 +158,18 @@ export default function GameLibrary() {
         ))}
       </div>
 
-      {showFilteredGrid ? (
-        <>
-          <p aria-live="polite" className="mb-3 px-1 text-xs font-bold text-white/62">
-            {matchedIds.length} {matchedIds.length === 1 ? 'game' : 'games'} found
-          </p>
-          {matchedIds.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-              {matchedIds.map((id) => <GameCard key={id} id={id} />)}
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-white/[0.04] px-5 py-12 text-center ring-1 ring-white/[0.08]">
-              <div aria-hidden="true" className="text-4xl">🕹️</div>
-              <h3 className="mt-3 text-lg font-black text-white">No games match “{query}”</h3>
-              <p className="mt-1 text-sm text-white/58">Try a shorter word or a different game name.</p>
-            </div>
-          )}
-        </>
+      <p aria-live="polite" className="mb-3 px-1 text-xs font-bold text-white/62">
+        {matchedIds.length} {matchedIds.length === 1 ? 'game' : 'games'}
+      </p>
+      {matchedIds.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          {matchedIds.map((id) => <GameCard key={id} id={id} />)}
+        </div>
       ) : (
-        <div className="game-library space-y-3">
-          {GAME_SECTIONS.map((section) => (
-            <StableGameCategory key={section.id} accent={section.accent} initiallyOpen={section.id === 'action'}>
-              <summary className="game-category__summary">
-                <span className="game-category__icon" aria-hidden="true">{section.icon}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[9px] font-extrabold uppercase tracking-[0.2em] text-white/55 sm:text-[10px]">{section.eyebrow}</span>
-                  <span className="mt-0.5 block truncate text-lg font-black tracking-tight text-white sm:text-xl">{section.title}</span>
-                </span>
-                <span className="game-category__count">{section.ids.length} games</span>
-                <span className="game-category__chevron" aria-hidden="true">↓</span>
-              </summary>
-              <div className="game-category__content">
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                  {section.ids.map((id) => <GameCard key={id} id={id} />)}
-                </div>
-              </div>
-            </StableGameCategory>
-          ))}
+        <div className="rounded-2xl bg-white/[0.04] px-5 py-12 text-center ring-1 ring-white/[0.08]">
+          <div aria-hidden="true" className="text-4xl">🕹️</div>
+          <h3 className="mt-3 text-lg font-black text-white">No games match “{query}”</h3>
+          <p className="mt-1 text-sm text-white/58">Try a shorter word or a different game name.</p>
         </div>
       )}
     </section>

@@ -8,6 +8,7 @@ const fail = (message: string): never => {
 };
 
 const gameLibrary = readFileSync(resolve('components/GameLibrary.tsx'), 'utf8');
+const recentShelf = readFileSync(resolve('components/RecentlyPlayed.tsx'), 'utf8');
 const sectionsSource = gameLibrary.slice(
   gameLibrary.indexOf('export const GAME_SECTIONS'),
   gameLibrary.indexOf('const NEW_GAME_IDS'),
@@ -24,6 +25,12 @@ if (duplicateCategories.length) fail(`games repeated across categories: ${duplic
 if (categoryIds.length !== allIds.length) fail(`category count ${categoryIds.length} does not match ${allIds.length} games`);
 if (GAME_LIST.length !== allIds.length || new Set(GAME_LIST.map((game) => game.id)).size !== allIds.length) {
   fail('GAME_LIST must contain every game exactly once');
+}
+if (gameLibrary.includes('<details') || gameLibrary.includes('StableGameCategory')) {
+  fail('game tabs must show direct card grids without accordion groupings');
+}
+if (!recentShelf.includes("recent.length === 1 ? 'game' : 'games'")) {
+  fail('recently played count must match the cards actually shown');
 }
 
 const playClient = readFileSync(resolve('components/PlayClient.tsx'), 'utf8');
