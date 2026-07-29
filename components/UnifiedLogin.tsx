@@ -11,6 +11,7 @@ import { setActiveProfile } from '@/lib/profiles';
 import { mergeProgressSnapshots } from '@/lib/progress';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { refreshCloudFamily, uploadSignedInChildState } from '@/lib/cloudSync';
+import { prepareParentDeviceState } from '@/lib/accountDeviceScope';
 
 type ChildResponse = {
   role?: 'child';
@@ -104,6 +105,7 @@ export default function UnifiedLogin() {
             .eq('user_id', data.user.id)
             .maybeSingle();
           if (account?.status === 'active') {
+            prepareParentDeviceState(data.user.id);
             const restored = await refreshCloudFamily();
             if (!restored.ok) {
               setError(`Signed in, but the family could not load: ${restored.message}`);

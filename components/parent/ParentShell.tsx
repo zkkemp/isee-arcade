@@ -7,6 +7,8 @@ import AccountSignOutButton from '@/components/AccountSignOutButton';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { setActiveProfile } from '@/lib/profiles';
 import { setPlayerMode } from '@/lib/playerMode';
+import { prepareParentDeviceState } from '@/lib/accountDeviceScope';
+import { refreshCloudFamily } from '@/lib/cloudSync';
 
 const NAV = [
   { href: '/parent', label: 'Overview', icon: '⌂' },
@@ -55,6 +57,11 @@ export default function ParentShell({
         return;
       }
       if (account.status === 'active') {
+        const accountChanged = prepareParentDeviceState(data.user.id);
+        if (accountChanged) {
+          await refreshCloudFamily();
+          if (!disposed) router.refresh();
+        }
         const { data: owner } = await cloudClient.rpc('is_platform_admin');
         if (!disposed) setIsOwner(owner === true);
         checking = false;

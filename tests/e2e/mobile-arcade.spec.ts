@@ -7,6 +7,8 @@ const SPACE_GAMES = [
 
 const E2E_USERNAME = process.env.E2E_USERNAME;
 const E2E_PASSWORD = process.env.E2E_PASSWORD;
+const E2E_SECOND_USERNAME = process.env.E2E_SECOND_USERNAME;
+const E2E_SECOND_PASSWORD = process.env.E2E_SECOND_PASSWORD;
 
 test('the signed-out front door fits the portrait viewport', async ({ page }) => {
   await page.goto('/');
@@ -20,6 +22,37 @@ test('the signed-out front door fits the portrait viewport', async ({ page }) =>
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
   expect(overflowsHorizontally).toBe(false);
+});
+
+test('switching parents clears the previous family cache', async ({ page }) => {
+  test.skip(
+    !E2E_SECOND_USERNAME || !E2E_SECOND_PASSWORD,
+    'Set the second parent credentials to run the shared-device isolation check.',
+  );
+
+  await page.goto('/');
+  await page.evaluate(() => {
+    window.localStorage.setItem('isee-arcade:account-scope', 'parent:previous-family');
+    window.localStorage.setItem(
+      'isee-arcade:profiles',
+      JSON.stringify([{ id: 'private-old-learner', name: 'Must disappear' }]),
+    );
+    window.sessionStorage.setItem('isee-arcade:player-mode', 'parent');
+  });
+  await page.getByLabel('Username').fill(E2E_SECOND_USERNAME!);
+  await page.getByPlaceholder('Your password').fill(E2E_SECOND_PASSWORD!);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.waitForURL(/\/parent(?:$|\?)/);
+
+  const localState = await page.evaluate(() => ({
+    scope: window.localStorage.getItem('isee-arcade:account-scope'),
+    profiles: JSON.parse(window.localStorage.getItem('isee-arcade:profiles') ?? '[]') as Array<{
+      id?: string;
+    }>,
+  }));
+  expect(localState.scope).toMatch(/^parent:/);
+  expect(localState.scope).not.toBe('parent:previous-family');
+  expect(localState.profiles).toEqual([]);
 });
 
 for (const game of SPACE_GAMES) {

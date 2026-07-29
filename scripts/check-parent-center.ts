@@ -123,6 +123,20 @@ assert(
     loginSource.includes('await uploadSignedInChildState()'),
   'child sign-in must preserve and immediately upload newer on-device answers',
 );
+assert(
+  loginSource.includes('prepareParentDeviceState(data.user.id)'),
+  'parent sign-in must scope cached family data to the authenticated account',
+);
+const accountScopeSource = fs.readFileSync(
+  path.join(process.cwd(), 'lib', 'accountDeviceScope.ts'),
+  'utf8',
+);
+assert(
+  accountScopeSource.includes("const STORAGE_PREFIX = 'isee-arcade:'") &&
+    accountScopeSource.includes('removeIseeArcadeKeys(window.localStorage)') &&
+    accountScopeSource.includes('removeIseeArcadeKeys(window.sessionStorage)'),
+  'shared phones and iPads must clear family-scoped state when the parent account changes',
+);
 
 const childSyncSource = fs.readFileSync(
   path.join(process.cwd(), 'app', 'api', 'child', 'sync', 'route.ts'),

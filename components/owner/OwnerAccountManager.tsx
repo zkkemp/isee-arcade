@@ -74,7 +74,8 @@ export default function OwnerAccountManager({
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState('');
-  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [parentSearch, setParentSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ParentAccount['status']>('all');
 
@@ -172,24 +173,25 @@ export default function OwnerAccountManager({
     setBusy(null);
   }
 
-  async function removeAccess(parent: ParentAccount) {
-    setBusy(`remove:${parent.user_id}`);
+  async function deleteParent(parent: ParentAccount) {
+    setBusy(`delete:${parent.user_id}`);
     setNotice(null);
     const { ok, payload } = await requestJson<{
-      parent?: ParentAccount;
+      deletedUserId?: string;
       error?: string;
       message?: string;
-    }>(`/api/owner/parents/${parent.user_id}`, { method: 'DELETE' });
-    if (payload.parent) {
-      setParents((current) =>
-        current.map((item) => (item.user_id === payload.parent!.user_id ? payload.parent! : item)),
-      );
-    }
-    if (ok && payload.parent) {
-      setConfirmRemove(null);
-      setNotice({ tone: 'success', message: payload.message ?? 'Parent access removed.' });
+    }>(`/api/owner/parents/${parent.user_id}`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: deleteConfirmation }),
+    });
+    if (ok && payload.deletedUserId === parent.user_id) {
+      setParents((current) => current.filter((item) => item.user_id !== parent.user_id));
+      setConfirmDelete(null);
+      setDeleteConfirmation('');
+      setNotice({ tone: 'success', message: payload.message ?? 'Parent account deleted.' });
     } else {
-      setNotice({ tone: 'error', message: payload.error ?? 'Parent access could not be removed.' });
+      setNotice({ tone: 'error', message: payload.error ?? 'The parent account could not be deleted.' });
     }
     setBusy(null);
   }
@@ -416,7 +418,7 @@ export default function OwnerAccountManager({
             {visibleParents.map((parent) => {
               const rowBusy = busy !== null;
               const resettingThis = resetting === parent.user_id;
-              const removingThis = confirmRemove === parent.user_id;
+              const deletingThis = confirmDelete === parent.user_id;
               return (
                 <article
                   key={parent.user_id}
@@ -448,7 +450,8 @@ export default function OwnerAccountManager({
                           onClick={() => {
                             setResetting(resettingThis ? null : parent.user_id);
                             setResetPassword('');
-                            setConfirmRemove(null);
+                            setConfirmDelete(null);
+                            setDeleteConfirmation('');
                           }}
                           disabled={rowBusy}
                           className="min-h-11 rounded-xl bg-white/[0.07] px-3 text-xs font-black text-white/70 hover:bg-white/10"
@@ -471,15 +474,30 @@ export default function OwnerAccountManager({
                         <button
                           type="button"
                           onClick={() => {
-                            setConfirmRemove(removingThis ? null : parent.user_id);
+                            setConfirmDelete(deletingThis ? null : parent.user_id);
+                            setDeleteConfirmation('');
                             setResetting(null);
                           }}
                           disabled={rowBusy}
                           className="min-h-11 rounded-xl bg-rose-300/10 px-3 text-xs font-black text-rose-100 hover:bg-rose-300/15"
                         >
-                          Remove
+                          Delete parent
                         </button>
                       </div>
+                    )}
+                    {parent.status === 'removed' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmDelete(deletingThis ? null : parent.user_id);
+                          setDeleteConfirmation('');
+                          setResetting(null);
+                        }}
+                        disabled={rowBusy}
+                        className="min-h-11 rounded-xl bg-rose-300/10 px-3 text-xs font-black text-rose-100 hover:bg-rose-300/15"
+                      >
+                        Delete permanently
+                      </button>
                     )}
                   </div>
 
@@ -516,27 +534,47 @@ export default function OwnerAccountManager({
                     </div>
                   )}
 
-                  {removingThis && (
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-rose-300/[0.07] p-3">
-                      <p className="max-w-xl text-xs font-semibold leading-relaxed text-rose-100/80">
-                        Remove @{parent.username}’s sign-in? Their children and learning records
-                        will be preserved, but this username cannot be restored.
+                  {deletingThis && (
+                    <div className="mt-4 rounded-xl bg-rose-300/[0.07] p-4">
+                      <p className="text-sm font-black text-rose-100">
+                        Permanently delete @{parent.username}?
                       </p>
-                      <div className="flex gap-2">
+                      <p className="mt-1 max-w-2xl text-xs font-semibold leading-relaxed text-rose-100/75">
+                        This removes the parent sign-in and their family’s children, answers, and
+                        learning records. This cannot be undone.
+                      </p>
+                      <label className="mt-4 block max-w-sm">
+                        <span className="mb-1.5 block text-xs font-bold text-rose-100/80">
+                          Type {parent.username} to confirm
+                        </span>
+                        <input
+                          value={deleteConfirmation}
+                          onChange={(event) =>
+                            setDeleteConfirmation(normalizeAccountUsername(event.target.value))
+                          }
+                          autoCapitalize="none"
+                          autoComplete="off"
+                          className="min-h-11 w-full rounded-lg bg-black/20 px-3 text-base text-white outline-none ring-1 ring-rose-200/20 focus:ring-2 focus:ring-rose-200 md:text-sm"
+                        />
+                      </label>
+                      <div className="mt-4 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => setConfirmRemove(null)}
-                          className="min-h-11 rounded-lg px-3 text-xs font-black text-white/60"
+                          onClick={() => {
+                            setConfirmDelete(null);
+                            setDeleteConfirmation('');
+                          }}
+                          className="min-h-11 rounded-lg bg-white/[0.06] px-3 text-xs font-black text-white/70"
                         >
                           Keep account
                         </button>
                         <button
                           type="button"
-                          onClick={() => void removeAccess(parent)}
-                          disabled={rowBusy}
+                          onClick={() => void deleteParent(parent)}
+                          disabled={rowBusy || deleteConfirmation !== parent.username}
                           className="min-h-11 rounded-lg bg-rose-300 px-3 text-xs font-black text-[#2a1018]"
                         >
-                          Remove access
+                          {busy === `delete:${parent.user_id}` ? 'Deleting…' : 'Delete permanently'}
                         </button>
                       </div>
                     </div>

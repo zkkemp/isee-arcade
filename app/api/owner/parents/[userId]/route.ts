@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { normalizeAccountUsername } from '@/lib/accountUsername';
 import { getOwnerSession, hasSameOrigin, isSimplePassword } from '@/lib/ownerAccess';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
+import { getIseeDatabase } from '@/lib/supabase/database';
 
 export const runtime = 'nodejs';
 
@@ -145,9 +147,10 @@ export async function DELETE(request: Request, context: RouteContext) {
   }
 
   const admin = getSupabaseAdminClient();
-  if (!admin) {
+  const sql = getIseeDatabase();
+  if (!admin || !sql) {
     return NextResponse.json(
-      { error: 'The server-only ISEE Arcade admin key is not configured yet.' },
+      { error: 'Secure parent-account deletion is not configured yet.' },
       { status: 503 },
     );
   }
@@ -158,14 +161,19 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Parent account not found.' }, { status: 404 });
   }
 
-  const { data: parent, error: statusError } = await admin
-    .from('parent_accounts')
-    .update({ status: 'removed', updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .select('user_id, username, account_role, status, created_at, updated_at')
-    .single();
-  if (statusError) {
-    return NextResponse.json({ error: 'Parent access could not be removed.' }, { status: 500 });
+  let body: { username?: unknown };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ error: 'Type the parent username to confirm deletion.' }, { status: 400 });
+  }
+  const confirmedUsername =
+    typeof body.username === 'string' ? normalizeAccountUsername(body.username) : '';
+  if (confirmedUsername !== target.username) {
+    return NextResponse.json(
+      { error: `Type ${target.username} exactly to confirm deletion.` },
+      { status: 400 },
+    );
   }
 
   await admin.from('owner_account_audit').insert({
@@ -175,22 +183,34 @@ export async function DELETE(request: Request, context: RouteContext) {
     target_username: target.username,
   });
 
-  const { error: banError } = await admin.auth.admin.updateUserById(userId, {
-    ban_duration: '876000h',
-  });
-  if (banError) {
+  const householdRows = await sql`
+    select household_id
+    from public.household_members
+    where user_id = ${userId}::uuid
+  `;
+  const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
+  if (deleteError) {
     return NextResponse.json(
-      {
-        error:
-          'Family-data access was removed, but the sign-in ban needs attention. The account cannot read family data.',
-        parent,
-      },
+      { error: 'The parent account could not be deleted. Nothing else was removed.' },
       { status: 500 },
     );
   }
 
+  const householdIds = householdRows.map((row) => String(row.household_id));
+  if (householdIds.length > 0) {
+    await sql`
+      delete from public.households as household
+      where household.id = any(${householdIds}::uuid[])
+        and not exists (
+          select 1
+          from public.household_members as member
+          where member.household_id = household.id
+        )
+    `;
+  }
+
   return NextResponse.json({
-    parent,
-    message: 'Parent access removed. Learning records were preserved.',
+    deletedUserId: userId,
+    message: `@${target.username} and their family data were permanently deleted.`,
   });
 }

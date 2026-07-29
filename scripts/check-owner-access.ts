@@ -71,8 +71,10 @@ assert(
 assert(
   ownerManagerSource.includes('Parents you have added') &&
     ownerManagerSource.includes('visibleParents') &&
-    ownerManagerSource.includes("'reset_password'"),
-  'the owner needs a searchable parent directory with per-parent password resets',
+    ownerManagerSource.includes("'reset_password'") &&
+    ownerManagerSource.includes('Type {parent.username} to confirm') &&
+    ownerManagerSource.includes('Delete permanently'),
+  'the owner needs searchable parent management with resets and confirmed permanent deletion',
 );
 assert(
   ownerRoute.includes('getOwnerSession()') && ownerTargetRoute.includes('getOwnerSession()'),
@@ -87,6 +89,12 @@ assert(
   ownerRoute.includes('hasSameOrigin(request)') &&
     ownerTargetRoute.match(/hasSameOrigin\(request\)/g)?.length === 2,
   'every mutating owner route must reject cross-origin requests',
+);
+assert(
+  ownerTargetRoute.includes('admin.auth.admin.deleteUser(userId)') &&
+    ownerTargetRoute.includes('delete from public.households') &&
+    ownerTargetRoute.includes('confirmedUsername !== target.username'),
+  'permanent parent deletion must require typed confirmation and clean up only orphaned family data',
 );
 assert(
   ownerRoute.includes('getIseeDatabase()') &&

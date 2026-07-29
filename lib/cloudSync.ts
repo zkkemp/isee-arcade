@@ -357,6 +357,9 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
     if (learnerError) throw learnerError;
     const remote = (learners ?? []) as RemoteLearner[];
     if (remote.length === 0) {
+      window.localStorage.setItem(PROFILE_KEY, '[]');
+      window.localStorage.removeItem('isee-arcade:active-profile');
+      refreshProfilesFromStorage();
       return { ok: true, message: 'The cloud family does not have learners yet.', learners: 0 };
     }
 
