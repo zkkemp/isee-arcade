@@ -37,25 +37,21 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
   const profile = useActiveProfile();
   const playerMode = usePlayerMode();
   const parentSandbox = playerMode === 'parent';
-  const [usedMs, setUsedMs] = useState(0);
   const [limitReached, setLimitReached] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const deferredRef = useRef(false);
 
-  const limitMs = (profile?.dailyLimitMinutes ?? 30) * 60_000;
   const countsAsLearningTime =
     !parentSandbox && (pathname.startsWith('/play/') || pathname === '/prep');
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!profile || parentSandbox) {
-        setUsedMs(0);
         setLimitReached(false);
         setBlocked(false);
         return;
       }
       const current = loadDailyUsage(profile.id).activeMs;
-      setUsedMs(current);
       const reached = current >= profile.dailyLimitMinutes * 60_000;
       setLimitReached(reached);
       setBlocked(reached && !deferredRef.current);
@@ -74,7 +70,6 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
       if (document.visibilityState !== 'visible') return;
       const next = addDailyUsage(profile.id, elapsed);
       sinceSync += elapsed;
-      setUsedMs(next.activeMs);
       if (sinceSync >= 30_000) {
         sinceSync = 0;
         syncDailyUsageSoon();
@@ -111,26 +106,37 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
     () => ({ limitReached, deferLock, lockAtBoundary }),
     [deferLock, limitReached, lockAtBoundary],
   );
-  const remainingMinutes = Math.max(0, Math.ceil((limitMs - usedMs) / 60_000));
 
   return (
     <DailyLimitContext.Provider value={value}>
       {children}
       {blocked && profile && !parentSandbox && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#070914]/95 p-5 text-center backdrop-blur-xl">
-          <section className="w-full max-w-md rounded-[2rem] border border-cyan-200/20 bg-[#12182a] p-7 shadow-[0_30px_90px_rgba(0,0,0,.65)]">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-cyan-200/10 text-4xl">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="playtime-limit-title"
+            aria-describedby="playtime-limit-message"
+            className="w-full max-w-md rounded-3xl bg-[#12182a] p-6 shadow-[0_30px_90px_rgba(0,0,0,.65)] ring-1 ring-cyan-200/20 sm:p-8"
+          >
+            <div className="mx-auto flex h-18 w-18 items-center justify-center rounded-2xl bg-cyan-200/10 text-4xl">
               🌙
             </div>
-            <div className="mt-4 text-[10px] font-black uppercase tracking-[.2em] text-cyan-200/65">
-              Daily goal complete
-            </div>
-            <h2 className="mt-1 text-3xl font-black tracking-tight text-white">
-              Nice work, {profile.name}
+            <h2
+              id="playtime-limit-title"
+              className="mt-5 text-4xl font-black leading-[1.02] tracking-[-.03em] text-white sm:text-5xl"
+            >
+              You&apos;re out of playtime
             </h2>
-            <p className="mt-3 text-sm leading-relaxed text-white/58">
-              You used today&apos;s {profile.dailyLimitMinutes} minutes. Your progress is saved.
-              A parent can add more time in the parent dashboard, or you can come back tomorrow.
+            <p className="mt-4 text-xl font-black text-cyan-100">
+              Nice work, {profile.name}!
+            </p>
+            <p
+              id="playtime-limit-message"
+              className="mx-auto mt-3 max-w-sm text-base leading-relaxed text-white/72"
+            >
+              You used all {profile.dailyLimitMinutes} minutes for today. Your progress is saved.
+              Ask a parent for more time, or come back tomorrow.
             </p>
             <button
               type="button"
@@ -146,9 +152,6 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
             >
               Return to sign in
             </button>
-            <p className="mt-3 text-xs text-white/30">
-              {remainingMinutes > 0 ? `${remainingMinutes} minutes remain.` : 'Timer resets tomorrow.'}
-            </p>
           </section>
         </div>
       )}
