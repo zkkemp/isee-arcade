@@ -1,1 +1,7 @@
-export { alt, contentType, default, size } from './opengraph-image';
+import OpenGraphImage from './opengraph-image';
+
+export { alt, contentType, size } from './opengraph-image';
+
+export default async function TwitterImage() {
+  return OpenGraphImage();
+}
