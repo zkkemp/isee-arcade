@@ -63,7 +63,7 @@ export default function RunJumpBar({
 
   return (
     <div
-      className="flex flex-shrink-0 items-stretch gap-2.5 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] select-none"
+      className="flex flex-shrink-0 items-stretch gap-2.5 px-2 pb-1.5 select-none"
       style={noCallout}
     >
       <button

@@ -76,7 +76,7 @@ export default function DPad({
 
   return (
     <div
-      className="flex flex-shrink-0 items-end justify-between px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] sm:px-3"
+      className="flex flex-shrink-0 items-end justify-between px-1 pb-1.5 sm:px-3"
       style={{ touchAction: 'none' }}
     >
       {/* LEFT thumb: move left / right, side by side. */}

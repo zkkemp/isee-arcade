@@ -15,7 +15,7 @@ export default function ProfileGate() {
   return (
     <section
       aria-label="Signed-in account"
-      className="flex min-h-20 items-center gap-3 rounded-2xl bg-[#151527] p-4 shadow-[0_18px_50px_rgba(0,0,0,.28)]"
+      className="flex min-h-20 flex-wrap items-center gap-3 rounded-2xl bg-[#151527] p-4 shadow-[0_18px_50px_rgba(0,0,0,.28)]"
     >
       {playerMode === 'parent' ? (
         <>
@@ -23,16 +23,16 @@ export default function ProfileGate() {
             🧭
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-lg font-black text-white">Parent free play</p>
+            <p className="text-lg font-black text-white">Parent game mode</p>
             <p className="mt-0.5 text-xs font-bold text-amber-100/72">
               Play without changing a child’s progress
             </p>
           </div>
           <Link
             href="/parent"
-            className="flex min-h-11 items-center rounded-xl bg-amber-200 px-4 text-sm font-black text-[#211704]"
+            className="flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-200 px-4 text-sm font-black text-[#211704] sm:w-auto"
           >
-            Dashboard
+            Manage family &amp; account →
           </Link>
         </>
       ) : active ? (

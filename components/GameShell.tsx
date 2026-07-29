@@ -627,6 +627,7 @@ export default function GameShell({
 
   const clockLow = msLeft > 0 && msLeft < 60_000;
   const isRemaster = meta.id.endsWith('2') || meta.id === 'platformer3';
+  const gameListHref = parentSandbox ? '/?play=parent' : '/';
 
   // Controls help lives behind an info button now, not as fixed text under the
   // canvas. On iPad that text sat right under the jump button and iOS kept
@@ -652,7 +653,8 @@ export default function GameShell({
 
   return (
     <div
-      className="relative flex h-dvh w-full flex-col overflow-hidden select-none"
+      data-game-shell
+      className="relative flex h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full flex-col overflow-hidden select-none"
       style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none', userSelect: 'none' }}
       onPointerDown={unlockAudio}
     >
@@ -660,14 +662,14 @@ export default function GameShell({
           screen. Secondary tools move behind one clearly labelled menu. Wider
           screens keep the roomy two-row HUD. */}
       <header
-        className="relative z-40 flex flex-shrink-0 flex-col border-b border-white/8 px-2 pt-[max(0.375rem,env(safe-area-inset-top))] pb-1.5 shadow-xl sm:gap-1.5 sm:px-5 sm:pt-[max(0.5rem,env(safe-area-inset-top))] sm:pb-3"
+        className="relative z-40 flex flex-shrink-0 flex-col border-b border-white/8 px-2 pt-1.5 pb-1.5 shadow-xl sm:gap-1.5 sm:px-5 sm:pt-2 sm:pb-3"
         style={{
           background: `radial-gradient(circle at 72% -30%, ${meta.accent}24, transparent 48%), linear-gradient(180deg, rgba(25,22,43,.98), rgba(12,11,22,.96))`,
         }}
       >
         <div className="flex items-center gap-1.5 sm:hidden">
           <Link
-            href="/"
+            href={gameListHref}
             className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.07] text-white/75 shadow-lg transition active:scale-95"
             aria-label="Back to game list"
           >
@@ -785,7 +787,7 @@ export default function GameShell({
 
         <div className="hidden items-center gap-3 sm:flex">
           <Link
-            href="/"
+            href={gameListHref}
             className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] text-lg text-white/75 shadow-lg transition hover:bg-white/10 active:scale-95"
             aria-label="Back to game list"
           >
@@ -942,7 +944,10 @@ export default function GameShell({
               >
                 Resume
               </button>
-              <Link href="/" className="text-xs font-semibold text-white/50 underline sm:text-sm">
+              <Link
+                href={gameListHref}
+                className="text-xs font-semibold text-white/50 underline sm:text-sm"
+              >
                 Quit to menu
               </Link>
             </div>
@@ -994,7 +999,7 @@ export default function GameShell({
       </div>
 
       {progress.totalSeen > 0 && (
-        <p className="flex-shrink-0 pb-[max(0.2rem,env(safe-area-inset-bottom))] text-center text-[11px] text-white/20 sm:text-sm">
+        <p className="flex-shrink-0 pb-1 text-center text-[11px] text-white/20 sm:text-sm">
           {progress.totalSeen} answered all time
           {sessionAccuracy !== null && ` · ${sessionAccuracy}% this run`}
         </p>
