@@ -4,7 +4,7 @@ import { ImageResponse } from 'next/og';
 import sharp from 'sharp';
 
 export const alt =
-  'ISEE Arcade — practice unlocks real games, creative avatars, and family learning progress.';
+  'ISEE Arcade — studying earns playtime.';
 
 export const size = {
   width: 1200,
@@ -98,9 +98,9 @@ export default async function OpenGraphImage() {
               display: 'flex',
               alignItems: 'center',
               color: '#ffd21c',
-              fontSize: 22,
-              fontWeight: 800,
-              letterSpacing: 3.2,
+              fontSize: 38,
+              fontWeight: 900,
+              letterSpacing: 2.5,
             }}
           >
             STUDY. PLAY. LEVEL UP.
@@ -110,30 +110,16 @@ export default async function OpenGraphImage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              marginTop: 28,
+              marginTop: 38,
               maxWidth: 650,
-              fontSize: 75,
+              fontSize: 84,
               lineHeight: 0.98,
               fontWeight: 900,
               letterSpacing: -2.2,
             }}
           >
-            <span>Practice earns</span>
-            <span style={{ color: '#52c7ff' }}>real play.</span>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              maxWidth: 615,
-              marginTop: 27,
-              color: '#d7e7ff',
-              fontSize: 27,
-              lineHeight: 1.32,
-              fontWeight: 600,
-            }}
-          >
-            Adaptive learning, 51 games, and a player for every imagination.
+            <span>Studying earns</span>
+            <span style={{ color: '#52c7ff' }}>playtime.</span>
           </div>
 
           <div
@@ -149,11 +135,11 @@ export default async function OpenGraphImage() {
                   key={avatar.label + index}
                   style={{
                     display: 'flex',
-                    width: 82,
-                    height: 82,
-                    marginLeft: index === 0 ? 0 : -13,
-                    padding: 4,
-                    borderRadius: 22,
+                    width: 108,
+                    height: 108,
+                    marginLeft: index === 0 ? 0 : -17,
+                    padding: 5,
+                    borderRadius: 27,
                     background: index < 2 ? '#a5f3fc' : '#c4b5fd',
                     boxShadow: '8px 10px 22px rgba(0, 0, 0, 0.3)',
                   }}
@@ -161,44 +147,17 @@ export default async function OpenGraphImage() {
                   <img
                     src={avatar.src}
                     alt={avatar.label}
-                    width={74}
-                    height={74}
+                    width={98}
+                    height={98}
                     style={{
-                      width: 74,
-                      height: 74,
-                      borderRadius: 18,
+                      width: 98,
+                      height: 98,
+                      borderRadius: 22,
                       objectFit: 'cover',
                     }}
                   />
                 </div>
               ))}
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                marginLeft: 22,
-              }}
-            >
-              <span
-                style={{
-                  color: '#f8fbff',
-                  fontSize: 21,
-                  fontWeight: 800,
-                }}
-              >
-                88 playable avatars
-              </span>
-              <span
-                style={{
-                  marginTop: 5,
-                  color: '#9acbff',
-                  fontSize: 17,
-                  fontWeight: 700,
-                }}
-              >
-                People, creatures, aliens &amp; more
-              </span>
             </div>
           </div>
         </div>
@@ -207,9 +166,9 @@ export default async function OpenGraphImage() {
           style={{
             position: 'relative',
             display: 'flex',
-            width: 435,
-            height: 530,
-            marginTop: 68,
+            width: 440,
+            height: 510,
+            marginTop: 80,
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: 38,
@@ -229,34 +188,14 @@ export default async function OpenGraphImage() {
           <img
             src={logo}
             alt="ISEE Arcade"
-            width={402}
-            height={402}
+            width={428}
+            height={428}
             style={{
-              width: 402,
-              height: 402,
+              width: 428,
+              height: 428,
               borderRadius: 28,
             }}
           />
-          <div
-            style={{
-              position: 'absolute',
-              left: 34,
-              right: 34,
-              bottom: 23,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: 46,
-              borderRadius: 12,
-              background: '#ffd21c',
-              color: '#241900',
-              fontSize: 18,
-              fontWeight: 900,
-              letterSpacing: 1.3,
-            }}
-          >
-            FAMILY LEARNING ARCADE
-          </div>
         </div>
       </div>
     ),
