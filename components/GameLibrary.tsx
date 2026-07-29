@@ -15,12 +15,13 @@ type GameSection = {
 };
 
 export const GAME_SECTIONS: GameSection[] = [
-  { id: 'action', eyebrow: 'Run · jump · dodge', title: 'Fast & fearless', icon: '⚡', accent: '#fb7185', ids: ['riftraiders', 'platformer3', 'platformer2', 'platformer', 'paperroute', 'pyramidhop', 'snake2', 'runner', 'frogger', 'climber', 'breakout'] },
+  { id: 'action', eyebrow: 'Run · jump · dodge', title: 'Fast & fearless', icon: '⚡', accent: '#fb7185', ids: ['riftraiders', 'platformer3', 'platformer', 'paperroute', 'pyramidhop', 'snake2', 'runner', 'frogger', 'climber', 'breakout'] },
   { id: 'arcade', eyebrow: 'Beloved rules · fresh worlds', title: 'Classics Reimagined', icon: '★', accent: '#38bdf8', ids: ['maze', 'seabattle', 'paddleduel', 'asteroids', 'stardefender', 'starfall', 'lunarlander', 'diamond'] },
   { id: 'puzzles', eyebrow: 'Match · stack · solve', title: 'Puzzle power', icon: '◆', accent: '#a78bfa', ids: ['lanterns', 'colorbynumber', 'match3', 'blocks', 'tetris', 'merge', 'bubble', 'memory', 'skystack'] },
   { id: 'tabletop', eyebrow: 'Boards · cards · strategy', title: 'Tabletop classics', icon: '♟', accent: '#34d399', ids: ['reversi', 'backgammon', 'chess', 'checkers', 'mancala', 'starlinefour', 'tictactoe', 'dots', 'sudoku', 'cards', 'diceroyale'] },
   { id: 'quick', eyebrow: 'Remember · react · discover', title: 'Quick thinkers', icon: '☄', accent: '#fb923c', ids: ['constellation', 'mysteryfaces', 'gemcode', 'hangman', 'wordscramble', 'echo', 'fruit2', 'fruit', 'tapattack2', 'tapattack', 'wordhunt', 'spelling', 'firefly'] },
 ];
+const ALL_GAME_IDS = GAME_SECTIONS.flatMap((section) => section.ids);
 
 const NEW_GAME_IDS = new Set<GameId>([
   'riftraiders', 'platformer3', 'diamond', 'paperroute', 'pyramidhop', 'reversi', 'backgammon',
@@ -31,8 +32,7 @@ const NEW_GAME_IDS = new Set<GameId>([
 
 function GameCard({ id }: { id: GameId }) {
   const game = GAMES[id];
-  const edition =
-    id === 'platformer3' ? 'V3' : id.endsWith('2') ? 'V2' : id === 'platformer' ? 'Original' : null;
+  const edition = id.endsWith('2') ? 'V2' : null;
   return (
     <Link
       href={`/play/${game.id}`}
@@ -46,7 +46,7 @@ function GameCard({ id }: { id: GameId }) {
             <span className="block truncate text-sm font-black text-white sm:text-base">{game.name}</span>
             {edition && (
               <span className="mt-0.5 block text-[9px] font-black uppercase tracking-[0.14em] text-amber-300">
-                {edition === 'Original' ? 'Original edition' : `${edition} · Original preserved`}
+                {edition} · Original preserved
               </span>
             )}
             {NEW_GAME_IDS.has(id) && (
@@ -70,13 +70,12 @@ export default function GameLibrary() {
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
   const matchedIds = useMemo(() => {
-    const allIds = GAME_SECTIONS.flatMap((section) => section.ids);
     if (!needle) {
       return sectionId === 'all'
-        ? allIds
+        ? ALL_GAME_IDS
         : GAME_SECTIONS.find((section) => section.id === sectionId)?.ids ?? [];
     }
-    return allIds.filter((id) => {
+    return ALL_GAME_IDS.filter((id) => {
       const game = GAMES[id];
       const section = GAME_SECTIONS.find((candidate) => candidate.ids.includes(id));
       return `${game.name} ${game.tagline} ${section?.title ?? ''} ${section?.eyebrow ?? ''}`
@@ -91,7 +90,7 @@ export default function GameLibrary() {
           <h2 id="game-library-title" className="text-2xl font-black tracking-[-0.025em] text-white sm:text-3xl">
             Browse the arcade
           </h2>
-          <p className="mt-1 text-sm text-white/62">Five shelves. Fifty-two ways to play.</p>
+          <p className="mt-1 text-sm text-white/62">Five shelves. {ALL_GAME_IDS.length} ways to play.</p>
         </div>
         <span className="hidden text-xs font-semibold text-white/55 sm:block">Search or choose a shelf</span>
       </div>
@@ -140,7 +139,7 @@ export default function GameLibrary() {
           }`}
         >
           <span className="block text-sm">All games</span>
-          <span className="mt-0.5 block text-[10px] opacity-65">52 games</span>
+          <span className="mt-0.5 block text-[10px] opacity-65">{ALL_GAME_IDS.length} games</span>
         </button>
         {GAME_SECTIONS.map((section) => (
           <button

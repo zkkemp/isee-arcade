@@ -10,7 +10,6 @@ export type GameId =
   | 'frogger'
   | 'snake2'
   | 'platformer'
-  | 'platformer2'
   | 'platformer3'
   | 'riftraiders'
   | 'diamond'
@@ -214,24 +213,14 @@ export const GAMES: Record<GameId, GameMeta> = {
   platformer: {
     id: 'platformer',
     name: 'Coin Runner',
-    tagline: 'Run, jump, stomp, and collect every coin.',
+    tagline: 'Race through storybook worlds, uncover secret pages, and collect every coin.',
     gateNote: 'Study time buys play time.',
-    icon: '🍄',
-    accent: '#ffb84e',
-    controls: 'run-jump',
-    aspect: 4 / 3,
-  },
-  platformer2: {
-    id: 'platformer2',
-    name: 'Coin Runner: Storybook',
-    tagline: 'Run through storybook worlds, scoop up coins, and reach the flag.',
-    gateNote: 'Study time buys play time.',
-    icon: '📖',
+    icon: '🪙',
     accent: '#ff9f5a',
     controls: 'run-jump',
     aspect: 4 / 3,
   },
-  platformer3: { id: 'platformer3', name: 'Coin Runner 3: Kingdom Quest', tagline: 'Cross sixteen handcrafted realms, master magical powers, and restore the kingdom.', gateNote: 'Study time buys play time.', icon: '🏰', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
+  platformer3: { id: 'platformer3', name: 'Kingdom Quest', tagline: 'Cross sixteen handcrafted realms, master magical powers, and restore the kingdom.', gateNote: 'Study time buys play time.', icon: '🏰', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
   riftraiders: {
     id: 'riftraiders',
     name: 'Rift Raiders',
@@ -561,9 +550,7 @@ export const HOW_TO: Record<GameId, string> = {
   snake2:
     'Guide your snake through the garden to munch sweet berries. Every berry makes your trail longer, so plan ahead and do not bump into the fence or your own tail.',
   platformer:
-    'Run and jump to the flag at the end. Collect coins, bounce on enemies to squash them, and watch out for spiky ones you cannot jump on. Jump over the pits! See a glowing OPEN door? Stand on it and STOP moving for a moment to warp to a hidden coin room.',
-  platformer2:
-    'Run through each storybook chapter to reach the flag. Collect coins, jump over pits, and bounce on safe enemies. Look for magical doors that lead to secret pages full of treasure.',
+    'Run through each storybook chapter to reach the flag. Collect coins, jump over pits, bounce on safe enemies, and avoid spiky ones. Look for glowing doors that open secret pages full of treasure.',
   platformer3:
     'Follow the sixteen-stage kingdom map, then run and jump to each beacon in order. Build speed smoothly, stomp creatures, cross pits, collect coins and hidden runes, and light checkpoints. Sunblooms give you a shield and comet stars let you charge through danger. Restore all sixteen realms, then defeat the Aurora Sentinel with four careful stomps.',
   riftraiders:
@@ -653,7 +640,6 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.tetris,
   GAMES.platformer3,
   GAMES.riftraiders,
-  GAMES.platformer2,
   GAMES.platformer,
   GAMES.diamond,
   GAMES.paperroute,

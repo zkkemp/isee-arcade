@@ -68,11 +68,11 @@ if (!componentSource.includes('className="absolute inset-0 h-full w-full touch-n
   fail('canvas must fill the game stage on phones and tablets');
 }
 if (componentSource.includes('ch - insetRef.current') || componentSource.includes('ch - controlsInset')) {
-  fail('Coin Runner 3 must not subtract the separate controls strip from its canvas again');
+  fail('Kingdom Quest must not subtract the separate controls strip from its canvas again');
 }
-if (/\b(portal|warp)\b/i.test(componentSource)) fail('Coin Runner 3 must not contain portal or warp mechanics');
+if (/\b(portal|warp)\b/i.test(componentSource)) fail('Kingdom Quest must not contain portal or warp mechanics');
 const campaignSource = readFileSync(new URL('../lib/kingdomQuest.ts', import.meta.url), 'utf8');
-if (/\b(portal|warp)\b/i.test(campaignSource)) fail('Coin Runner 3 campaign data must not contain portals or warps');
+if (/\b(portal|warp)\b/i.test(campaignSource)) fail('Kingdom Quest campaign data must not contain portals or warps');
 if (KINGDOM_THEME.length < 24 || new Set(KINGDOM_THEME.filter((note) => note !== null)).size < 8) {
   fail('original platformer theme needs a real melodic phrase');
 }

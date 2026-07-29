@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
+import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import PlayClient from '@/components/PlayClient';
 import { GAMES, GAME_LIST, isGameId } from '@/lib/games';
@@ -16,12 +16,14 @@ export async function generateMetadata({
   params: Promise<{ game: string }>;
 }): Promise<Metadata> {
   const { game } = await params;
+  if (game === 'platformer2') return { title: GAMES.platformer.name };
   if (!isGameId(game)) return { title: 'ISEE Arcade' };
   return { title: GAMES[game].name };
 }
 
 export default async function PlayPage({ params }: { params: Promise<{ game: string }> }) {
   const { game } = await params;
+  if (game === 'platformer2') permanentRedirect('/play/platformer');
   if (!isGameId(game)) notFound();
 
   // A game route can be opened directly, refreshed, or restored by iOS without

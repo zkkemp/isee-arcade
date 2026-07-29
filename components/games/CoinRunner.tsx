@@ -66,6 +66,8 @@ type Blip = { x: number; y: number; life: number; text: string };
 type Confetti = { x: number; y: number; vx: number; vy: number; spin: number; life: number; color: string };
 /** An expanding dust ring, for landings and stomps. */
 type Puff = { x: number; y: number; r: number; life: number };
+export type CoinRunnerEdition = 'storybook' | 'skybound';
+type CoinRunnerProps = GameCanvasProps & { edition?: CoinRunnerEdition };
 
 type State = {
   level: number;
@@ -118,7 +120,23 @@ type State = {
   onDoor: { tx: number; ty: number } | null;
   /** Index into data.coins of this level's one rainbow coin, or -1. */
   rainbowIdx: number;
+  /** Three V3 star relics, chosen deterministically from this level's coins. */
+  relicIdx: number[];
+  relicsHere: number;
+  /** V3 discovery callouts never repeat within a level. */
+  secretsFound: number[];
+  /** Screen-space V3 portal wipe; presentation-only. */
+  portalFlash: number;
 };
+
+function relicIndices(level: number, count: number): number[] {
+  if (count < 3) return [];
+  const indices = new Set<number>();
+  for (let i = 0; indices.size < 3 && i < 12; i += 1) {
+    indices.add((level * 47 + i * Math.max(7, Math.floor(count / 3) + 1) + 11) % count);
+  }
+  return [...indices];
+}
 
 function freshState(level: number, difficulty: GameCanvasProps['difficulty'], coinsTotal = 0): State {
   const data = buildLevel(level, difficulty);
@@ -160,6 +178,10 @@ function freshState(level: number, difficulty: GameCanvasProps['difficulty'], co
     // One magic rainbow coin per level, picked deterministically so replays of
     // a level hide it in the same place. Worth extra and worth hunting for.
     rainbowIdx: data.coins.length > 0 ? (level * 31 + 7) % data.coins.length : -1,
+    relicIdx: relicIndices(level, data.coins.length),
+    relicsHere: 0,
+    secretsFound: [],
+    portalFlash: 0,
   };
 }
 
@@ -318,20 +340,33 @@ function stepPickup(tiles: TileCode[][], p: Pickup, dt: number) {
   p.x = Math.max(0, Math.min(p.x, LEVEL_W - PW));
 }
 
-export default function Platformer({
+export default function CoinRunner({
   paused,
   input,
   api,
   restartToken,
   difficulty,
   controlsInset,
-}: GameCanvasProps) {
+  edition = 'storybook',
+}: CoinRunnerProps) {
   const stateRef = useRef<State>(freshState(1, difficulty));
   const sprites = useSprites();
   const spritesRef = useRef<SpriteSet | null>(null);
   useEffect(() => {
     spritesRef.current = sprites;
   }, [sprites]);
+  const skyboundRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (edition !== 'skybound') return;
+    const image = new Image();
+    image.src = '/assets/coin-runner-v3/skybound-kingdom.png';
+    image.onload = () => {
+      skyboundRef.current = image;
+    };
+    return () => {
+      image.onload = null;
+    };
+  }, [edition]);
 
   // Difficulty changes the geometry, so it has to rebuild rather than rescale.
   useEffect(() => {
@@ -361,6 +396,7 @@ export default function Platformer({
       const { zoom, viewW, viewH, skyPad } = viewport(cw, playH);
 
       s.animTime += dt;
+      if (s.portalFlash > 0) s.portalFlash -= dt;
       if (s.hurt > 0) s.hurt -= dt;
       if (s.squash > 0) s.squash = Math.max(0, s.squash - dt * 4);
       if (s.doorCd > 0) s.doorCd -= dt;
@@ -390,10 +426,10 @@ export default function Platformer({
           const next = freshState(cleared + 1, difficulty, s.coinsTotal);
           stateRef.current = next;
           api.requestGate(`Level ${cleared} cleared`);
-          draw(ctx, next, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+          draw(ctx, next, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
           return;
         }
-        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
         return;
       }
 
@@ -525,6 +561,7 @@ export default function Platformer({
             s.riding = -1;
             s.onDoor = null;
             s.pulse = 0.35;
+            s.portalFlash = 0.38;
             // ...and a fanfare at the arrival, so it lands as a reward.
             playSound('powerup');
             playSound('pass');
@@ -685,7 +722,16 @@ export default function Platformer({
         c.taken = true;
         s.coinsTotal += 1;
         s.coinsHere += 1;
-        if (ci === s.rainbowIdx) {
+        const relic = edition === 'skybound' && s.relicIdx.includes(ci);
+        if (relic) {
+          s.relicsHere += 1;
+          burst(s, c.x, c.y, 12, 82, '#fff0a6');
+          burst(s, c.x, c.y, 8, 58, '#76dfff');
+          blip(s, c.x - PW / 2, c.y - 12, `STAR RELIC ${s.relicsHere}/3! +75`);
+          playSound('powerup');
+          s.pulse = 0.5;
+          api.addScore(75);
+        } else if (ci === s.rainbowIdx) {
           // The level's one magic coin: a triple-color burst and a fanfare, so
           // spotting it in the wild feels like finding treasure.
           burst(s, c.x, c.y, 8, 70, '#ff9ad5');
@@ -700,6 +746,20 @@ export default function Platformer({
           comboUp(s, c.x - PW / 2, c.y);
           s.pulse = Math.max(s.pulse, 0.18);
           api.addScore(10);
+        }
+        if (edition === 'skybound') {
+          const secretIndex = s.data.secrets.findIndex(
+            (secret) =>
+              c.x >= secret.tx * TILE &&
+              c.x < (secret.tx + secret.w) * TILE &&
+              c.y >= secret.ty * TILE &&
+              c.y < (secret.ty + secret.h) * TILE,
+          );
+          if (secretIndex >= 0 && !s.secretsFound.includes(secretIndex)) {
+            s.secretsFound.push(secretIndex);
+            blip(s, c.x - PW / 2, c.y - 22, 'SECRET SKY CACHE!');
+            burst(s, c.x, c.y, 14, 76, '#c5a4ff');
+          }
         }
       }
 
@@ -736,7 +796,7 @@ export default function Platformer({
         api.setStatus(`Level ${s.level} clear`);
         burst(s, b.x + PW / 2, b.y, 20, 90, '#ffe9a8');
         confettiBurst(s, b.x + PW / 2, (GROUND_TOP - FLAG_H) * TILE, 42);
-        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
         return;
       }
 
@@ -758,7 +818,7 @@ export default function Platformer({
       // stationary. The sprite no longer pops back to frame zero on release.
       s.runPhase += Math.abs(b.vx) * dt * 0.08;
 
-      draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
+      draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
     },
   });
 
@@ -1609,6 +1669,197 @@ function blockFrame(blk: Block, time: number): string {
   return animFrame(['block_coin', 'block_coin', 'block_coin_active'], time, 4);
 }
 
+/** A gentle painted-paper glaze and drifting motes, entirely in screen space. */
+function drawStorybookAtmosphere(
+  ctx: CanvasRenderingContext2D,
+  biome: Biome,
+  t: number,
+  cw: number,
+  playH: number,
+) {
+  const tint: Record<Biome, string> = {
+    grass: 'rgba(255,232,166,0.075)', sand: 'rgba(255,170,92,0.10)', snow: 'rgba(190,229,255,0.09)',
+    stone: 'rgba(102,104,185,0.11)', dirt: 'rgba(255,168,116,0.075)', purple: 'rgba(205,154,255,0.10)',
+  };
+  const wash = ctx.createLinearGradient(0, 0, 0, playH);
+  wash.addColorStop(0, tint[biome]);
+  wash.addColorStop(0.62, 'rgba(255,255,255,0)');
+  wash.addColorStop(1, 'rgba(38,20,70,0.035)');
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, cw, playH);
+
+  const moteColor = biome === 'stone' || biome === 'purple' ? '218,207,255' : '255,246,203';
+  for (let i = 0; i < 18; i += 1) {
+    const drift = ((hash01(i * 17 + 8) * cw + t * (5 + (i % 4) * 2)) % (cw + 36)) - 18;
+    const y = playH * (0.11 + hash01(i * 31 + 3) * 0.68) + Math.sin(t * 0.8 + i) * 5;
+    const a = 0.08 + 0.11 * Math.max(0, Math.sin(t * 1.7 + i * 2.6));
+    ctx.fillStyle = `rgba(${moteColor},${a.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(drift, y, 0.8 + (i % 3) * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** Soft edge foliage gives a storybook proscenium without covering the play lane. */
+function drawStorybookForeground(ctx: CanvasRenderingContext2D, biome: Biome, t: number, cw: number, playH: number) {
+  const color = biome === 'snow' ? 'rgba(232,248,255,0.20)' : biome === 'stone' ? 'rgba(24,23,50,0.24)' : 'rgba(48,87,57,0.18)';
+  ctx.fillStyle = color;
+  for (const side of [0, 1]) {
+    const base = side === 0 ? 0 : cw;
+    const dir = side === 0 ? 1 : -1;
+    for (let i = 0; i < 5; i += 1) {
+      const y = playH * (0.42 + i * 0.105);
+      const sway = Math.sin(t * 1.2 + i * 1.7) * 3;
+      ctx.beginPath();
+      ctx.ellipse(base + dir * (10 + (i % 2) * 5), y + sway, 14, 5, dir * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/** A bold illustrated frame makes this edition legible as its own game at once. */
+function drawStorybookEditionFrame(ctx: CanvasRenderingContext2D, biome: Biome, cw: number, playH: number) {
+  const accent = WORLD[biome].accent;
+  const edge = Math.min(10, Math.max(5, cw * 0.025));
+  const shade = ctx.createLinearGradient(0, 0, 0, playH);
+  shade.addColorStop(0, `${accent}55`);
+  shade.addColorStop(0.5, 'rgba(255,252,225,0.08)');
+  shade.addColorStop(1, 'rgba(32,18,62,0.18)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, edge, playH);
+  ctx.fillRect(cw - edge, 0, edge, playH);
+  ctx.strokeStyle = 'rgba(255,252,225,0.62)';
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(edge * 0.5, edge * 0.5, cw - edge, playH - edge);
+  ctx.fillStyle = 'rgba(255,255,255,0.76)';
+  for (const x of [edge + 6, cw - edge - 8]) {
+    ctx.beginPath();
+    ctx.arc(x, edge + 6, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** V3's panoramic kingdom is original supplied art, parallaxed behind the verified world. */
+function drawSkyboundPanorama(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement | null,
+  camX: number,
+  zoom: number,
+  cw: number,
+  playH: number,
+) {
+  if (!image) return;
+  const aspect = image.width / image.height;
+  const h = playH;
+  const w = Math.max(cw, h * aspect);
+  const travel = Math.max(1, w - cw);
+  const x = -((camX * zoom * 0.14) % travel);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, cw, playH);
+  ctx.clip();
+  ctx.globalAlpha = 0.94;
+  ctx.drawImage(image, x, 0, w, h);
+  // Repeat with one overlap when a wide device sees beyond the image edge.
+  ctx.drawImage(image, x + w - 1, 0, w, h);
+  ctx.restore();
+}
+
+/** Original skybound ink/metal treatment for collision-identical tiles. */
+function drawSkyboundTileFinish(ctx: CanvasRenderingContext2D, code: TileCode, x: number, y: number, time: number) {
+  if (code === '#') {
+    // Fully repaint the old atlas tile: Skybound terrain is violet sky-stone
+    // with a bright crystal lip, not a tinted version of the Storybook dirt.
+    ctx.fillStyle = '#30265f';
+    ctx.fillRect(x, y, TILE, TILE);
+    ctx.fillStyle = '#443579';
+    ctx.fillRect(x + 2, y + 5, 5, 4);
+    ctx.fillRect(x + 10, y + 10, 4, 3);
+    ctx.fillStyle = '#18183d';
+    ctx.fillRect(x + 1, y + TILE - 3, TILE - 2, 2);
+    ctx.fillStyle = '#9cecff';
+    ctx.fillRect(x, y, TILE, 3);
+    ctx.fillStyle = '#e7fbff';
+    ctx.fillRect(x + 2, y, 5, 1);
+  } else if (code === 'B' || code === 'C') {
+    ctx.fillStyle = code === 'C' ? '#d9f7ff' : '#82508f';
+    ctx.fillRect(x, y + 1, TILE, TILE - 2);
+    ctx.fillStyle = code === 'C' ? '#94d9ee' : '#f4bd68';
+    ctx.fillRect(x + 2, y + (code === 'C' ? 10 : 3), TILE - 4, 2);
+    ctx.strokeStyle = code === 'C' ? '#ffffff' : '#ffd98d';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 1.5, TILE - 1, TILE - 3);
+  } else if (code === 'X') {
+    ctx.fillStyle = `rgba(255,102,136,${(0.32 + 0.16 * Math.sin(time * 7 + x)).toFixed(3)})`;
+    ctx.fillRect(x, y + TILE - 3, TILE, 3);
+  }
+}
+
+function drawSkyboundEnemyFinish(ctx: CanvasRenderingContext2D, enemy: Enemy, time: number): void {
+  const cx = enemy.x + PW / 2;
+  const cy = enemy.y + PH / 2;
+  const dangerous = isSpiky(enemy);
+  const body = dangerous ? '#ed517c' : enemy.kind === 'flyer' ? '#f7c65d' : enemy.kind === 'shell' ? '#8b71e8' : '#58d5df';
+  ctx.save();
+  ctx.shadowColor = body;
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 1, 6.5, 5.5 + Math.sin(time * 5 + enemy.x) * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  if (enemy.kind === 'flyer') {
+    ctx.fillStyle = 'rgba(233,252,255,.9)';
+    ctx.beginPath();
+    ctx.ellipse(cx - 7, cy - 2, 4, 2.5, -0.35, 0, Math.PI * 2);
+    ctx.ellipse(cx + 7, cy - 2, 4, 2.5, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (dangerous) {
+    ctx.fillStyle = '#ffd4df';
+    for (const dx of [-5, 0, 5]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + dx - 2, cy - 4);
+      ctx.lineTo(cx + dx, cy - 9);
+      ctx.lineTo(cx + dx + 2, cy - 4);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = '#15204d';
+  ctx.fillRect(cx - 3.5, cy - 1, 2, 2);
+  ctx.fillRect(cx + 1.5, cy - 1, 2, 2);
+  ctx.restore();
+}
+
+function drawSkyboundBlockFinish(
+  ctx: CanvasRenderingContext2D,
+  block: Block | undefined,
+  x: number,
+  y: number,
+): void {
+  const power = block?.kind === 'power';
+  const coin = block?.kind === 'coin';
+  ctx.fillStyle = power ? '#f0b94f' : coin ? '#4fc5da' : '#7254a5';
+  ctx.fillRect(x, y, TILE, TILE);
+  ctx.fillStyle = power ? '#fff19a' : coin ? '#b9f5ff' : '#bda7ed';
+  ctx.fillRect(x + 2, y + 2, TILE - 4, 2);
+  ctx.fillRect(x + 2, y + TILE - 4, 2, 2);
+  ctx.fillRect(x + TILE - 4, y + TILE - 4, 2, 2);
+  ctx.strokeStyle = '#252052';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1);
+  if (power) {
+    ctx.fillStyle = '#44366e';
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y + 4);
+    ctx.lineTo(x + 10, y + 8);
+    ctx.lineTo(x + 8, y + 12);
+    ctx.lineTo(x + 6, y + 8);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
 function draw(
   ctx: CanvasRenderingContext2D,
   s: State,
@@ -1620,6 +1871,8 @@ function draw(
   cw: number,
   ch: number,
   playH: number,
+  edition: CoinRunnerEdition,
+  skyboundImage: HTMLImageElement | null,
 ) {
   // The backdrop uses the unshaken camera so only the WORLD kicks on impact -
   // shaking the horizon too reads as the screen glitching rather than a thump.
@@ -1741,6 +1994,14 @@ function draw(
   drawSilhouettes(ctx, biome, baseCamX, zoom, cw, playH, horizonY);
   drawAmbient(ctx, biome, s.animTime, cw, playH);
   drawCritter(ctx, biome, s.animTime, cw, playH, horizonY);
+  if (edition === 'skybound') {
+    drawSkyboundPanorama(ctx, skyboundImage, baseCamX, zoom, cw, playH);
+  } else {
+    drawStorybookAtmosphere(ctx, biome, s.animTime, cw, playH);
+    // This apron sits behind the world draw, so hazards and collectibles always
+    // render over it even when they reach a screen edge.
+    drawStorybookForeground(ctx, biome, s.animTime, cw, playH);
+  }
 
   // World drawing happens in world units. `skyPad` is the surplus when the view
   // is taller than the world; `camY` is the scroll when it is shorter. Only one
@@ -1780,27 +2041,55 @@ function draw(
       const py = ty * TILE;
       if (code === '#') {
         drawFrame(ctx, sp.tiles, terrainFrame(s.data.tiles, tx, ty, terrain), px, py, TILE, TILE);
+        // A hand-painted rim gives every walkable ledge a warm, 16-bit storybook
+        // silhouette while preserving the exact same sprite and collision tile.
+        if (!solidAt(s.data.tiles, tx, ty - 1)) {
+          ctx.fillStyle = 'rgba(255,251,210,0.34)';
+          ctx.fillRect(px + 1, py + 1, TILE - 2, 1.35);
+          ctx.fillStyle = 'rgba(45,83,56,0.22)';
+          ctx.fillRect(px + 2, py + 3, TILE - 4, 0.9);
+        }
+        if (edition === 'skybound') drawSkyboundTileFinish(ctx, code, px, py, s.animTime);
       } else if (code === 'B') {
         drawFrame(ctx, sp.tiles, 'block_planks', px, py, TILE, TILE);
+        if (edition === 'skybound') drawSkyboundTileFinish(ctx, code, px, py, s.animTime);
       } else if (code === 'C') {
         const left = s.data.tiles[ty][tx - 1] === 'C';
         const right = s.data.tiles[ty][tx + 1] === 'C';
         const name = left && right ? cloud.middle : left ? cloud.right : right ? cloud.left : cloud.single;
         drawFrame(ctx, sp.tiles, name, px, py, TILE, TILE);
+        if (edition === 'skybound') drawSkyboundTileFinish(ctx, code, px, py, s.animTime);
       } else if (code === 'S') {
         const spring = s.data.springs.find((v) => v.tx === tx && v.ty === ty);
         const out = spring && spring.fired > 0;
         drawFrame(ctx, sp.tiles, out ? 'spring_out' : 'spring', px, py, TILE, TILE);
+        if (edition === 'skybound') {
+          ctx.fillStyle = out ? 'rgba(255,245,166,0.9)' : 'rgba(132,236,255,0.85)';
+          ctx.fillRect(px + 2, py + TILE - (out ? 8 : 5), TILE - 4, 2);
+        }
       } else if (code === 'X') {
+        // A halo makes the one-shot danger read before a small sprite is reached.
+        const warning = 0.32 + 0.16 * Math.sin(s.animTime * 5 + tx * 1.7);
+        ctx.fillStyle = `rgba(255,99,92,${warning.toFixed(3)})`;
+        ctx.fillRect(px - 1, py + TILE - 5, TILE + 2, 6);
         drawFrame(ctx, sp.tiles, 'spikes', px, py, TILE, TILE);
+        if (edition === 'skybound') drawSkyboundTileFinish(ctx, code, px, py, s.animTime);
       } else if (code === 'D') {
         const isEntry = s.data.doors.some((d) => d.tx === tx && d.ty === ty);
         drawFrame(ctx, sp.tiles, isEntry ? 'door_open_top' : 'door_closed_top', px, py - TILE, TILE, TILE);
         drawFrame(ctx, sp.tiles, isEntry ? 'door_open' : 'door_closed', px, py, TILE, TILE);
+        if (edition === 'skybound') {
+          ctx.strokeStyle = isEntry ? 'rgba(141,242,255,0.95)' : 'rgba(202,167,255,0.7)';
+          ctx.lineWidth = 1.1;
+          ctx.strokeRect(px + 2, py - TILE + 2, TILE - 4, TILE * 2 - 4);
+        }
       } else {
         const blk = blockAt.get(`${tx},${ty}`);
         const lift = blk && blk.bump > 0 ? -3 : 0;
         drawFrame(ctx, sp.tiles, blk ? blockFrame(blk, s.animTime) : 'brick_brown', px, py + lift, TILE, TILE);
+        if (edition === 'skybound') {
+          drawSkyboundBlockFinish(ctx, blk, px, py + lift);
+        }
       }
     }
   }
@@ -1809,8 +2098,17 @@ function draw(
   for (const m of s.data.movers) {
     const mx = moverX(m);
     const my = moverY(m);
+    ctx.fillStyle = 'rgba(31,24,48,0.20)';
+    ctx.beginPath();
+    ctx.ellipse(mx + m.w / 2, my + MOVER_H + 3, m.w * 0.45, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
     for (let x = 0; x < m.w; x += TILE) {
       drawFrame(ctx, sp.tiles, 'bridge_logs', mx + x, my, Math.min(TILE, m.w - x), MOVER_H);
+    }
+    if (edition === 'skybound') {
+      ctx.strokeStyle = 'rgba(255,230,146,0.82)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(mx + 1, my + 1, m.w - 2, MOVER_H - 2);
     }
   }
 
@@ -1844,6 +2142,13 @@ function draw(
       if (strength === 1) {
         const bobY = dty * TILE - 24 + Math.sin(s.animTime * 2.2 + dtx) * 2.5;
         drawFrame(ctx, sp.tiles, 'star', dtx * TILE + 3.5, bobY, 9, 9);
+        if (edition === 'skybound') {
+          ctx.strokeStyle = `rgba(127,237,255,${(0.55 + pulse * 0.35).toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 13 + pulse * 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
     }
   }
@@ -1879,6 +2184,23 @@ function draw(
     ctx.fillRect(poleX + 2, poleTop, 1, FLAG_H * TILE);
     const flagName = animFrame(['flag_green_a', 'flag_green_b'], s.animTime, 4);
     drawFrame(ctx, sp.tiles, flagName, s.data.flagX + 2, poleTop - 2, TILE, TILE);
+    if (edition === 'skybound') {
+      const gx = s.data.flagX + TILE / 2;
+      const gy = poleTop - 10;
+      const beacon = ctx.createRadialGradient(gx, gy, 2, gx, gy, 25);
+      beacon.addColorStop(0, 'rgba(255,244,160,0.78)');
+      beacon.addColorStop(1, 'rgba(255,244,160,0)');
+      ctx.fillStyle = beacon;
+      ctx.fillRect(gx - 25, gy - 25, 50, 50);
+      ctx.fillStyle = '#ffef9c';
+      ctx.beginPath();
+      ctx.moveTo(gx, gy - 8);
+      ctx.lineTo(gx + 6, gy);
+      ctx.lineTo(gx, gy + 8);
+      ctx.lineTo(gx - 6, gy);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
   // --- the checkpoint ---
@@ -1901,6 +2223,39 @@ function draw(
     if (c.taken) continue;
     if (c.x < camX - 20 || c.x > camX + viewW + 20) continue;
     const bob = Math.sin(s.animTime * 3 + c.x * 0.05) * 1.5;
+    const coinGlow = ctx.createRadialGradient(c.x, c.y + bob, 1, c.x, c.y + bob, 11);
+    coinGlow.addColorStop(0, 'rgba(255,232,112,0.36)');
+    coinGlow.addColorStop(1, 'rgba(255,232,112,0)');
+    ctx.fillStyle = coinGlow;
+    ctx.fillRect(c.x - 11, c.y + bob - 11, 22, 22);
+    if (edition === 'skybound' && s.relicIdx.includes(ci)) {
+      const pulse = 0.7 + 0.3 * Math.sin(s.animTime * 5 + ci);
+      const starGlow = ctx.createRadialGradient(c.x, c.y + bob, 1, c.x, c.y + bob, 16);
+      starGlow.addColorStop(0, `rgba(255,246,174,${(0.78 * pulse).toFixed(3)})`);
+      starGlow.addColorStop(1, 'rgba(135,219,255,0)');
+      ctx.fillStyle = starGlow;
+      ctx.fillRect(c.x - 16, c.y + bob - 16, 32, 32);
+      ctx.save();
+      ctx.translate(c.x, c.y + bob);
+      ctx.rotate(s.animTime * 1.7 + ci);
+      ctx.fillStyle = '#fff4a2';
+      ctx.beginPath();
+      for (let p = 0; p < 10; p += 1) {
+        const r = p % 2 === 0 ? 8 : 3.6;
+        const a = -Math.PI / 2 + (p * Math.PI) / 5;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (p === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#6e4fb3';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
     if (ci === s.rainbowIdx) {
       // The magic coin: a slowly cycling rainbow halo with two orbiting sparks.
       const hue = (s.animTime * 140) % 360;
@@ -1910,7 +2265,7 @@ function draw(
       halo.addColorStop(1, `hsla(${hue.toFixed(0)},90%,65%,0)`);
       ctx.fillStyle = halo;
       ctx.fillRect(c.x - r - 4, c.y + bob - r - 4, (r + 4) * 2, (r + 4) * 2);
-      drawFrame(ctx, sp.tiles, coinName, c.x - 7.5, c.y - 7.5 + bob, 15, 15);
+      drawFrame(ctx, sp.tiles, coinName, c.x - 8.5, c.y - 8.5 + bob, 17, 17);
       for (let k = 0; k < 2; k += 1) {
         const a = s.animTime * 4 + k * Math.PI;
         ctx.fillStyle = `hsla(${((hue + 120 * (k + 1)) % 360).toFixed(0)},90%,70%,0.9)`;
@@ -1918,7 +2273,7 @@ function draw(
       }
       continue;
     }
-    drawFrame(ctx, sp.tiles, coinName, c.x - 6, c.y - 6 + bob, 12, 12);
+    drawFrame(ctx, sp.tiles, coinName, c.x - 7, c.y - 7 + bob, 14, 14);
     // A travelling glint, phase-shifted per coin so a row of them sparkles.
     const twinkle = Math.sin(s.animTime * 4 + c.x * 0.3);
     if (twinkle > 0.86) {
@@ -1945,13 +2300,26 @@ function draw(
 
   // --- power-ups ---
   for (const p of s.pickups) {
-    drawFrame(ctx, sp.tiles, 'mushroom_red', p.x - 2, p.y - 1, 15, 15);
+    const glow = ctx.createRadialGradient(p.x + PW / 2, p.y + PH / 2, 2, p.x + PW / 2, p.y + PH / 2, 13);
+    glow.addColorStop(0, 'rgba(255,227,126,0.30)');
+    glow.addColorStop(1, 'rgba(255,227,126,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(p.x - 7, p.y - 7, 26, 26);
+    ctx.fillStyle = 'rgba(30,22,38,0.20)';
+    ctx.beginPath();
+    ctx.ellipse(p.x + PW / 2, p.y + PH + 1, 6, 1.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawFrame(ctx, sp.tiles, 'mushroom_red', p.x - 3, p.y - 2, 17, 17);
   }
 
   // --- enemies ---
   for (const e of s.data.enemies) {
     if (e.x < camX - 30 || e.x > camX + viewW + 30) continue;
     const art = ENEMY_SPRITES[e.kind];
+    ctx.fillStyle = e.mode === 'slide' ? 'rgba(255,180,85,0.25)' : 'rgba(28,20,38,0.23)';
+    ctx.beginPath();
+    ctx.ellipse(e.x + PW / 2, e.y + PH + 1, e.mode === 'slide' ? 8 : 6, 1.8, 0, 0, Math.PI * 2);
+    ctx.fill();
     if (!e.alive) {
       if (e.squash > 0) drawFrame(ctx, sp.enemies, art.dead, e.x - 2, e.y + PH - 6, 16, 8);
       continue;
@@ -1968,6 +2336,7 @@ function draw(
     const frame =
       e.kind === 'hopper' && !e.onGround ? 'frog_jump' : animFrame(art.walk, s.animTime, art.fps);
     drawFrame(ctx, sp.enemies, frame, e.x - 2, e.y - 2, 16, 16, e.vx > 0);
+    if (edition === 'skybound') drawSkyboundEnemyFinish(ctx, e, s.animTime);
   }
 
   // --- dust puffs, behind the player so a landing kicks up around the feet ---
@@ -1979,9 +2348,9 @@ function draw(
     ctx.stroke();
   }
 
-  // --- player: Coin Runner's own animated green trail scout ---
-  // Profile portraits stay in the app chrome and celebrations; the moving hero
-  // uses a complete walk/jump/hit animation set sized to the existing hitbox.
+  // --- player: this edition's own animated explorer ---
+  // The storybook scout is pink; the optional skybound edition uses purple.
+  // Both have complete movement poses while preserving the original hitbox.
   const b = s.body;
   const h = s.big ? PH_BIG : PH;
   const blink = s.hurt > 0 && Math.floor(s.animTime * 20) % 2 === 0;
@@ -2000,6 +2369,15 @@ function draw(
       ctx.fillRect(ax - 17, ay - 17, 34, 34);
     }
 
+    // Grounded shadow stays tied to the collision body, while the larger art can
+    // lean and hop above it. It improves depth without moving the hitbox at all.
+    const shadowLift = Math.max(0, Math.min(10, (GROUND_TOP * TILE - h) - b.y));
+    const shadowScale = 1 - shadowLift / 24;
+    ctx.fillStyle = `rgba(26,18,45,${(0.26 * shadowScale).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(b.x + PW / 2, b.y + h + 1, 7 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     // Squash on landing, stretch on takeoff, a happy pop on pickups, victory
     // hops at the flag. The old continuous idle "breathing" scale is GONE on
     // purpose: it resized the sprite by a fraction of a pixel every frame,
@@ -2011,21 +2389,41 @@ function draw(
       ((b.vx > 0 && s.facing < 0) || (b.vx < 0 && s.facing > 0));
     const pop = 1 + s.pulse * 0.22;
     const hop = cheering ? Math.abs(Math.sin(s.animTime * 7)) * 4 : 0;
+    const heroScale = edition === 'skybound' ? 1.16 : 1;
+    const storybookFrames = {
+      front: 'character_pink_front',
+      hit: 'character_pink_hit',
+      jump: 'character_pink_jump',
+      walkA: 'character_pink_walk_a',
+      walkB: 'character_pink_walk_b',
+      duck: 'character_pink_duck',
+      idle: 'character_pink_idle',
+    } as const;
+    const skyboundFrames = {
+      front: 'character_purple_front',
+      hit: 'character_purple_hit',
+      jump: 'character_purple_jump',
+      walkA: 'character_purple_walk_a',
+      walkB: 'character_purple_walk_b',
+      duck: 'character_purple_duck',
+      idle: 'character_purple_idle',
+    } as const;
+    const frames = edition === 'skybound' ? skyboundFrames : storybookFrames;
     const moving = Math.abs(b.vx) > 8;
     const frame = cheering
-      ? 'character_green_front'
+      ? frames.front
       : s.hurt > 0
-        ? 'character_green_hit'
+        ? frames.hit
         : !b.onGround
-          ? 'character_green_jump'
+          ? frames.jump
           : skidding
-            ? 'character_green_duck'
+            ? frames.duck
             : moving
               ? Math.floor(s.runPhase) % 2 === 0
-                ? 'character_green_walk_a'
-                : 'character_green_walk_b'
-              : 'character_green_idle';
-    const size = (s.big ? 34 : 27) * pop;
+                ? frames.walkA
+                : frames.walkB
+              : frames.idle;
+    const size = (s.big ? 36 : 29) * pop * heroScale;
     drawFrame(
       ctx,
       sp.characters,
@@ -2036,6 +2434,14 @@ function draw(
       size,
       s.facing < 0,
     );
+    if (edition === 'skybound' && !b.onGround) {
+      ctx.strokeStyle = 'rgba(221,248,255,0.52)';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(b.x + PW / 2 - s.facing * 7, b.y + h - 2);
+      ctx.lineTo(b.x + PW / 2 - s.facing * 14, b.y + h + 2);
+      ctx.stroke();
+    }
   }
 
   // --- confetti ---
@@ -2074,6 +2480,24 @@ function draw(
   ctx.restore(); // end camera translate
   ctx.restore(); // end world scale and clip
 
+  if (edition === 'storybook') drawStorybookEditionFrame(ctx, biome, cw, playH);
+
+  // A restrained vignette focuses the eye toward the action without dimming HUD.
+  const vignette = ctx.createRadialGradient(cw / 2, playH * 0.46, Math.min(cw, playH) * 0.18, cw / 2, playH * 0.46, Math.max(cw, playH) * 0.78);
+  vignette.addColorStop(0, 'rgba(28,17,55,0)');
+  vignette.addColorStop(1, edition === 'skybound' ? 'rgba(28,24,95,0.26)' : 'rgba(28,17,55,0.18)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, cw, playH);
+  if (edition === 'skybound' && s.portalFlash > 0) {
+    const portalA = Math.min(0.5, s.portalFlash * 1.35);
+    const portal = ctx.createRadialGradient(cw / 2, playH / 2, 8, cw / 2, playH / 2, Math.max(cw, playH) * 0.72);
+    portal.addColorStop(0, `rgba(222,252,255,${portalA.toFixed(3)})`);
+    portal.addColorStop(0.42, `rgba(145,188,255,${(portalA * 0.55).toFixed(3)})`);
+    portal.addColorStop(1, 'rgba(78,48,158,0)');
+    ctx.fillStyle = portal;
+    ctx.fillRect(0, 0, cw, playH);
+  }
+
   // --- controls band, in screen pixels ---
   if (ch > playH) {
     const f = sp.backgrounds.frames[BAND[biome]];
@@ -2088,7 +2512,7 @@ function draw(
   }
 
   // --- HUD at the TOP, in screen pixels. The bottom belongs to thumbs. ---
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillStyle = edition === 'skybound' ? 'rgba(18,22,74,0.66)' : 'rgba(0,0,0,0.22)';
   ctx.fillRect(0, 0, cw, 24);
   ctx.fillStyle = 'rgba(255,255,255,0.95)';
   ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
@@ -2106,7 +2530,10 @@ function draw(
   ctx.textAlign = 'center';
   ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillText(WORLD[biome].name, cw / 2, 16);
+  ctx.fillText(edition === 'skybound' ? 'SKYBOUND KINGDOM' : WORLD[biome].name, cw / 2, 16);
+  ctx.font = 'bold 6.5px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillStyle = edition === 'skybound' ? 'rgba(160,239,255,0.96)' : 'rgba(255,246,209,0.92)';
+  ctx.fillText(edition === 'skybound' ? `STAR RELICS ${s.relicsHere}/3` : 'STORYBOOK EDITION', cw / 2, 23);
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255,255,255,0.95)';
   ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
@@ -2139,19 +2566,19 @@ function draw(
     ctx.globalAlpha = a;
     ctx.translate(bx, by);
     ctx.scale(scale, scale);
-    ctx.fillStyle = 'rgba(22,12,46,0.8)';
+    ctx.fillStyle = edition === 'skybound' ? 'rgba(20,31,88,0.88)' : 'rgba(22,12,46,0.8)';
     roundRectPath(ctx, -bw / 2, -30, bw, 60, 12);
     ctx.fill();
-    ctx.strokeStyle = WORLD[biome].accent;
+    ctx.strokeStyle = edition === 'skybound' ? '#8eeeff' : WORLD[biome].accent;
     ctx.lineWidth = 2.5;
     ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = WORLD[biome].accent;
+    ctx.fillStyle = edition === 'skybound' ? '#a7f3ff' : WORLD[biome].accent;
     ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(`LEVEL ${s.level}`, 0, -9);
+    ctx.fillText(edition === 'skybound' ? `SKYBOUND ACT ${s.level}` : `LEVEL ${s.level}`, 0, -9);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 19px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(WORLD[biome].name, 0, 14);
+    ctx.fillText(edition === 'skybound' ? 'THE CLOUD-CROWN REACH' : WORLD[biome].name, 0, 14);
     drawFrame(ctx, sp.tiles, 'star', -bw / 2 + 10, -8, 15, 15);
     drawFrame(ctx, sp.tiles, 'star', bw / 2 - 25, -8, 15, 15);
     ctx.textAlign = 'left';

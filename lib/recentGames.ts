@@ -13,18 +13,33 @@ function isGameId(value: unknown): value is GameId {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(GAMES, value);
 }
 
+/** Retired catalog ids collapse into their surviving game instead of vanishing. */
+export function normalizeRecentGames(value: unknown): GameId[] {
+  if (!Array.isArray(value)) return EMPTY;
+  const normalized: GameId[] = [];
+  for (const candidate of value) {
+    const migrated = candidate === 'platformer2' ? 'platformer' : candidate;
+    if (isGameId(migrated) && !normalized.includes(migrated)) normalized.push(migrated);
+    if (normalized.length === 6) break;
+  }
+  return normalized.length > 0 ? normalized : EMPTY;
+}
+
 export function getRecentGames(): GameId[] {
   if (typeof window === 'undefined') return EMPTY;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw === cachedRaw) return cachedGames;
-    cachedRaw = raw;
     if (!raw) {
+      cachedRaw = raw;
       cachedGames = EMPTY;
       return cachedGames;
     }
     const parsed = JSON.parse(raw) as unknown;
-    cachedGames = Array.isArray(parsed) ? parsed.filter(isGameId).slice(0, 6) : EMPTY;
+    cachedGames = normalizeRecentGames(parsed);
+    const migratedRaw = JSON.stringify(cachedGames);
+    cachedRaw = migratedRaw;
+    if (migratedRaw !== raw) window.localStorage.setItem(STORAGE_KEY, migratedRaw);
     return cachedGames;
   } catch {
     return EMPTY;

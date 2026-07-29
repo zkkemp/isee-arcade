@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { GAMES, GAME_LIST, type GameId } from '../lib/games';
-import { nextRecentGames } from '../lib/recentGames';
+import { mergeProgressSnapshots } from '../lib/progress';
+import { nextRecentGames, normalizeRecentGames } from '../lib/recentGames';
 
 const fail = (message: string): never => {
   throw new Error(`Game catalog check failed: ${message}`);
@@ -71,6 +72,21 @@ const newest = recent[0];
 recent = nextRecentGames(recent, recent[3]);
 if (recent[0] === newest || new Set(recent).size !== recent.length) {
   fail('replaying a game must move it to the front without duplication');
+}
+const migratedRecent = normalizeRecentGames(['platformer2', 'platformer', 'frogger']);
+if (migratedRecent.join(',') !== 'platformer,frogger') {
+  fail('retired Coin Runner history must merge into the surviving game');
+}
+const migratedProgress = mergeProgressSnapshots(
+  { highScores: { platformer: 120, platformer2: 340 } },
+  { highScores: { platformer2: 280 } },
+);
+if (migratedProgress.highScores.platformer !== 340 || 'platformer2' in migratedProgress.highScores) {
+  fail('retired Coin Runner scores must merge into the surviving game');
+}
+
+if (gameLibrary.includes("'platformer2'")) {
+  fail('the retired Coin Runner edition must not remain in the visible catalog');
 }
 
 console.log(`Game catalog verified: ${allIds.length} routed, categorized, full-stage games; recent shelf capped at 6.`);

@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async redirects() {
+    return [
+      {
+        source: '/play/platformer2',
+        destination: '/play/platformer',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -18,14 +18,7 @@ function expectFrames(file: string, frames: string[]): void {
 }
 
 expectFrames('Frogger.tsx', ['frog_idle', 'frog_jump']);
-expectFrames('Platformer.tsx', [
-  'character_green_idle',
-  'character_green_walk_a',
-  'character_green_walk_b',
-  'character_green_jump',
-  'character_green_hit',
-]);
-expectFrames('PlatformerV2.tsx', [
+expectFrames('CoinRunner.tsx', [
   'character_pink_idle',
   'character_pink_walk_a',
   'character_pink_walk_b',
@@ -41,5 +34,5 @@ expectFrames('RiftRaiders.tsx', [
 ]);
 
 console.log(
-  'Game heroes verified: Road Hopper, both Coin Runners, and Rift Raiders use purpose-built animated sprites.',
+  'Game heroes verified: Road Hopper, Coin Runner, and Rift Raiders use purpose-built animated sprites.',
 );

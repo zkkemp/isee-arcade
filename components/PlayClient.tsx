@@ -27,8 +27,7 @@ function GameLoading() {
 const COMPONENTS: Record<GameId, GameComponent> = {
   frogger: dynamic<GameCanvasProps>(() => import('./games/Frogger'), { loading: GameLoading }),
   snake2: dynamic<GameCanvasProps>(() => import('./games/SnakeV2'), { loading: GameLoading }),
-  platformer: dynamic<GameCanvasProps>(() => import('./games/Platformer'), { loading: GameLoading }),
-  platformer2: dynamic<GameCanvasProps>(() => import('./games/PlatformerV2'), { loading: GameLoading }),
+  platformer: dynamic<GameCanvasProps>(() => import('./games/CoinRunner'), { loading: GameLoading }),
   platformer3: dynamic<GameCanvasProps>(() => import('./games/KingdomQuest'), { loading: GameLoading }),
   riftraiders: dynamic<GameCanvasProps>(() => import('./games/RiftRaiders'), { loading: GameLoading }),
   diamond: dynamic<GameCanvasProps>(() => import('./games/DiamondDerby'), { loading: GameLoading }),

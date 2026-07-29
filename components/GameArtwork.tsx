@@ -4,7 +4,6 @@ type ArtKind = 'adventure' | 'candy' | 'blocks' | 'arena' | 'tabletop' | 'words'
 
 const ART_KIND: Record<GameId, ArtKind> = {
   platformer: 'adventure',
-  platformer2: 'adventure',
   platformer3: 'adventure',
   riftraiders: 'adventure',
   diamond: 'candy',
@@ -92,9 +91,6 @@ export default function GameArtwork({
       } as React.CSSProperties & { '--game-accent': string }}
       aria-hidden="true"
     >
-      {(game === 'platformer2' || game === 'platformer3') && (
-        <span className="game-art__edition">{game === 'platformer3' ? 'V3 edition' : 'V2 edition'}</span>
-      )}
       <span className="game-art__sun" />
       <span className="game-art__backdrop game-art__backdrop--far" />
       <span className="game-art__backdrop game-art__backdrop--near" />

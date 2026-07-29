@@ -65,6 +65,21 @@ export function emptyProgress(): Progress {
   };
 }
 
+function normalizeHighScores(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object') return {};
+  const highScores = { ...(value as Record<string, number>) };
+  const retiredScore = highScores.platformer2;
+  if (typeof retiredScore === 'number' && Number.isFinite(retiredScore)) {
+    const currentScore =
+      typeof highScores.platformer === 'number' && Number.isFinite(highScores.platformer)
+        ? highScores.platformer
+        : 0;
+    highScores.platformer = Math.max(currentScore, retiredScore);
+  }
+  delete highScores.platformer2;
+  return highScores;
+}
+
 /** Merges stored data over a fresh shape so older saves survive new fields. */
 function hydrate(raw: unknown): Progress {
   const base = emptyProgress();
@@ -76,7 +91,7 @@ function hydrate(raw: unknown): Progress {
     bySubject: { ...base.bySubject, ...(p.bySubject ?? {}) },
     missed: { ...(p.missed ?? {}) },
     mastered: [...(p.mastered ?? [])],
-    highScores: { ...(p.highScores ?? {}) },
+    highScores: normalizeHighScores(p.highScores),
     history: [...(p.history ?? [])],
     vocabulary: { ...(p.vocabulary ?? {}) },
   };

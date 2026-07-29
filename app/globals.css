@@ -291,23 +291,6 @@ summary:focus-visible {
   opacity: 0.85;
 }
 
-.game-art__edition {
-  position: absolute;
-  left: 0.75rem;
-  top: 0.75rem;
-  z-index: 7;
-  border: 1px solid rgba(253, 230, 138, 0.35);
-  border-radius: 999px;
-  background: rgba(21, 17, 35, 0.78);
-  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.22);
-  color: #fde68a;
-  font-size: 0.52rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  padding: 0.38rem 0.55rem;
-  text-transform: uppercase;
-}
-
 .game-art__backdrop {
   position: absolute;
   left: -8%;

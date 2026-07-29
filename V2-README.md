@@ -5,9 +5,9 @@ The original repository was not edited.
 
 ## Latest refresh
 
-- **Coin Runner: Skybound** (`platformer3`)
-  - A genuinely separate V3 presentation built on the verifier-proven platformer
-    simulation, so the original and Storybook editions remain available
+- **Kingdom Quest** (`platformer3`)
+  - A separate handcrafted campaign built on the verifier-proven platformer
+    simulation
   - New original panoramic pixel-art kingdom, crystal terrain and blocks,
     sky-creature enemies, beacon goal, portal wipe, HUD and world intros
   - Three deterministic star relics in every level, bonus scoring and secret-cache
@@ -25,15 +25,14 @@ The original repository was not edited.
   - **Asteroid Patrol** — wraparound space steering and splitting rocks
   - **Star Defender** — fixed-screen formation defense
   - **Lunar Lander** — fuel, momentum and soft-landing challenges
-- **Coin Runner: Storybook** (`platformer2`)
-  - A distinct original 16-bit storybook-console presentation, with illustrated
-    terrain, depth layers, paper grain, brighter landmarks and a custom HUD
+- **Coin Runner** (`platformer`)
+  - The strongest original and Storybook work is consolidated into one game
+  - Illustrated terrain, depth layers, paper grain, brighter landmarks and a custom HUD
   - Smoother animation when the hero stops and more stable camera settling
   - Doors work by tapping jump while standing in them or by briefly holding still
   - 25 generated levels retain their worlds, enemies, moving platforms, springs,
-    pits, secrets, power-ups and warp doors
-- **Coin Runner** (`platformer`)
-  - The same stopping and warp-door fixes were applied to the original edition
+    pits, secrets, power-ups and hidden doors
+  - Retired `/play/platformer2` links permanently redirect to the combined game
 - **Bubble Pop** (`bubblepop`)
   - Touch shots fire on press, including a safe straight-up shot from the launcher
   - Persistent aim guide plus keyboard aiming and firing
@@ -75,7 +74,7 @@ The original repository was not edited.
   - Confetti-like hit feedback
 - **Arcade catalog**
   - Illustrated game cards and grouped collections
-  - V2 editions are clearly labeled
+  - Redundant editions are consolidated into a single strongest choice
 - **Three entirely new games**
   - **Sky Stack** (`skystack`) — one-tap timing and tower building
   - **Starfall Squadron** (`starfall`) — drag-to-fly, auto-firing space waves
@@ -112,4 +111,4 @@ Install dependencies if needed, then run:
 npm run dev
 ```
 
-Start with **Coin Runner: Skybound** or the **Classics Reimagined** collection.
+Start with **Kingdom Quest** or the **Classics Reimagined** collection.
