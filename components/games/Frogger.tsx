@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { drawCharacterSprite, type Character } from '@/lib/characters';
 import { RAMP_SCALE, SPEED_SCALE, type Difficulty } from '@/lib/difficulty';
 import type { GameApi, GameCanvasProps } from '@/lib/games';
+import type { Direction } from '@/lib/input';
 import { playSound } from '@/lib/sound';
 import {
   CAR_NAMES,
@@ -483,6 +483,8 @@ type State = {
   bestRow: number;
   /** Counts down a short hop animation. */
   hop: number;
+  /** The frog turns toward the most recent successful hop. */
+  facing: Direction;
   dying: number;
   splash: { x: number; y: number } | null;
   animTime: number;
@@ -505,6 +507,7 @@ function freshLevelState(
     row: START_ROW,
     bestRow: START_ROW,
     hop: 0,
+    facing: 'up',
     dying: 0,
     splash: null,
     animTime: 0,
@@ -568,7 +571,6 @@ export default function Frogger({
   api,
   restartToken,
   difficulty,
-  character,
 }: GameCanvasProps) {
   const stateRef = useRef<State>(freshRun(difficulty));
   const sprites = useSprites();
@@ -576,11 +578,6 @@ export default function Frogger({
   useEffect(() => {
     spritesRef.current = sprites;
   }, [sprites]);
-
-  const characterRef = useRef<Character>(character);
-  useEffect(() => {
-    characterRef.current = character;
-  }, [character]);
 
   // Changing the skill setting mid-run rebuilds from level 1 with a fresh seed.
   useEffect(() => {
@@ -613,19 +610,23 @@ export default function Frogger({
             s.row -= 1;
             s.x = Math.round(s.x);
             s.hop = 0.14;
+            s.facing = 'up';
             moved = true;
           } else if (tap === 'down' && s.row < START_ROW) {
             s.row += 1;
             s.x = Math.round(s.x);
             s.hop = 0.14;
+            s.facing = 'down';
             moved = true;
           } else if (tap === 'left') {
             s.x = Math.max(0, Math.round(s.x) - 1);
             s.hop = 0.14;
+            s.facing = 'left';
             moved = true;
           } else if (tap === 'right') {
             s.x = Math.min(COLS - 1, Math.round(s.x) + 1);
             s.hop = 0.14;
+            s.facing = 'right';
             moved = true;
           }
           if (moved) {
@@ -703,7 +704,7 @@ export default function Frogger({
         }
       }
 
-      draw(ctx, stateRef.current, spritesRef.current, cw, ch, characterRef.current);
+      draw(ctx, stateRef.current, spritesRef.current, cw, ch);
     },
   });
 
@@ -1144,7 +1145,7 @@ function drawHomeBank(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet): v
   }
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, s: State, character: Character): void {
+function drawPlayer(ctx: CanvasRenderingContext2D, s: State, sp: SpriteSet): void {
   if (s.dying > 0 && s.splash) {
     const t = 1 - s.dying / 0.5;
     ctx.strokeStyle = `rgba(255,255,255,${1 - t})`;
@@ -1155,13 +1156,12 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: State, character: Characte
     return;
   }
 
-  // Whoever is selected, drawn rather than a stock frog. A hop lifts and
-  // stretches them, which reads as a jump at this size far better than a
-  // second sprite frame would.
+  // Road Hopper has its own frog. The extended-leg jump frame and directional
+  // turn make every queued move readable without changing the grid physics.
   const hopping = s.hop > 0;
-  const lift = hopping ? 6 : 0;
-  const size = CELL - 2;
-  const squash = hopping ? 1.12 : 1;
+  const progress = hopping ? 1 - s.hop / 0.14 : 0;
+  const lift = hopping ? Math.sin(progress * Math.PI) * 7 : 0;
+  const size = CELL + 8;
 
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
   ctx.beginPath();
@@ -1176,15 +1176,27 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: State, character: Characte
   );
   ctx.fill();
 
-  drawCharacterSprite(
+  const rotation =
+    s.facing === 'left'
+      ? -Math.PI / 2
+      : s.facing === 'right'
+        ? Math.PI / 2
+        : s.facing === 'down'
+          ? Math.PI
+          : 0;
+  ctx.save();
+  ctx.translate(s.x * CELL + CELL / 2, s.row * CELL + CELL / 2 - lift);
+  ctx.rotate(rotation);
+  drawFrame(
     ctx,
-    character,
-    s.x * CELL + (CELL - size) / 2,
-    s.row * CELL + (CELL - size) - lift,
+    sp.enemies,
+    hopping ? 'frog_jump' : 'frog_idle',
+    -size / 2,
+    -size / 2,
     size,
     size,
-    { frame: 0, facing: 1, squash, airborne: hopping },
   );
+  ctx.restore();
 }
 
 /**
@@ -1198,7 +1210,6 @@ function draw(
   sp: SpriteSet | null,
   cw: number,
   ch: number,
-  character: Character,
 ): void {
   const surround = ctx.createRadialGradient(cw / 2, ch * 0.42, 20, cw / 2, ch * 0.45, Math.max(cw, ch) * 0.7);
   surround.addColorStop(0, '#244f68');
@@ -1208,7 +1219,7 @@ function draw(
   ctx.fillRect(0, 0, cw, ch);
   ctx.save();
   fitBoard(ctx, cw, ch, W, H);
-  drawBoard(ctx, s, sp, character);
+  drawBoard(ctx, s, sp);
   ctx.restore();
 }
 
@@ -1216,7 +1227,6 @@ function drawBoard(
   ctx: CanvasRenderingContext2D,
   s: State,
   sp: SpriteSet | null,
-  character: Character,
 ): void {
   const plan = s.plan;
 
@@ -1293,7 +1303,7 @@ function drawBoard(
     if (!coin.collected) drawCoin(ctx, s, coin);
   }
 
-  drawPlayer(ctx, s, character);
+  drawPlayer(ctx, s, sp);
   drawParticles(ctx, s);
 
   const boardGrade = ctx.createLinearGradient(0, 0, W, H);

@@ -49,7 +49,6 @@ import {
   type Level,
   type TileCode,
 } from '@/lib/platformerLevel';
-import { drawCharacterSprite, type Character } from '@/lib/characters';
 import { animFrame, drawFrame, useSprites, type SpriteSet } from '@/lib/sprites';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
@@ -347,7 +346,6 @@ export default function PlatformerV2({
   api,
   restartToken,
   difficulty,
-  character,
   controlsInset,
   edition = 'storybook',
 }: PlatformerV2Props) {
@@ -428,10 +426,10 @@ export default function PlatformerV2({
           const next = freshState(cleared + 1, difficulty, s.coinsTotal);
           stateRef.current = next;
           api.requestGate(`Level ${cleared} cleared`);
-          draw(ctx, next, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
+          draw(ctx, next, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
           return;
         }
-        draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
+        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
         return;
       }
 
@@ -798,7 +796,7 @@ export default function PlatformerV2({
         api.setStatus(`Level ${s.level} clear`);
         burst(s, b.x + PW / 2, b.y, 20, 90, '#ffe9a8');
         confettiBurst(s, b.x + PW / 2, (GROUND_TOP - FLAG_H) * TILE, 42);
-        draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
+        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
         return;
       }
 
@@ -820,7 +818,7 @@ export default function PlatformerV2({
       // stationary. The sprite no longer pops back to frame zero on release.
       s.runPhase += Math.abs(b.vx) * dt * 0.08;
 
-      draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
+      draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH, edition, skyboundRef.current);
     },
   });
 
@@ -1866,7 +1864,6 @@ function draw(
   ctx: CanvasRenderingContext2D,
   s: State,
   sp: SpriteSet | null,
-  character: Character,
   viewW: number,
   viewH: number,
   zoom: number,
@@ -2351,10 +2348,9 @@ function draw(
     ctx.stroke();
   }
 
-  // --- player: the kid's own chosen family avatar, not a stock alien ---
-  // drawCharacterSprite is the same hand-drawn art the menus and celebration
-  // cards use, so the hero in the level IS the character they picked. Only the
-  // drawing changed: the hitbox (PW x PH / PH_BIG) is exactly what it was.
+  // --- player: this edition's own animated explorer ---
+  // The storybook scout is pink; the optional skybound edition uses purple.
+  // Both have complete movement poses while preserving the original hitbox.
   const b = s.body;
   const h = s.big ? PH_BIG : PH;
   const blink = s.hurt > 0 && Math.floor(s.animTime * 20) % 2 === 0;
@@ -2394,21 +2390,50 @@ function draw(
     const pop = 1 + s.pulse * 0.22;
     const hop = cheering ? Math.abs(Math.sin(s.animTime * 7)) * 4 : 0;
     const heroScale = edition === 'skybound' ? 1.16 : 1;
-    const dw = (s.big ? 25 : 20) * pop * heroScale;
-    const dh = (s.big ? 32 : 25) * pop * heroScale;
-    // drawCharacterSprite reads squash as a scale: >1 stretches (takeoff),
-    // <1 squashes (landing). s.squash is the 0..1 impulse the game tracks.
-    let squash = b.onGround ? 1 - s.squash * 0.16 : 1 + s.squash * 0.12;
-    if (skidding) squash *= 0.9; // lean into the brake
-    // `frame` advances with travelled distance, with a quick victory dance and
-    // a frozen final stride at rest rather than a visible pose reset.
-    const runFrame = cheering ? s.animTime * 6 : s.runPhase;
-    drawCharacterSprite(ctx, character, b.x + PW / 2 - dw / 2, b.y + h - dh - hop, dw, dh, {
-      frame: runFrame,
-      facing: s.facing,
-      squash,
-      airborne: !b.onGround && s.finish <= 0,
-    });
+    const storybookFrames = {
+      front: 'character_pink_front',
+      hit: 'character_pink_hit',
+      jump: 'character_pink_jump',
+      walkA: 'character_pink_walk_a',
+      walkB: 'character_pink_walk_b',
+      duck: 'character_pink_duck',
+      idle: 'character_pink_idle',
+    } as const;
+    const skyboundFrames = {
+      front: 'character_purple_front',
+      hit: 'character_purple_hit',
+      jump: 'character_purple_jump',
+      walkA: 'character_purple_walk_a',
+      walkB: 'character_purple_walk_b',
+      duck: 'character_purple_duck',
+      idle: 'character_purple_idle',
+    } as const;
+    const frames = edition === 'skybound' ? skyboundFrames : storybookFrames;
+    const moving = Math.abs(b.vx) > 8;
+    const frame = cheering
+      ? frames.front
+      : s.hurt > 0
+        ? frames.hit
+        : !b.onGround
+          ? frames.jump
+          : skidding
+            ? frames.duck
+            : moving
+              ? Math.floor(s.runPhase) % 2 === 0
+                ? frames.walkA
+                : frames.walkB
+              : frames.idle;
+    const size = (s.big ? 36 : 29) * pop * heroScale;
+    drawFrame(
+      ctx,
+      sp.characters,
+      frame,
+      b.x + PW / 2 - size / 2,
+      b.y + h - size - hop,
+      size,
+      size,
+      s.facing < 0,
+    );
     if (edition === 'skybound' && !b.onGround) {
       ctx.strokeStyle = 'rgba(221,248,255,0.52)';
       ctx.lineWidth = 1.1;

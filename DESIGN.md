@@ -41,7 +41,9 @@ The selectable avatar system contains 48 consistent semi-realistic 3D illustrate
 including an expanded range of blonde boys and girls.
 Portraits are square, front-facing, diverse, expressive, and readable at 38–64px. They use a
 shared midnight arcade background and remain illustrated rather than photographic. Picker
-portraits and lightweight gameplay drawings always represent the same human character identity.
+portraits remain consistent through profiles, menus, progress, and celebration screens. Active
+gameplay uses a purpose-built hero whenever movement readability matters, so running, hopping,
+jumping, and hit reactions use complete animation poses instead of stretching a profile portrait.
 
 A separate **Fantastic friends** group adds 40 original non-human avatars—aliens, robots,
 creatures, celestial buddies, magical objects, and emoji-like characters—using the same lighting

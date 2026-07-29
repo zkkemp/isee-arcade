@@ -49,7 +49,6 @@ import {
   type Level,
   type TileCode,
 } from '@/lib/platformerLevel';
-import { drawCharacterSprite, type Character } from '@/lib/characters';
 import { animFrame, drawFrame, useSprites, type SpriteSet } from '@/lib/sprites';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
@@ -325,7 +324,6 @@ export default function Platformer({
   api,
   restartToken,
   difficulty,
-  character,
   controlsInset,
 }: GameCanvasProps) {
   const stateRef = useRef<State>(freshState(1, difficulty));
@@ -392,10 +390,10 @@ export default function Platformer({
           const next = freshState(cleared + 1, difficulty, s.coinsTotal);
           stateRef.current = next;
           api.requestGate(`Level ${cleared} cleared`);
-          draw(ctx, next, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
+          draw(ctx, next, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
           return;
         }
-        draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
+        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
         return;
       }
 
@@ -738,7 +736,7 @@ export default function Platformer({
         api.setStatus(`Level ${s.level} clear`);
         burst(s, b.x + PW / 2, b.y, 20, 90, '#ffe9a8');
         confettiBurst(s, b.x + PW / 2, (GROUND_TOP - FLAG_H) * TILE, 42);
-        draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
+        draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
         return;
       }
 
@@ -760,7 +758,7 @@ export default function Platformer({
       // stationary. The sprite no longer pops back to frame zero on release.
       s.runPhase += Math.abs(b.vx) * dt * 0.08;
 
-      draw(ctx, s, spritesRef.current, character, viewW, viewH, zoom, skyPad, cw, ch, playH);
+      draw(ctx, s, spritesRef.current, viewW, viewH, zoom, skyPad, cw, ch, playH);
     },
   });
 
@@ -1615,7 +1613,6 @@ function draw(
   ctx: CanvasRenderingContext2D,
   s: State,
   sp: SpriteSet | null,
-  character: Character,
   viewW: number,
   viewH: number,
   zoom: number,
@@ -1982,10 +1979,9 @@ function draw(
     ctx.stroke();
   }
 
-  // --- player: the kid's own chosen family avatar, not a stock alien ---
-  // drawCharacterSprite is the same hand-drawn art the menus and celebration
-  // cards use, so the hero in the level IS the character they picked. Only the
-  // drawing changed: the hitbox (PW x PH / PH_BIG) is exactly what it was.
+  // --- player: Coin Runner's own animated green trail scout ---
+  // Profile portraits stay in the app chrome and celebrations; the moving hero
+  // uses a complete walk/jump/hit animation set sized to the existing hitbox.
   const b = s.body;
   const h = s.big ? PH_BIG : PH;
   const blink = s.hurt > 0 && Math.floor(s.animTime * 20) % 2 === 0;
@@ -2015,21 +2011,31 @@ function draw(
       ((b.vx > 0 && s.facing < 0) || (b.vx < 0 && s.facing > 0));
     const pop = 1 + s.pulse * 0.22;
     const hop = cheering ? Math.abs(Math.sin(s.animTime * 7)) * 4 : 0;
-    const dw = (s.big ? 20 : 16) * pop;
-    const dh = (s.big ? 26 : 20) * pop;
-    // drawCharacterSprite reads squash as a scale: >1 stretches (takeoff),
-    // <1 squashes (landing). s.squash is the 0..1 impulse the game tracks.
-    let squash = b.onGround ? 1 - s.squash * 0.16 : 1 + s.squash * 0.12;
-    if (skidding) squash *= 0.9; // lean into the brake
-    // `frame` advances with travelled distance, with a quick victory dance and
-    // a frozen final stride at rest rather than a visible pose reset.
-    const runFrame = cheering ? s.animTime * 6 : s.runPhase;
-    drawCharacterSprite(ctx, character, b.x + PW / 2 - dw / 2, b.y + h - dh - hop, dw, dh, {
-      frame: runFrame,
-      facing: s.facing,
-      squash,
-      airborne: !b.onGround && s.finish <= 0,
-    });
+    const moving = Math.abs(b.vx) > 8;
+    const frame = cheering
+      ? 'character_green_front'
+      : s.hurt > 0
+        ? 'character_green_hit'
+        : !b.onGround
+          ? 'character_green_jump'
+          : skidding
+            ? 'character_green_duck'
+            : moving
+              ? Math.floor(s.runPhase) % 2 === 0
+                ? 'character_green_walk_a'
+                : 'character_green_walk_b'
+              : 'character_green_idle';
+    const size = (s.big ? 34 : 27) * pop;
+    drawFrame(
+      ctx,
+      sp.characters,
+      frame,
+      b.x + PW / 2 - size / 2,
+      b.y + h - size - hop,
+      size,
+      size,
+      s.facing < 0,
+    );
   }
 
   // --- confetti ---

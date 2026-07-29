@@ -109,7 +109,7 @@ export type GameCanvasProps = {
   restartToken: number;
   /** Skill setting. Games scale speed, hazard density and ramp from this. */
   difficulty: Difficulty;
-  /** The chosen family character, so every game can draw the same avatar. */
+  /** The chosen family character for profile-aware games and non-gameplay UI. */
   character: Character;
   /**
    * Screen pixels at the bottom of the canvas occupied by thumb controls. Games

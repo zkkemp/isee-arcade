@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { drawCharacterSprite, type Character } from '@/lib/characters';
 import type { Difficulty } from '@/lib/difficulty';
 import type { GameApi, GameCanvasProps } from '@/lib/games';
 import { playSound } from '@/lib/sound';
+import { drawFrame, useSprites, type SpriteSet } from '@/lib/sprites';
 import { useCanvasGame } from '@/lib/useCanvasGame';
 
 /**
- * THESIS: A family-avatar run-and-gun where forward motion leaves living light
+ * THESIS: An original bio-ranger run-and-gun where forward motion leaves living light
  * in a jungle bioforge; it refuses a copied military cartridge world.
  * OWN-WORLD: Ink-blue jungle, cyan life, coral danger, gold rescue hardware,
  * crisp silhouettes, phosphorescent trails, and machinery reclaimed by roots.
@@ -72,6 +72,7 @@ type Player = {
   jumpBuffer: number;
   health: number;
   invulnerable: number;
+  hitPose: number;
   respawnX: number;
   weapon: Weapon;
   weaponTime: number;
@@ -272,6 +273,7 @@ function fresh(stageNumber: number, difficulty: Difficulty): State {
       jumpBuffer: 0,
       health: difficulty === 'easy' ? 5 : difficulty === 'hard' ? 3 : 4,
       invulnerable: 1.1,
+      hitPose: 0,
       respawnX: 92,
       weapon: 'pulse',
       weaponTime: 0,
@@ -388,6 +390,7 @@ function hurtPlayer(s: State, api: GameApi, difficulty: Difficulty): void {
   if (p.invulnerable > 0) return;
   p.health -= 1;
   p.invulnerable = 1.35;
+  p.hitPose = 0.28;
   s.shake = 10;
   burst(s, p.x + PLAYER_W / 2, p.y + PLAYER_H / 2, '#ff7892', 14, 150);
   playSound('wrong');
@@ -415,6 +418,7 @@ function hurtPlayer(s: State, api: GameApi, difficulty: Difficulty): void {
 function recoverFromFall(s: State, api: GameApi, difficulty: Difficulty): void {
   const p = s.player;
   p.health -= 1;
+  p.hitPose = 0.28;
   s.shake = 10;
   playSound('wrong');
   if (p.health <= 0) {
@@ -608,6 +612,7 @@ function update(
   s.bossWarning = Math.max(0, s.bossWarning - dt);
   s.shake = Math.max(0, s.shake - 35 * dt);
   p.invulnerable = Math.max(0, p.invulnerable - dt);
+  p.hitPose = Math.max(0, p.hitPose - dt);
   p.coyote = Math.max(0, p.coyote - dt);
   p.jumpBuffer = Math.max(0, p.jumpBuffer - dt);
   p.weaponTime = Math.max(0, p.weaponTime - dt);
@@ -719,16 +724,16 @@ export default function RiftRaiders({
   api,
   restartToken,
   difficulty,
-  character,
   controlsInset,
 }: GameCanvasProps) {
   const stateRef = useRef<State>(fresh(1, difficulty));
-  const characterRef = useRef<Character>(character);
+  const sprites = useSprites();
+  const spritesRef = useRef<SpriteSet | null>(null);
   const backgroundRef = useRef<HTMLImageElement | null>(null);
   const reducedMotionRef = useRef(false);
   useEffect(() => {
-    characterRef.current = character;
-  }, [character]);
+    spritesRef.current = sprites;
+  }, [sprites]);
   useEffect(() => {
     const image = new Image();
     image.src = '/assets/rift-raiders/bioforge-background.webp';
@@ -765,7 +770,7 @@ export default function RiftRaiders({
         cw,
         ch,
         controlsInset,
-        characterRef.current,
+        spritesRef.current,
         backgroundRef.current,
         reducedMotionRef.current,
       );
@@ -1077,7 +1082,7 @@ function drawPlayer(
   ctx: CanvasRenderingContext2D,
   s: State,
   camX: number,
-  character: Character,
+  sprites: SpriteSet | null,
   reducedMotion: boolean,
 ): void {
   const p = s.player;
@@ -1091,12 +1096,37 @@ function drawPlayer(
   ctx.beginPath();
   ctx.ellipse(x + PLAYER_W / 2, p.y + PLAYER_H + 3, 14, 5, 0, 0, Math.PI * 2);
   ctx.fill();
-  drawCharacterSprite(ctx, character, x - 8, p.y - 12, 46, 62, {
-    frame: running ? Math.floor(s.time * 10) % 2 : 0,
-    facing: p.facing,
-    airborne: !p.onGround,
-    squash: p.onGround ? 1 : 1.05,
-  });
+  if (sprites) {
+    const frame =
+      p.hitPose > 0
+        ? 'character_purple_hit'
+        : !p.onGround
+          ? 'character_purple_jump'
+          : running
+            ? Math.floor(s.time * 10) % 2 === 0
+              ? 'character_purple_walk_a'
+              : 'character_purple_walk_b'
+            : 'character_purple_idle';
+    const size = 58;
+    drawFrame(
+      ctx,
+      sprites.characters,
+      frame,
+      x + PLAYER_W / 2 - size / 2,
+      p.y + PLAYER_H - size,
+      size,
+      size,
+      p.facing < 0,
+    );
+  } else {
+    // A readable ranger silhouette while the atlas loads.
+    ctx.fillStyle = '#865dff';
+    ctx.beginPath();
+    ctx.roundRect(x + 2, p.y + 3, PLAYER_W - 4, PLAYER_H - 3, 10);
+    ctx.fill();
+    ctx.fillStyle = '#bffcff';
+    ctx.fillRect(x + 7, p.y + 10, PLAYER_W - 14, 8);
+  }
   ctx.save();
   ctx.translate(x + PLAYER_W / 2, p.y + 19);
   ctx.scale(p.facing, 1);
@@ -1163,7 +1193,7 @@ function draw(
   cw: number,
   ch: number,
   controlsInset: number,
-  character: Character,
+  sprites: SpriteSet | null,
   background: HTMLImageElement | null,
   reducedMotion: boolean,
 ): void {
@@ -1224,7 +1254,7 @@ function draw(
     }
   }
   ctx.globalAlpha = 1;
-  drawPlayer(ctx, s, s.camX, character, reducedMotion);
+  drawPlayer(ctx, s, s.camX, sprites, reducedMotion);
 
   const targets: ForwardTarget[] = s.stage.enemies.filter((enemy) => enemy.alive);
   if (s.stage.boss.alive) targets.push(s.stage.boss);
