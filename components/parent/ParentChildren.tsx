@@ -20,6 +20,8 @@ import {
 import { uploadDeviceState } from '@/lib/cloudSync';
 
 const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+const DAILY_LIMIT_MINUTES = { min: 5, max: 240 } as const;
+const QUESTION_BLOCK_SIZE = { min: 5, max: 20 } as const;
 
 function makePassword(length = 8): string {
   const bytes = new Uint32Array(length);
@@ -34,10 +36,16 @@ type EditorState = {
   password: string;
   band: GradeBand;
   avatarId: CharacterId;
-  dailyLimitMinutes: number;
-  questionBlockSize: number;
+  dailyLimitMinutes: string;
+  questionBlockSize: string;
   smartPractice: boolean;
 };
+
+function parseBoundedInteger(value: string, min: number, max: number): number | null {
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
 
 function editorFrom(profile?: Profile): EditorState {
   return {
@@ -47,8 +55,8 @@ function editorFrom(profile?: Profile): EditorState {
     password: '',
     band: profile?.band ?? 'grade3',
     avatarId: profile?.avatarId ?? 'marty',
-    dailyLimitMinutes: profile?.dailyLimitMinutes ?? 30,
-    questionBlockSize: profile?.questionBlockSize ?? 8,
+    dailyLimitMinutes: String(profile?.dailyLimitMinutes ?? 30),
+    questionBlockSize: String(profile?.questionBlockSize ?? 8),
     smartPractice: profile?.smartPractice ?? true,
   };
 }
@@ -85,6 +93,16 @@ export default function ParentChildren() {
     const duplicate = profiles.some(
       (profile) => profile.id !== editor.id && profile.username === username,
     );
+    const dailyLimitMinutes = parseBoundedInteger(
+      editor.dailyLimitMinutes,
+      DAILY_LIMIT_MINUTES.min,
+      DAILY_LIMIT_MINUTES.max,
+    );
+    const questionBlockSize = parseBoundedInteger(
+      editor.questionBlockSize,
+      QUESTION_BLOCK_SIZE.min,
+      QUESTION_BLOCK_SIZE.max,
+    );
 
     if (!name || username.length < 2) {
       setNotice({
@@ -97,6 +115,20 @@ export default function ParentChildren() {
       setNotice({
         tone: 'error',
         message: `@${username} is already used by another child. Choose a different username.`,
+      });
+      return;
+    }
+    if (dailyLimitMinutes === null) {
+      setNotice({
+        tone: 'error',
+        message: `Daily play must be a whole number from ${DAILY_LIMIT_MINUTES.min} to ${DAILY_LIMIT_MINUTES.max} minutes.`,
+      });
+      return;
+    }
+    if (questionBlockSize === null) {
+      setNotice({
+        tone: 'error',
+        message: `Study block must be a whole number from ${QUESTION_BLOCK_SIZE.min} to ${QUESTION_BLOCK_SIZE.max} questions.`,
       });
       return;
     }
@@ -135,8 +167,8 @@ export default function ParentChildren() {
         username,
         band: editor.band,
         avatarId: editor.avatarId,
-        dailyLimitMinutes: editor.dailyLimitMinutes,
-        questionBlockSize: editor.questionBlockSize,
+        dailyLimitMinutes,
+        questionBlockSize,
         smartPractice: editor.smartPractice,
       });
       if (editor.password) {
@@ -155,8 +187,8 @@ export default function ParentChildren() {
         username,
         band: editor.band,
         avatarId: editor.avatarId,
-        dailyLimitMinutes: editor.dailyLimitMinutes,
-        questionBlockSize: editor.questionBlockSize,
+        dailyLimitMinutes,
+        questionBlockSize,
         smartPractice: editor.smartPractice,
       });
       await actions.setPasscode(profile.id, editor.password);
@@ -461,16 +493,16 @@ export default function ParentChildren() {
                 <NumberField
                   label="Daily play"
                   value={editor.dailyLimitMinutes}
-                  min={5}
-                  max={240}
+                  min={DAILY_LIMIT_MINUTES.min}
+                  max={DAILY_LIMIT_MINUTES.max}
                   suffix="minutes"
                   onChange={(value) => setEditor({ ...editor, dailyLimitMinutes: value })}
                 />
                 <NumberField
                   label="Study block"
                   value={editor.questionBlockSize}
-                  min={5}
-                  max={20}
+                  min={QUESTION_BLOCK_SIZE.min}
+                  max={QUESTION_BLOCK_SIZE.max}
                   suffix="questions"
                   onChange={(value) => setEditor({ ...editor, questionBlockSize: value })}
                 />
@@ -549,25 +581,31 @@ function NumberField({
   onChange,
 }: {
   label: string;
-  value: number;
+  value: string;
   min: number;
   max: number;
   suffix: string;
-  onChange: (value: number) => void;
+  onChange: (value: string) => void;
 }) {
   return (
     <label className="rounded-xl bg-white/[0.045] p-3 ring-1 ring-white/10">
-      <span className="block text-[11px] font-black text-white/48">{label}</span>
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-black text-white/58">{label}</span>
+        <span className="text-[10px] font-bold text-white/35">
+          {min}–{max}
+        </span>
+      </span>
       <span className="mt-1 flex items-baseline gap-1">
         <input
-          type="number"
+          type="text"
           inputMode="numeric"
+          pattern="[0-9]*"
           value={value}
-          min={min}
-          max={max}
-          onChange={(event) =>
-            onChange(Math.max(min, Math.min(max, Number(event.target.value) || min)))
-          }
+          maxLength={String(max).length}
+          enterKeyHint="done"
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => onChange(event.target.value.replace(/\D/g, ''))}
+          aria-label={`${label}, ${min} to ${max} ${suffix}`}
           className="min-w-0 flex-1 bg-transparent text-xl font-black text-white outline-none"
         />
         <span className="text-[10px] font-bold text-white/35">{suffix}</span>

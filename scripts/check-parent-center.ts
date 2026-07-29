@@ -156,6 +156,21 @@ assert(
   'the arcade must explain the learner-specific practice-to-play exchange clearly',
 );
 
+const childEditorSource = fs.readFileSync(
+  path.join(process.cwd(), 'components', 'parent', 'ParentChildren.tsx'),
+  'utf8',
+);
+assert(
+  childEditorSource.includes('dailyLimitMinutes: string') &&
+    childEditorSource.includes('parseBoundedInteger') &&
+    childEditorSource.includes("onChange(event.target.value.replace(/\\D/g, ''))"),
+  'parent number fields must allow a blank editing state before validating whole numbers',
+);
+assert(
+  !childEditorSource.includes('Number(event.target.value) || min'),
+  'parent number fields must not force the minimum value back in while the user is typing',
+);
+
 const localAnswer = recordAnswer(emptyProgress(), {
   id: mathId,
   subject: 'math',
@@ -195,5 +210,5 @@ assert(migration.includes('parent_preferences'), 'parent preferences need cloud 
 console.log(
   'Parent center audit: catalogs, valid answer previews, gentle Smart Practice, ' +
     'avatar-consistent celebrations, live reports, safe progress merging, owner access, ' +
-    'unlimited parent sandbox, and isolated cloud preferences passed.',
+    'editable playtime fields, unlimited parent sandbox, and isolated cloud preferences passed.',
 );
