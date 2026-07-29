@@ -3,7 +3,6 @@
 import { useEffect, useRef } from 'react';
 import { SPEED_SCALE } from '@/lib/difficulty';
 import type { GameCanvasProps } from '@/lib/games';
-import { startKingdomMusic } from '@/lib/kingdomMusic';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
 import { GROUND_Y, HERO_H, LEVELS, WORLD_H, cameraTarget, cloneLevel, dampCamera, newHero, overlaps, questPace, questViewport, simulationSteps, stepEnemy, stepHero, type Enemy, type Hero, type QuestLevel, type Rect } from '@/lib/kingdomQuest';
@@ -198,14 +197,6 @@ export default function KingdomQuest({ paused, input, api, restartToken, difficu
     panorama.onload = () => { panoramaRef.current = panorama; };
     return () => { keyArtRef.current = null; panoramaRef.current = null; };
   }, []);
-  useEffect(() => {
-    if (paused) return;
-    let stop: (() => void) | null = null;
-    const begin = () => { stop ??= startKingdomMusic(); };
-    window.addEventListener('pointerdown', begin, { once: true });
-    window.addEventListener('keydown', begin, { once: true });
-    return () => { window.removeEventListener('pointerdown', begin); window.removeEventListener('keydown', begin); stop?.(); };
-  }, [paused]);
   const { canvasRef } = useCanvasGame({ active: !paused, step: (ctx, dt, cw, ch) => {
     const s = stateRef.current; elapsedRef.current += dt; const time = elapsedRef.current;
     const viewport = questViewport(cw, ch); const viewW = viewport.w; const viewH = viewport.h; const scale = viewport.scale;

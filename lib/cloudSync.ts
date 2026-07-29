@@ -19,9 +19,11 @@ const DAILY_USAGE_KEY = 'isee-arcade:daily-usage';
 const LAST_SYNC_SCHEDULED_KEY = 'isee-arcade:last-sync-scheduled';
 const SETTINGS_KEYS = [
   'isee-arcade:difficulty',
+  'isee-arcade:game-difficulties',
   'isee-arcade:character',
   'isee-arcade:character-name',
   'isee-arcade:muted',
+  'isee-arcade:music-enabled',
 ] as const;
 
 export type CloudSyncResult = {

@@ -13,7 +13,7 @@ const DIFFICULTY_ICONS = {
   hard: '🚀',
 } as const;
 
-/** Game-speed setting. Defaults to Easy and applies across the arcade. */
+/** Default for games that have not yet had their own level selected. */
 export default function DifficultyPicker() {
   const [difficulty, setDifficulty] = useDifficulty();
 
@@ -21,7 +21,7 @@ export default function DifficultyPicker() {
     <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.025] p-4 shadow-xl">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span className="text-xs font-bold uppercase tracking-widest text-white/40">
-          Game speed
+          Starting game level
         </span>
         <span className="text-[11px] text-white/40">{DIFFICULTY_BLURBS[difficulty]}</span>
       </div>

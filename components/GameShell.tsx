@@ -10,7 +10,12 @@ import RunJumpBar from './RunJumpBar';
 import TouchOverlay from './TouchOverlay';
 import { HOW_TO, type GameApi, type GameComponent, type GameMeta } from '@/lib/games';
 import { useCharacter } from '@/lib/characters';
-import { useDifficulty } from '@/lib/difficulty';
+import {
+  DIFFICULTIES,
+  DIFFICULTY_LABELS,
+  type Difficulty,
+  useGameDifficulty,
+} from '@/lib/difficulty';
 import { clearPendingGate, loadPendingGate, savePendingGate } from '@/lib/pendingGate';
 import { InputController, bindKeyboard } from '@/lib/input';
 import { bandHasReading, bandNeedsNarration, pickQuestion } from '@/lib/questions';
@@ -19,7 +24,13 @@ import { useActiveProfile } from '@/lib/profiles';
 import { usePlayerMode } from '@/lib/playerMode';
 import { useParentContentState } from '@/lib/parentControls';
 import { smartFocusForProgress } from '@/lib/adaptivePractice';
-import { playSound, unlockAudio, useMuted } from '@/lib/sound';
+import {
+  playSound,
+  unlockAudio,
+  useGameMusic,
+  useMusicEnabled,
+  useMuted,
+} from '@/lib/sound';
 import {
   COIN_BONUS_MS,
   COIN_STEP,
@@ -95,9 +106,10 @@ export default function GameShell({
   Game: GameComponent;
   parentAccount?: boolean;
 }) {
-  const [difficulty] = useDifficulty();
+  const [difficulty, setDifficulty] = useGameDifficulty(meta.id);
   const [character] = useCharacter();
   const [muted, setMuted] = useMuted();
+  const [musicEnabled, setMusicEnabled] = useMusicEnabled();
   const { deferLock, lockAtBoundary } = useDailyLimit();
   // Which learner is signed in decides which question bank the study block draws
   // from, so a kindergartner never gets a 5th-grade ISEE question.
@@ -366,7 +378,8 @@ export default function GameShell({
     });
   }, [gate, meta.id]);
 
-  const paused = gate !== null || manualPause || rotate;
+  const paused = gate !== null || manualPause || rotate || infoOpen || mobileToolsOpen;
+  useGameMusic(meta.music, !paused, musicEnabled, muted);
 
   /**
    * The play clock. Runs only while actually playing - not while a question is up,
@@ -606,6 +619,16 @@ export default function GameShell({
     setRestartToken((t) => t + 1);
   }, [input]);
 
+  const changeDifficulty = useCallback(
+    (next: Difficulty) => {
+      if (next === difficulty || gateOpenRef.current) return;
+      restart();
+      setDifficulty(next);
+      flashStatus(`${DIFFICULTY_LABELS[next]} level — fresh start`, 2200);
+    },
+    [difficulty, flashStatus, restart, setDifficulty],
+  );
+
   const sessionAccuracy = asked === 0 ? null : Math.round((gotRight / asked) * 100);
   const left = block ? questionsLeft(block) : 0;
 
@@ -734,10 +757,45 @@ export default function GameShell({
               className="fixed inset-0 z-40 cursor-default bg-transparent"
               onClick={() => setMobileToolsOpen(false)}
             />
-            <div className="absolute right-2 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-white/15 bg-[#171528] p-2 text-sm text-white shadow-2xl">
+            <div className="absolute right-2 top-full z-50 mt-2 max-h-[calc(100dvh-5.5rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border border-white/15 bg-[#171528] p-2 text-sm text-white shadow-2xl">
               <div className="flex min-h-11 items-center justify-between rounded-xl bg-white/[0.055] px-3 text-white/60">
                 <span>Best score</span>
                 <strong className="text-white">{best}</strong>
+              </div>
+              <div className="mt-1 rounded-xl bg-white/[0.055] p-2.5">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="font-semibold text-white/80">Game level</span>
+                  <strong style={{ color: meta.accent }}>
+                    {DIFFICULTY_LABELS[difficulty]}
+                  </strong>
+                </div>
+                <div className="grid grid-cols-3 gap-1" role="group" aria-label="Game level">
+                  {DIFFICULTIES.map((level) => {
+                    const selected = level === difficulty;
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => {
+                          changeDifficulty(level);
+                          if (!selected) setMobileToolsOpen(false);
+                        }}
+                        className={`min-h-11 rounded-lg border px-1 text-xs font-bold transition active:scale-95 ${
+                          selected
+                            ? 'border-white/30 bg-white/15 text-white'
+                            : 'border-white/10 bg-black/15 text-white/70 active:bg-white/10'
+                        }`}
+                        style={selected ? { borderColor: `${meta.accent}99`, color: meta.accent } : undefined}
+                      >
+                        {DIFFICULTY_LABELS[level]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] leading-tight text-white/70">
+                  Saved for {meta.name}. Changing it restarts this game.
+                </p>
               </div>
               <button
                 type="button"
@@ -758,8 +816,19 @@ export default function GameShell({
                 className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left font-semibold text-white/80 active:bg-white/10"
               >
                 <span aria-hidden="true">{muted ? '🔇' : '🔊'}</span>
-                {muted ? 'Turn sound on' : 'Mute sound'}
+                {muted ? 'Turn all audio on' : 'Mute all audio'}
               </button>
+              {meta.music && (
+                <button
+                  type="button"
+                  onClick={() => setMusicEnabled(!musicEnabled)}
+                  disabled={muted}
+                  className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left font-semibold text-white/80 active:bg-white/10 disabled:text-white/30"
+                >
+                  <span aria-hidden="true">♫</span>
+                  {musicEnabled ? 'Turn music off' : 'Turn music on'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -858,6 +927,23 @@ export default function GameShell({
             )}
           </div>
 
+          <label className="flex h-11 flex-shrink-0 items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 text-xs font-semibold text-white/60">
+            <span className="hidden lg:inline">Level</span>
+            <select
+              value={difficulty}
+              onChange={(event) => changeDifficulty(event.target.value as Difficulty)}
+              aria-label={`Game level for ${meta.name}`}
+              className="min-w-0 bg-transparent font-bold text-white outline-none"
+              style={{ colorScheme: 'dark' }}
+            >
+              {DIFFICULTIES.map((level) => (
+                <option key={level} value={level}>
+                  {DIFFICULTY_LABELS[level]}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <button
             type="button"
             onClick={() => setInfoOpen((v) => !v)}
@@ -875,6 +961,19 @@ export default function GameShell({
           >
             {muted ? '🔇' : '🔊'}
           </button>
+
+          {meta.music && (
+            <button
+              type="button"
+              onClick={() => setMusicEnabled(!musicEnabled)}
+              disabled={muted}
+              aria-label={musicEnabled ? 'Turn music off' : 'Turn music on'}
+              title={musicEnabled ? 'Turn music off' : 'Turn music on'}
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-lg text-white/75 transition hover:bg-white/10 active:scale-95 disabled:text-white/25"
+            >
+              {musicEnabled ? '♫' : '♩'}
+            </button>
+          )}
 
           <button
             type="button"

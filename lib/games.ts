@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { Difficulty } from './difficulty';
 import type { InputController } from './input';
 import type { Character } from './characters';
+import type { MusicTheme } from './gameMusic';
 
 export type GameId =
   | 'match3'
@@ -81,6 +82,8 @@ export type GameMeta = {
   controls: ControlScheme;
   /** Canvas width / height. The stage scales to fit while preserving this. */
   aspect: number;
+  /** Optional quiet background score selected for this game's atmosphere. */
+  music?: MusicTheme;
 };
 
 /**
@@ -129,6 +132,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#3ddc84',
     controls: 'dpad',
     aspect: 1,
+    music: 'motion',
   },
   snake2: {
     id: 'snake2',
@@ -139,6 +143,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#69c66d',
     controls: 'dpad',
     aspect: 1,
+    music: 'storybook',
   },
   match3: {
     id: 'match3',
@@ -149,6 +154,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#ff6fb5',
     controls: 'grid',
     aspect: 3 / 4,
+    music: 'puzzle',
   },
   blocks: {
     id: 'blocks',
@@ -159,6 +165,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#5ec8ff',
     controls: 'grid',
     aspect: 3 / 4,
+    music: 'puzzle',
   },
   tetris: {
     id: 'tetris',
@@ -169,6 +176,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#8b7cf6',
     controls: 'dpad',
     aspect: 1 / 2,
+    music: 'puzzle',
   },
   runner: {
     id: 'runner',
@@ -179,6 +187,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#ff8f5d',
     controls: 'tapjump',
     aspect: 3 / 4,
+    music: 'motion',
   },
   breakout: {
     id: 'breakout',
@@ -189,6 +198,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#ffd75e',
     controls: 'paddle',
     aspect: 3 / 4,
+    music: 'motion',
   },
   climber: {
     id: 'climber',
@@ -199,6 +209,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#7ec8ff',
     controls: 'lanes',
     aspect: 3 / 4,
+    music: 'storybook',
   },
   maze: {
     id: 'maze',
@@ -209,6 +220,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#c77dff',
     controls: 'dpad',
     aspect: 1,
+    music: 'puzzle',
   },
   platformer: {
     id: 'platformer',
@@ -219,8 +231,9 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#ff9f5a',
     controls: 'run-jump',
     aspect: 4 / 3,
+    music: 'storybook',
   },
-  platformer3: { id: 'platformer3', name: 'Kingdom Quest', tagline: 'Cross sixteen handcrafted realms, master magical powers, and restore the kingdom.', gateNote: 'Study time buys play time.', icon: '🏰', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
+  platformer3: { id: 'platformer3', name: 'Kingdom Quest', tagline: 'Cross sixteen handcrafted realms, master magical powers, and restore the kingdom.', gateNote: 'Study time buys play time.', icon: '🏰', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3, music: 'kingdom' },
   riftraiders: {
     id: 'riftraiders',
     name: 'Rift Raiders',
@@ -230,17 +243,18 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#4df8d2',
     controls: 'run-jump',
     aspect: 4 / 3,
+    music: 'rift',
   },
-  diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Pitch, field, bat, run the bases, and win a three-inning harbor cup.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4 },
-  paperroute: { id: 'paperroute', name: 'Paper Route', tagline: 'Zip down the street, dodge trouble, and deliver every paper.', gateNote: 'Study time buys play time.', icon: '📰', accent: '#ffbd5a', controls: 'lanes', aspect: 3 / 4 },
-  pyramidhop: { id: 'pyramidhop', name: 'Pyramid Hop', tagline: 'Hop through sunny ruins and uncover the golden path.', gateNote: 'Study time buys play time.', icon: '🔺', accent: '#efb24e', controls: 'dpad', aspect: 3 / 4 },
+  diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Pitch, field, bat, run the bases, and win a three-inning harbor cup.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4, music: 'motion' },
+  paperroute: { id: 'paperroute', name: 'Paper Route', tagline: 'Zip down the street, dodge trouble, and deliver every paper.', gateNote: 'Study time buys play time.', icon: '📰', accent: '#ffbd5a', controls: 'lanes', aspect: 3 / 4, music: 'motion' },
+  pyramidhop: { id: 'pyramidhop', name: 'Pyramid Hop', tagline: 'Hop through sunny ruins and uncover the golden path.', gateNote: 'Study time buys play time.', icon: '🔺', accent: '#efb24e', controls: 'dpad', aspect: 3 / 4, music: 'storybook' },
   reversi: { id: 'reversi', name: 'Reversi', tagline: 'Trap the discs, flip the board, and claim the most.', gateNote: 'Study time buys play time.', icon: '⚫', accent: '#5ed6a0', controls: 'board', aspect: 1 },
   backgammon: { id: 'backgammon', name: 'Backgammon', tagline: 'Play the complete 24-point race with all 15 checkers.', gateNote: 'Study time buys play time.', icon: '▰', accent: '#e7b978', controls: 'board', aspect: 4 / 3 },
   seabattle: { id: 'seabattle', name: 'Sea Battle', tagline: 'Scan the waves, find the fleet, and win the naval duel.', gateNote: 'Study time buys play time.', icon: '⚓', accent: '#58b9e8', controls: 'board', aspect: 1 },
-  paddleduel: { id: 'paddleduel', name: 'Paddle Duel', tagline: 'Challenge the computer or put two players on one iPad.', gateNote: 'Study time buys play time.', icon: '🏓', accent: '#ff7d8e', controls: 'paddle', aspect: 3 / 4 },
-  asteroids: { id: 'asteroids', name: 'Asteroid Patrol', tagline: 'Steer through the starfield and clear a safe space lane.', gateNote: 'Study time buys play time.', icon: '☄️', accent: '#b49aff', controls: 'dpad', aspect: 3 / 4 },
-  stardefender: { id: 'stardefender', name: 'Star Defender', tagline: 'Slide your starship, fire bright bolts, and stop the descending swarm.', gateNote: 'Study time buys play time.', icon: '🌟', accent: '#ffdc63', controls: 'paddle', aspect: 3 / 4 },
-  lunarlander: { id: 'lunarlander', name: 'Lunar Lander', tagline: 'Guide your lander gently onto the moon base.', gateNote: 'Study time buys play time.', icon: '🌙', accent: '#b6d4ee', controls: 'dpad', aspect: 3 / 4 },
+  paddleduel: { id: 'paddleduel', name: 'Paddle Duel', tagline: 'Challenge the computer or put two players on one iPad.', gateNote: 'Study time buys play time.', icon: '🏓', accent: '#ff7d8e', controls: 'paddle', aspect: 3 / 4, music: 'motion' },
+  asteroids: { id: 'asteroids', name: 'Asteroid Patrol', tagline: 'Steer through the starfield and clear a safe space lane.', gateNote: 'Study time buys play time.', icon: '☄️', accent: '#b49aff', controls: 'dpad', aspect: 3 / 4, music: 'space' },
+  stardefender: { id: 'stardefender', name: 'Star Defender', tagline: 'Slide your starship, fire bright bolts, and stop the descending swarm.', gateNote: 'Study time buys play time.', icon: '🌟', accent: '#ffdc63', controls: 'paddle', aspect: 3 / 4, music: 'space' },
+  lunarlander: { id: 'lunarlander', name: 'Lunar Lander', tagline: 'Guide your lander gently onto the moon base.', gateNote: 'Study time buys play time.', icon: '🌙', accent: '#b6d4ee', controls: 'dpad', aspect: 3 / 4, music: 'space' },
   tictactoe: {
     id: 'tictactoe',
     name: 'Tic-Tac-Toe',
@@ -280,6 +294,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#4be3c2',
     controls: 'grid',
     aspect: 3 / 4,
+    music: 'puzzle',
   },
   checkers: {
     id: 'checkers',
@@ -310,6 +325,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#ff8fa3',
     controls: 'paddle',
     aspect: 3 / 4,
+    music: 'storybook',
   },
   fruit2: {
     id: 'fruit2',
@@ -320,6 +336,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#f26b5b',
     controls: 'paddle',
     aspect: 3 / 4,
+    music: 'storybook',
   },
   chess: {
     id: 'chess',
@@ -340,6 +357,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#f2542d',
     controls: 'grid',
     aspect: 1,
+    music: 'motion',
   },
   tapattack2: {
     id: 'tapattack2',
@@ -350,6 +368,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#ff5aa5',
     controls: 'grid',
     aspect: 1,
+    music: 'motion',
   },
   sudoku: {
     id: 'sudoku',
@@ -410,6 +429,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#7dd3fc',
     controls: 'tapjump',
     aspect: 3 / 4,
+    music: 'storybook',
   },
   starfall: {
     id: 'starfall',
@@ -420,6 +440,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#7be6ff',
     controls: 'grid',
     aspect: 3 / 4,
+    music: 'space',
   },
   firefly: {
     id: 'firefly',
@@ -430,6 +451,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#fff19a',
     controls: 'grid',
     aspect: 2 / 3,
+    music: 'storybook',
   },
   mysteryfaces: {
     id: 'mysteryfaces',
@@ -520,6 +542,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     accent: '#a5f3fc',
     controls: 'board',
     aspect: 3 / 4,
+    music: 'space',
   },
   lanterns: {
     id: 'lanterns',
