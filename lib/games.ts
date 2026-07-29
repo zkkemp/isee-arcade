@@ -12,6 +12,7 @@ export type GameId =
   | 'platformer'
   | 'platformer2'
   | 'platformer3'
+  | 'riftraiders'
   | 'diamond'
   | 'paperroute'
   | 'pyramidhop'
@@ -231,6 +232,16 @@ export const GAMES: Record<GameId, GameMeta> = {
     aspect: 4 / 3,
   },
   platformer3: { id: 'platformer3', name: 'Coin Runner 3: Kingdom Quest', tagline: 'Cross sixteen handcrafted realms, master magical powers, and restore the kingdom.', gateNote: 'Study time buys play time.', icon: '🏰', accent: '#79c9ff', controls: 'run-jump', aspect: 4 / 3 },
+  riftraiders: {
+    id: 'riftraiders',
+    name: 'Rift Raiders',
+    tagline: 'Run the glowing wilds, blast the machine swarm, and break the siege.',
+    gateNote: 'Study time buys play time.',
+    icon: '🦾',
+    accent: '#4df8d2',
+    controls: 'run-jump',
+    aspect: 4 / 3,
+  },
   diamond: { id: 'diamond', name: 'Diamond Derby', tagline: 'Pitch, field, bat, run the bases, and win a three-inning harbor cup.', gateNote: 'Study time buys play time.', icon: '⚾', accent: '#71e3d0', controls: 'grid', aspect: 3 / 4 },
   paperroute: { id: 'paperroute', name: 'Paper Route', tagline: 'Zip down the street, dodge trouble, and deliver every paper.', gateNote: 'Study time buys play time.', icon: '📰', accent: '#ffbd5a', controls: 'lanes', aspect: 3 / 4 },
   pyramidhop: { id: 'pyramidhop', name: 'Pyramid Hop', tagline: 'Hop through sunny ruins and uncover the golden path.', gateNote: 'Study time buys play time.', icon: '🔺', accent: '#efb24e', controls: 'dpad', aspect: 3 / 4 },
@@ -555,6 +566,8 @@ export const HOW_TO: Record<GameId, string> = {
     'Run through each storybook chapter to reach the flag. Collect coins, jump over pits, and bounce on safe enemies. Look for magical doors that lead to secret pages full of treasure.',
   platformer3:
     'Follow the sixteen-stage kingdom map, then run and jump to each beacon in order. Build speed smoothly, stomp creatures, cross pits, collect coins and hidden runes, and light checkpoints. Sunblooms give you a shield and comet stars let you charge through danger. Restore all sixteen realms, then defeat the Aurora Sentinel with four careful stomps.',
+  riftraiders:
+    'Move left and right and jump across the glowing bioforge. Your pulse rifle aims and fires automatically, so concentrate on moving, dodging, and choosing safe platforms. Collect S, L, and C weapon capsules for spread shots, lasers, and comet blasts. Activate gold rescue beacons, then destroy the giant Siege Core to open the next mission.',
   diamond:
     'Play both sides of a three-inning Harbor Cup. On defense, choose Changeup, Curveball, or Fastball, then tap the catcher target. Pitch smart: changeups work best low, fastballs work best high, and curveballs create outs on the corners. Avoid the risky center square. On offense, move the yellow aim marker and tap as the ball reaches the strike zone. Balls, strikes, walks, fielded outs, hits, runners, runs, innings, extra innings, wins, and losses all count.',
   paperroute: 'Move left and right along the street. Deliver papers to the mailboxes, dodge obstacles, and keep your route rolling.',
@@ -639,6 +652,7 @@ export const GAME_LIST: GameMeta[] = [
   GAMES.blocks,
   GAMES.tetris,
   GAMES.platformer3,
+  GAMES.riftraiders,
   GAMES.platformer2,
   GAMES.platformer,
   GAMES.diamond,

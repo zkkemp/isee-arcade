@@ -15,7 +15,7 @@ type GameSection = {
 };
 
 export const GAME_SECTIONS: GameSection[] = [
-  { id: 'action', eyebrow: 'Run · jump · dodge', title: 'Fast & fearless', icon: '⚡', accent: '#fb7185', ids: ['platformer3', 'platformer2', 'platformer', 'paperroute', 'pyramidhop', 'snake2', 'runner', 'frogger', 'climber', 'breakout'] },
+  { id: 'action', eyebrow: 'Run · jump · dodge', title: 'Fast & fearless', icon: '⚡', accent: '#fb7185', ids: ['riftraiders', 'platformer3', 'platformer2', 'platformer', 'paperroute', 'pyramidhop', 'snake2', 'runner', 'frogger', 'climber', 'breakout'] },
   { id: 'arcade', eyebrow: 'Beloved rules · fresh worlds', title: 'Classics Reimagined', icon: '★', accent: '#38bdf8', ids: ['maze', 'seabattle', 'paddleduel', 'asteroids', 'stardefender', 'starfall', 'lunarlander', 'diamond'] },
   { id: 'puzzles', eyebrow: 'Match · stack · solve', title: 'Puzzle power', icon: '◆', accent: '#a78bfa', ids: ['lanterns', 'colorbynumber', 'match3', 'blocks', 'tetris', 'merge', 'bubble', 'memory', 'skystack'] },
   { id: 'tabletop', eyebrow: 'Boards · cards · strategy', title: 'Tabletop classics', icon: '♟', accent: '#34d399', ids: ['reversi', 'backgammon', 'chess', 'checkers', 'mancala', 'starlinefour', 'tictactoe', 'dots', 'sudoku', 'cards', 'diceroyale'] },
@@ -23,7 +23,7 @@ export const GAME_SECTIONS: GameSection[] = [
 ];
 
 const NEW_GAME_IDS = new Set<GameId>([
-  'platformer3', 'diamond', 'paperroute', 'pyramidhop', 'reversi', 'backgammon',
+  'riftraiders', 'platformer3', 'diamond', 'paperroute', 'pyramidhop', 'reversi', 'backgammon',
   'seabattle', 'paddleduel', 'asteroids', 'stardefender', 'lunarlander', 'skystack',
   'starfall', 'firefly', 'mysteryfaces', 'colorbynumber', 'hangman', 'wordscramble',
   'diceroyale', 'starlinefour', 'mancala', 'gemcode', 'constellation', 'lanterns',
@@ -91,7 +91,7 @@ export default function GameLibrary() {
           <h2 id="game-library-title" className="text-2xl font-black tracking-[-0.025em] text-white sm:text-3xl">
             Browse the arcade
           </h2>
-          <p className="mt-1 text-sm text-white/62">Five shelves. Fifty-one ways to play.</p>
+          <p className="mt-1 text-sm text-white/62">Five shelves. Fifty-two ways to play.</p>
         </div>
         <span className="hidden text-xs font-semibold text-white/55 sm:block">Search or choose a shelf</span>
       </div>
@@ -140,7 +140,7 @@ export default function GameLibrary() {
           }`}
         >
           <span className="block text-sm">All games</span>
-          <span className="mt-0.5 block text-[10px] opacity-65">51 games</span>
+          <span className="mt-0.5 block text-[10px] opacity-65">52 games</span>
         </button>
         {GAME_SECTIONS.map((section) => (
           <button

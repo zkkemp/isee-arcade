@@ -6,6 +6,7 @@ const ART_KIND: Record<GameId, ArtKind> = {
   platformer: 'adventure',
   platformer2: 'adventure',
   platformer3: 'adventure',
+  riftraiders: 'adventure',
   diamond: 'candy',
   paperroute: 'adventure',
   pyramidhop: 'adventure',
@@ -73,7 +74,14 @@ export default function GameArtwork({
       data-game={game}
       style={{
         '--game-accent': accent,
-        ...(game === 'platformer3'
+        ...(game === 'riftraiders'
+          ? {
+              backgroundImage:
+                'linear-gradient(180deg, rgba(2,7,18,.02), rgba(2,7,18,.5)), url(/assets/rift-raiders/rift-raiders-key-art.webp)',
+              backgroundPosition: 'center',
+              backgroundSize: 'cover',
+            }
+          : game === 'platformer3'
           ? {
               backgroundImage:
                 'linear-gradient(180deg, rgba(16,28,79,.02), rgba(14,18,66,.42)), url(/assets/coin-runner-v3/kingdom-quest-key-art.webp)',
@@ -81,7 +89,7 @@ export default function GameArtwork({
               backgroundSize: 'cover',
             }
           : {}),
-      } as React.CSSProperties}
+      } as React.CSSProperties & { '--game-accent': string }}
       aria-hidden="true"
     >
       {(game === 'platformer2' || game === 'platformer3') && (
