@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { normalizeAccountUsername, usernameAuthEmail } from '@/lib/accountUsername';
 import { getOwnerSession, hasSameOrigin, isSimplePassword } from '@/lib/ownerAccess';
+import {
+  findOwnerParentAccount,
+  listOwnerParentAccounts,
+} from '@/lib/ownerParentAccounts';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import { getIseeDatabase } from '@/lib/supabase/database';
 
 export const runtime = 'nodejs';
-
-const ACCOUNT_FIELDS =
-  'user_id, username, account_role, status, created_at, updated_at';
 
 export async function GET() {
   const owner = await getOwnerSession();
@@ -15,25 +16,12 @@ export async function GET() {
     return NextResponse.json({ error: 'Owner access required.' }, { status: 403 });
   }
 
-  const admin = getSupabaseAdminClient();
-  if (!admin) {
-    return NextResponse.json(
-      { error: 'The server-only ISEE Arcade admin key is not configured yet.' },
-      { status: 503 },
-    );
-  }
-
-  const { data, error } = await admin
-    .from('parent_accounts')
-    .select(ACCOUNT_FIELDS)
-    .eq('account_role', 'parent')
-    .order('created_at', { ascending: false });
-
-  if (error) {
+  try {
+    const parents = await listOwnerParentAccounts();
+    return NextResponse.json({ parents });
+  } catch {
     return NextResponse.json({ error: 'Parent accounts could not be loaded.' }, { status: 500 });
   }
-
-  return NextResponse.json({ parents: data ?? [] });
 }
 
 export async function POST(request: Request) {
@@ -77,12 +65,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: existing } = await admin
-    .from('parent_accounts')
-    .select('user_id')
-    .eq('username', username)
-    .maybeSingle();
-  if (existing) {
+  let existingRows;
+  try {
+    existingRows = await sql`
+      select user_id
+      from public.parent_accounts
+      where lower(username) = lower(${username})
+      limit 1
+    `;
+  } catch {
+    return NextResponse.json(
+      { error: 'The parent directory could not be checked. Please try again.' },
+      { status: 500 },
+    );
+  }
+  if (existingRows[0]) {
     return NextResponse.json({ error: 'That username is already in use.' }, { status: 409 });
   }
 
@@ -155,11 +152,13 @@ export async function POST(request: Request) {
     target_username: username,
   });
 
-  const { data: loadedParent } = await admin
-    .from('parent_accounts')
-    .select(ACCOUNT_FIELDS)
-    .eq('user_id', created.user.id)
-    .single();
+  let loadedParent = null;
+  try {
+    loadedParent = await findOwnerParentAccount(created.user.id);
+  } catch {
+    // The Auth user and database trigger have already completed. Return the
+    // confirmed account below, then the client performs a canonical list reload.
+  }
 
   const now = new Date().toISOString();
   const parent =

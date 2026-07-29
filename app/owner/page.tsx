@@ -6,7 +6,9 @@ import OwnerAccountManager, {
 } from '@/components/owner/OwnerAccountManager';
 import { usernameFromAuthEmail } from '@/lib/accountUsername';
 import { getOwnerSession } from '@/lib/ownerAccess';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
+import { listOwnerParentAccounts } from '@/lib/ownerParentAccounts';
+import { isSupabaseAdminConfigured } from '@/lib/supabase/admin';
+import { getIseeDatabase } from '@/lib/supabase/database';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 export const metadata = {
@@ -47,17 +49,17 @@ export default async function OwnerPage() {
     );
   }
 
-  const adminConfigured = isSupabaseAdminConfigured();
+  const adminConfigured = isSupabaseAdminConfigured() && Boolean(getIseeDatabase());
   const ownerUsername = usernameFromAuthEmail(owner.user.email) ?? 'owner';
   let initialParents: ParentAccount[] = [];
+  let initialLoadError = '';
   if (adminConfigured) {
-    const admin = getSupabaseAdminClient();
-    const { data } = (await admin
-      ?.from('parent_accounts')
-      .select('user_id, username, account_role, status, created_at, updated_at')
-      .eq('account_role', 'parent')
-      .order('created_at', { ascending: false })) ?? { data: [] };
-    initialParents = (data ?? []) as ParentAccount[];
+    try {
+      initialParents = await listOwnerParentAccounts();
+    } catch {
+      initialLoadError =
+        'The parent list could not load. The accounts are still saved—use Refresh to try again.';
+    }
   }
 
   return (
@@ -101,6 +103,7 @@ export default async function OwnerPage() {
       <OwnerAccountManager
         adminConfigured={adminConfigured}
         initialParents={initialParents}
+        initialLoadError={initialLoadError}
       />
     </main>
   );

@@ -38,6 +38,10 @@ const databaseClient = fs.readFileSync(
   path.join(root, 'lib', 'supabase', 'database.ts'),
   'utf8',
 );
+const parentDirectory = fs.readFileSync(
+  path.join(root, 'lib', 'ownerParentAccounts.ts'),
+  'utf8',
+);
 const migration = fs.readFileSync(
   path.join(root, 'supabase', 'migrations', '202607270004_owner_managed_accounts.sql'),
   'utf8',
@@ -72,6 +76,7 @@ assert(
   ownerManagerSource.includes('Parents you have added') &&
     ownerManagerSource.includes('visibleParents') &&
     ownerManagerSource.includes("'reset_password'") &&
+    ownerManagerSource.includes('Parent list didn’t load') &&
     ownerManagerSource.includes('Type {parent.username} to confirm') &&
     ownerManagerSource.includes('Delete permanently'),
   'the owner needs searchable parent management with resets and confirmed permanent deletion',
@@ -81,9 +86,10 @@ assert(
   'every owner account route must re-check owner authorization on the server',
 );
 assert(
-  ownerRoute.includes(".eq('account_role', 'parent')") &&
-    !ownerRoute.includes(".eq('status',"),
-  'the owner directory must return every issued parent, including suspended and removed accounts',
+  ownerRoute.includes('listOwnerParentAccounts()') &&
+    parentDirectory.includes("where account_role = 'parent'") &&
+    !parentDirectory.includes("status = 'active'"),
+  'the owner directory must use the pinned database and return active, suspended, and removed parents',
 );
 assert(
   ownerRoute.includes('hasSameOrigin(request)') &&

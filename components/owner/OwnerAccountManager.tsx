@@ -62,9 +62,11 @@ function statusClass(status: ParentAccount['status']) {
 export default function OwnerAccountManager({
   adminConfigured,
   initialParents,
+  initialLoadError = '',
 }: {
   adminConfigured: boolean;
   initialParents: ParentAccount[];
+  initialLoadError?: string;
 }) {
   const [parents, setParents] = useState<ParentAccount[]>(initialParents);
   const [username, setUsername] = useState('');
@@ -78,6 +80,7 @@ export default function OwnerAccountManager({
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [parentSearch, setParentSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ParentAccount['status']>('all');
+  const [directoryError, setDirectoryError] = useState(initialLoadError);
 
   const activeCount = useMemo(
     () => parents.filter((parent) => parent.status === 'active').length,
@@ -101,8 +104,11 @@ export default function OwnerAccountManager({
     }>('/api/owner/parents', { cache: 'no-store' });
     if (ok) {
       setParents(payload.parents ?? []);
+      setDirectoryError('');
     } else {
-      setNotice({ tone: 'error', message: payload.error ?? 'Parent accounts could not be loaded.' });
+      const message = payload.error ?? 'Parent accounts could not be loaded.';
+      setDirectoryError(message);
+      setNotice({ tone: 'error', message });
     }
     setBusy(null);
   }, [adminConfigured]);
@@ -132,7 +138,13 @@ export default function OwnerAccountManager({
       setCredentials({ username: cleanUsername, password });
       setUsername('');
       setPassword('');
+      setParentSearch('');
+      setStatusFilter('all');
+      setDirectoryError('');
       setNotice({ tone: 'success', message: `Parent @${cleanUsername} is ready to sign in.` });
+      setBusy(null);
+      void loadParents();
+      return;
     } else {
       setNotice({ tone: 'error', message: payload.error ?? 'The parent account could not be created.' });
     }
@@ -246,12 +258,16 @@ export default function OwnerAccountManager({
               </p>
             </div>
             <div className="rounded-2xl bg-black/20 px-4 py-3 text-right">
-              <p className="text-2xl font-black text-white">{parents.length}</p>
+              <p className="text-2xl font-black text-white">
+                {directoryError && parents.length === 0 ? '—' : parents.length}
+              </p>
               <p className="text-[10px] font-black uppercase tracking-[.14em] text-white/38">
                 parents added
               </p>
               <p className="mt-1 text-[11px] font-bold text-emerald-100/65">
-                {activeCount} active
+                {directoryError && parents.length === 0
+                  ? 'List unavailable'
+                  : `${activeCount} active`}
               </p>
             </div>
           </div>
@@ -393,6 +409,21 @@ export default function OwnerAccountManager({
           <p className="mt-6 rounded-2xl bg-white/[0.04] px-5 py-8 text-center text-sm text-white/45">
             Loading parent accounts…
           </p>
+        ) : directoryError && parents.length === 0 ? (
+          <div className="mt-6 rounded-2xl bg-rose-300/[0.07] px-5 py-8 text-center">
+            <p className="text-sm font-black text-rose-100">Parent list didn’t load</p>
+            <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-rose-100/70">
+              The accounts are still saved. Check the connection and try loading the list again.
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadParents()}
+              disabled={busy !== null}
+              className="mt-4 min-h-11 rounded-xl bg-rose-200 px-4 text-sm font-black text-[#2a1018] disabled:opacity-45"
+            >
+              Try again
+            </button>
+          </div>
         ) : parents.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center">
             <div className="text-3xl" aria-hidden="true">⌁</div>
