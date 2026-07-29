@@ -31,10 +31,18 @@ assert(
   iseeIds.every((id) => !/^gk-|^g1-|^g3-/.test(id)),
   'a younger-grade question leaked into the ISEE bank',
 );
-for (const band of ['k', 'grade1', 'grade3'] as const) {
-  const gradePrefix = band === 'k' ? 'gk-' : band === 'grade1' ? 'g1-' : 'g3-';
+const GRADE_ID_PREFIXES = {
+  k: ['gk-', 'elk-', 'el-stem-'],
+  grade1: ['g1-', 'elk-', 'el1-', 'el-stem-', 'fig-'],
+  grade2: ['g1-', 'g3-', 'el2-', 'el-stem-', 'fig-'],
+  grade3: ['g3-', 'el3-', 'el-stem-', 'rc3-', 'fig-'],
+} as const;
+for (const band of ['k', 'grade1', 'grade2', 'grade3'] as const) {
+  const allowedPrefixes = GRADE_ID_PREFIXES[band];
   assert(
-    familyIdsForBand(band).every((id) => id.startsWith(gradePrefix) || id.startsWith('fig-')),
+    familyIdsForBand(band).every((id) =>
+      allowedPrefixes.some((prefix) => id.startsWith(prefix)),
+    ),
     `${band} contains an out-of-band question`,
   );
 }

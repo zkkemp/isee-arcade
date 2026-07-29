@@ -233,14 +233,14 @@ export default function OwnerAccountManager({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-200">
-                Issue private access
+                Direct parent login
               </p>
               <h2 className="mt-2 text-2xl font-black tracking-[-.025em] text-white">
                 Create a parent sign-in
               </h2>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/52">
-                Choose a username, make a temporary password, then create and copy the sign-in.
-                Each parent can add and manage only their own children.
+                Choose a username and password, create the account, then copy the details to give
+                directly to the parent. Each parent can add and manage only their own children.
               </p>
             </div>
             <div className="rounded-2xl bg-black/20 px-4 py-3 text-right">

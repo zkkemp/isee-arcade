@@ -36,14 +36,14 @@ type IdiomEntry = readonly [
  * contrasts it with the literal picture, and demonstrates natural context.
  */
 const IDIOMS: readonly IdiomEntry[] = [
-  ['piece of cake', 'something very easy to do', 'a slice of dessert', 'After practicing, the spelling quiz was a piece of cake.', 2],
-  ['hold your horses', 'wait and be patient', 'holding several horses still', 'Hold your horses—we need to read the directions first.', 2],
-  ['under the weather', 'feeling sick', 'standing beneath rain clouds', 'Mia stayed home because she felt under the weather.', 2],
-  ['all ears', 'listening very carefully', 'a person made only of ears', 'Tell me about the game—I am all ears.', 2],
-  ['in a pickle', 'in a difficult situation', 'sitting inside a pickle jar', 'I was in a pickle when I forgot both my lunch and my homework.', 2],
-  ['zip your lip', 'stop talking for a moment', 'closing a zipper across your mouth', 'We had to zip our lips when the play began.', 2],
-  ['on top of the world', 'feeling extremely happy', 'standing on the planet', 'Jalen felt on top of the world after helping his team win.', 2],
-  ['two peas in a pod', 'two people or things that are very alike', 'two peas growing together', 'The twins both love puzzles and are like two peas in a pod.', 2],
+  ['piece of cake', 'something very easy to do', 'a slice of dessert', 'After practicing, the spelling quiz was a piece of cake.', 1],
+  ['hold your horses', 'wait and be patient', 'holding several horses still', 'Hold your horses—we need to read the directions first.', 1],
+  ['under the weather', 'feeling sick', 'standing beneath rain clouds', 'Mia stayed home because she felt under the weather.', 1],
+  ['all ears', 'listening very carefully', 'a person made only of ears', 'Tell me about the game—I am all ears.', 1],
+  ['in a pickle', 'in a difficult situation', 'sitting inside a pickle jar', 'I was in a pickle when I forgot both my lunch and my homework.', 1],
+  ['zip your lip', 'stop talking for a moment', 'closing a zipper across your mouth', 'We had to zip our lips when the play began.', 1],
+  ['on top of the world', 'feeling extremely happy', 'standing on the planet', 'Jalen felt on top of the world after helping his team win.', 1],
+  ['two peas in a pod', 'two people or things that are very alike', 'two peas growing together', 'The twins both love puzzles and are like two peas in a pod.', 1],
   ['butterflies in my stomach', 'a nervous fluttery feeling', 'insects flying inside your body', 'I had butterflies in my stomach before the recital.', 2],
   ['raining cats and dogs', 'raining very heavily', 'pets falling from clouds', 'Bring an umbrella—it is raining cats and dogs.', 2],
   ['break the ice', 'help people feel comfortable together', 'cracking frozen water', 'The silly name game helped break the ice.', 3],
@@ -278,7 +278,7 @@ const ALL_FIGURATIVE = [...IDIOM_QUESTIONS, ...DEVICE_QUESTIONS, ...PUN_QUESTION
 /** Grade-only content. Never import this into an ISEE practice bank. */
 export function figurativeQuestionsForGrade(grade: FigurativeGrade): Question[] {
   const gradeNumber = GRADE_NUMBER[grade];
-  if (gradeNumber < 2) return [];
+  if (gradeNumber < 1) return [];
   return ALL_FIGURATIVE.filter((question) => minimumGrade(question) <= gradeNumber);
 }
 

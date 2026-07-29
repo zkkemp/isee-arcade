@@ -77,7 +77,7 @@ export default async function OwnerPage() {
             Parents
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/58 sm:text-base">
-            Create parent sign-ins, see everyone you have invited, and reset a forgotten password
+            Create parent usernames and passwords, see everyone you have added, and reset a forgotten password
             without opening another family’s records.
           </p>
         </div>

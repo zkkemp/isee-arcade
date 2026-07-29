@@ -96,7 +96,6 @@ export async function POST(request: Request) {
     ];
   });
   if (attempts.length > 0) {
-    const attemptsJson = JSON.stringify(attempts);
     await sql`
       insert into public.question_attempts (
         attempt_key, learner_id, question_id, subject, correct, answered_at
@@ -108,7 +107,7 @@ export async function POST(request: Request) {
         attempt.subject,
         attempt.correct,
         attempt.answered_at::timestamptz
-      from jsonb_to_recordset(${attemptsJson}::jsonb) as attempt(
+      from jsonb_to_recordset(${sql.json(attempts)}::jsonb) as attempt(
         attempt_key text,
         question_id text,
         subject text,

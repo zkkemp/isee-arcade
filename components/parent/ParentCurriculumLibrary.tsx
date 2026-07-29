@@ -18,11 +18,13 @@ import {
 import { useProfiles } from '@/lib/profiles';
 
 const BATCH_SIZE = 40;
-type Area = 'all' | 'vocabulary' | Subject;
+type Area = 'all' | 'vocabulary' | 'idioms' | 'stem' | Subject;
 
 const AREAS: Array<{ id: Area; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'vocabulary', label: 'Vocabulary' },
+  { id: 'idioms', label: 'Idioms' },
+  { id: 'stem', label: 'STEM & weather' },
   { id: 'verbal', label: 'Verbal' },
   { id: 'quantitative', label: 'Quantitative' },
   { id: 'reading', label: 'Reading' },
@@ -37,6 +39,29 @@ const REASONS: Array<{ id: OverrideReason; label: string }> = [
   { id: 'already_mastered', label: 'Already mastered' },
   { id: 'other', label: 'Other' },
 ];
+
+function isIdiom(family: CurriculumFamilyPreview): boolean {
+  return family.topic?.toLowerCase().includes('idiom') ?? false;
+}
+
+function isStem(family: CurriculumFamilyPreview): boolean {
+  return family.topic?.toLowerCase().startsWith('stem ·') ?? false;
+}
+
+function matchesArea(family: CurriculumFamilyPreview, selectedArea: Area): boolean {
+  if (selectedArea === 'all') return true;
+  if (selectedArea === 'vocabulary') return family.kind === 'synonym';
+  if (selectedArea === 'idioms') return isIdiom(family);
+  if (selectedArea === 'stem') return isStem(family);
+  return family.subject === selectedArea;
+}
+
+function familyAreaLabel(family: CurriculumFamilyPreview): string {
+  if (isIdiom(family)) return 'Idiom';
+  if (isStem(family)) return 'STEM & weather';
+  if (family.kind === 'synonym') return 'Vocabulary';
+  return SUBJECT_LABELS[family.subject];
+}
 
 export default function ParentCurriculumLibrary({
   band,
@@ -55,11 +80,21 @@ export default function ParentCurriculumLibrary({
   const [reason, setReason] = useState<OverrideReason>('not_a_fit');
   const targetLearner = scope === 'family' ? null : scope;
 
+  const areaCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        AREAS.map((item) => [
+          item.id,
+          families.filter((family) => matchesArea(family, item.id)).length,
+        ]),
+      ) as Record<Area, number>,
+    [families],
+  );
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return families.filter((family) => {
-      if (area === 'vocabulary' && family.kind !== 'synonym') return false;
-      if (area !== 'all' && area !== 'vocabulary' && family.subject !== area) return false;
+      if (!matchesArea(family, area)) return false;
       if (!needle) return true;
       const sample = family.sample;
       return [
@@ -105,6 +140,8 @@ export default function ParentCurriculumLibrary({
             <select
               value={band}
               onChange={(event) => {
+                setArea('all');
+                resetBatch();
                 router.push(`/parent/curriculum?level=${event.target.value}`);
               }}
               className="min-h-13 w-full rounded-xl border border-white/12 bg-[#181526] px-4 text-base font-black text-white outline-none focus:border-violet-300 lg:text-sm"
@@ -159,27 +196,38 @@ export default function ParentCurriculumLibrary({
         </div>
       </section>
 
-      <div className="mb-5 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Subject">
+      <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Curriculum area">
         {AREAS.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
             aria-selected={area === item.id}
+            disabled={areaCounts[item.id] === 0}
             onClick={() => {
               setArea(item.id);
               resetBatch();
             }}
-            className={`min-h-11 flex-shrink-0 rounded-xl px-4 text-xs font-black ${
+            className={`min-h-11 rounded-xl px-3.5 text-xs font-black transition ${
               area === item.id
                 ? 'bg-violet-300 text-[#171226]'
-                : 'bg-white/[0.055] text-white/55 hover:text-white'
-            }`}
+                : 'bg-white/[0.055] text-white/60 hover:bg-white/[0.08] hover:text-white'
+            } disabled:cursor-not-allowed disabled:opacity-30`}
           >
-            {item.label}
+            {item.label}{' '}
+            <span className={area === item.id ? 'text-[#171226]/60' : 'text-white/35'}>
+              {areaCounts[item.id]}
+            </span>
           </button>
         ))}
       </div>
+
+      {areaCounts.idioms === 0 && areaCounts.stem === 0 && (
+        <div className="mb-5 rounded-xl bg-cyan-300/[0.07] px-4 py-3 text-sm font-semibold leading-relaxed text-cyan-50/75">
+          Idioms and STEM &amp; weather are part of the grade-level curriculum. Choose First
+          through Eighth Grade above to browse those lanes.
+        </div>
+      )}
 
       {enabledCount <= Math.min(10, families.length) && (
         <div
@@ -268,9 +316,7 @@ export default function ParentCurriculumLibrary({
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="text-[10px] font-black text-cyan-200">
-                        {family.kind === 'synonym'
-                          ? 'Vocabulary'
-                          : SUBJECT_LABELS[family.subject]}
+                        {familyAreaLabel(family)}
                       </span>
                       <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-bold text-white/42">
                         {family.templated ? 'Dynamic family' : 'Fixed question'}

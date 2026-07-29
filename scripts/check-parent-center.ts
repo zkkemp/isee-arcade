@@ -130,7 +130,8 @@ const childSyncSource = fs.readFileSync(
 );
 assert(
   childSyncSource.includes('insert into public.question_attempts') &&
-    childSyncSource.includes('on conflict (attempt_key) do nothing'),
+    childSyncSource.includes('on conflict (attempt_key) do nothing') &&
+    childSyncSource.includes('sql.json(attempts)'),
   'child sync must persist deduplicated attempt history as well as the report snapshot',
 );
 

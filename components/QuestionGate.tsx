@@ -288,10 +288,12 @@ export default function QuestionGate({
 
   const answered = picked !== null;
   const correct = picked === question.answer;
-  const accent = SUBJECT_COLORS[question.subject];
+  const stemQuestion = question.topic?.toLowerCase().startsWith('stem ·') ?? false;
+  const accent = stemQuestion ? '#67e8f9' : SUBJECT_COLORS[question.subject];
   const speechLine = questionSpeech(question.prompt, question.choices);
   const canSpeak = speechAvailable();
-  const subjectIcon = SUBJECT_ICONS[question.subject];
+  const subjectIcon = stemQuestion ? '🔬' : SUBJECT_ICONS[question.subject];
+  const subjectLabel = stemQuestion ? 'STEM & WEATHER' : SUBJECT_LABELS[question.subject];
 
   const toggleSpeech = useCallback((key: string, line: string) => {
     if (speakingKey === key) {
@@ -404,7 +406,7 @@ export default function QuestionGate({
               className="text-[10px] font-bold uppercase tracking-widest"
               style={{ color: accent }}
             >
-              {SUBJECT_LABELS[question.subject]}
+              {subjectLabel}
             </div>
             <div className="mt-1 flex justify-end gap-1">
               {[1, 2, 3].map((d) => (

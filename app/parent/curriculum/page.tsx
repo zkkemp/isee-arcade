@@ -18,7 +18,7 @@ export default async function CurriculumPage({
   const requested = (await searchParams).level;
   const band = GRADE_BANDS.includes(requested as GradeBand)
     ? (requested as GradeBand)
-    : 'isee';
+    : 'grade3';
   return (
     <ParentShell
       title="Curriculum library"

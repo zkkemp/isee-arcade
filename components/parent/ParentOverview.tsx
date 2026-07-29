@@ -113,7 +113,7 @@ export default function ParentOverview({ isOwner = false }: { isOwner?: boolean 
             <p className="text-[10px] font-black uppercase tracking-[.16em] text-fuchsia-200">
               Owner tools
             </p>
-            <h2 className="mt-1 text-lg font-black text-white">Invite another parent family</h2>
+            <h2 className="mt-1 text-lg font-black text-white">Add another parent family</h2>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-white/48">
               Create a private username and temporary password, then copy the sign-in details to
               share. Each parent gets their own separate family.

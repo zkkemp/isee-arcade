@@ -34,6 +34,10 @@ const adminClient = fs.readFileSync(
   path.join(root, 'lib', 'supabase', 'admin.ts'),
   'utf8',
 );
+const databaseClient = fs.readFileSync(
+  path.join(root, 'lib', 'supabase', 'database.ts'),
+  'utf8',
+);
 const migration = fs.readFileSync(
   path.join(root, 'supabase', 'migrations', '202607270004_owner_managed_accounts.sql'),
   'utf8',
@@ -85,10 +89,21 @@ assert(
   'every mutating owner route must reject cross-origin requests',
 );
 assert(
+  ownerRoute.includes('getIseeDatabase()') &&
+    ownerRoute.includes('insert into public.parent_account_invites') &&
+    !ownerRoute.includes('The invitation could not be secured.'),
+  'direct parent login creation must prepare its internal authorization row without invitation UX',
+);
+assert(
   adminClient.includes("import 'server-only'") &&
     adminClient.includes('SUPABASE_SERVICE_ROLE_KEY') &&
     !adminClient.includes('NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY'),
   'the service-role client must remain server-only',
+);
+assert(
+  databaseClient.includes("const ISEE_PROJECT_REF = 'hgmupcysijskaowsrgbn'") &&
+    databaseClient.includes('url.includes(ISEE_PROJECT_REF)'),
+  'the direct database connection must remain pinned to the isolated ISEE project',
 );
 assert(
   migration.includes('hgmupcysijskaowsrgbn') &&
@@ -121,6 +136,6 @@ assert(
 
 console.log(
   'Owner access audit: self-service password changes, complete parent directory, owner resets, ' +
-    'no public signup, server-only authorization, same-origin mutations, database invitation gate, ' +
+    'direct credential creation, no public signup, server-only authorization, same-origin mutations, database authorization gate, ' +
     'active-account RLS, and isolated-project boundary passed.',
 );

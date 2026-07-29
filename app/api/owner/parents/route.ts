@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { normalizeAccountUsername, usernameAuthEmail } from '@/lib/accountUsername';
 import { getOwnerSession, hasSameOrigin, isSimplePassword } from '@/lib/ownerAccess';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
+import { getIseeDatabase } from '@/lib/supabase/database';
 
 export const runtime = 'nodejs';
 
@@ -46,9 +47,10 @@ export async function POST(request: Request) {
   }
 
   const admin = getSupabaseAdminClient();
-  if (!admin) {
+  const sql = getIseeDatabase();
+  if (!admin || !sql) {
     return NextResponse.json(
-      { error: 'The server-only ISEE Arcade admin key is not configured yet.' },
+      { error: 'Secure parent-account creation is not configured yet.' },
       { status: 503 },
     );
   }
@@ -85,29 +87,45 @@ export async function POST(request: Request) {
   }
 
   const authEmail = usernameAuthEmail(username);
-  await admin
-    .from('parent_account_invites')
-    .delete()
-    .eq('auth_email', authEmail)
-    .is('consumed_at', null)
-    .lt('expires_at', new Date().toISOString());
-
-  const { data: invite, error: inviteError } = await admin
-    .from('parent_account_invites')
-    .insert({
-      username,
-      auth_email: authEmail,
-      account_role: 'parent',
-      created_by: owner.user.id,
-    })
-    .select('id')
-    .single();
-
-  if (inviteError || !invite) {
-    const duplicate = inviteError?.code === '23505';
+  let inviteId: string;
+  try {
+    // This row is an internal, short-lived authorization token for the database
+    // trigger. It is not an emailed invitation and the parent never sees it.
+    // Using the pinned ISEE database connection avoids PostgREST/RLS ambiguity
+    // while preserving the database boundary against public account creation.
+    await sql`
+      delete from public.parent_account_invites
+      where lower(auth_email) = lower(${authEmail})
+        and consumed_at is null
+    `;
+    const rows = await sql`
+      insert into public.parent_account_invites (
+        username, auth_email, account_role, created_by
+      ) values (
+        ${username}, ${authEmail}, 'parent', ${owner.user.id}::uuid
+      )
+      returning id
+    `;
+    inviteId = String(rows[0]?.id ?? '');
+  } catch (error) {
+    const duplicate =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === '23505';
     return NextResponse.json(
-      { error: duplicate ? 'That username is already being created.' : 'The invitation could not be secured.' },
+      {
+        error: duplicate
+          ? 'That username is already in use.'
+          : 'The parent sign-in could not be prepared. Please try again.',
+      },
       { status: duplicate ? 409 : 500 },
+    );
+  }
+  if (!inviteId) {
+    return NextResponse.json(
+      { error: 'The parent sign-in could not be prepared. Please try again.' },
+      { status: 500 },
     );
   }
 
@@ -119,7 +137,10 @@ export async function POST(request: Request) {
   });
 
   if (createError || !created.user) {
-    await admin.from('parent_account_invites').delete().eq('id', invite.id);
+    await sql`
+      delete from public.parent_account_invites
+      where id = ${inviteId}::uuid and consumed_at is null
+    `;
     const duplicate = createError?.message.toLowerCase().includes('already');
     return NextResponse.json(
       { error: duplicate ? 'That username is already in use.' : 'The parent account could not be created.' },

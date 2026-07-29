@@ -23,6 +23,7 @@ import { QUANT_TEMPLATES_3 } from './quantTemplates3';
 import { GRADE_K_TEMPLATES } from './gradeK';
 import { GRADE_1_TEMPLATES } from './grade1';
 import { GRADE_3_TEMPLATES } from './grade3';
+import { ELEMENTARY_EXPANSION, type ElementaryBand } from './elementaryExpansion';
 import { figurativeQuestionsForGrade } from './figurativeLanguage';
 
 export * from './types';
@@ -65,10 +66,10 @@ export const GRADE_BAND_LABELS: Record<GradeBand, string> = {
 };
 
 export const GRADE_BAND_BLURBS: Record<GradeBand, string> = {
-  k: 'Counting, shapes, letters, patterns.',
-  grade1: 'Add and subtract to 20, place value, time, and early reading.',
-  grade2: 'Place value, two-digit operations, fluency, and reading foundations.',
-  grade3: 'Times tables, fractions, multi-digit work, and comprehension.',
+  k: 'Counting, shapes, sounds, patterns, weather, nature, and simple STEM.',
+  grade1: 'Add and subtract to 20, place value, time, phonics, idioms, weather, and STEM.',
+  grade2: 'Two-digit operations, fluency, grammar, idioms, weather, and STEM.',
+  grade3: 'Times tables, fractions, grammar, idioms, STEM, weather, and comprehension.',
   grade4: 'Multi-step operations, fractions, vocabulary, and close reading.',
   grade5: 'Decimals, fractions, volume, language, and evidence-based reading.',
   grade6: 'Ratios, expressions, number systems, vocabulary, and analysis.',
@@ -109,7 +110,7 @@ export const GENERIC_GRADE_BANDS: GradeBand[] = [
 export const ISEE_GRADE_BANDS: GradeBand[] = ['isee', 'iseeMiddle', 'iseeUpper'];
 
 export function bandHasReading(band: GradeBand): boolean {
-  return !['k', 'grade1', 'grade2', 'grade3'].includes(band);
+  return !['k', 'grade1', 'grade2'].includes(band);
 }
 
 export function bandNeedsNarration(band: GradeBand): boolean {
@@ -221,6 +222,13 @@ const ISEE_UPPER = [
 ];
 const GRADE_1_CANDIDATES = templatesToCandidates(GRADE_1_TEMPLATES);
 const GRADE_3_CANDIDATES = templatesToCandidates(GRADE_3_TEMPLATES);
+const ELEMENTARY_CANDIDATES: Record<ElementaryBand, Candidate[]> = {
+  k: questionsToCandidates(ELEMENTARY_EXPANSION.k),
+  grade1: questionsToCandidates(ELEMENTARY_EXPANSION.grade1),
+  grade2: questionsToCandidates(ELEMENTARY_EXPANSION.grade2),
+  grade3: questionsToCandidates(ELEMENTARY_EXPANSION.grade3),
+};
+const GRADE_3_READING_CANDIDATES = questionsToCandidates(READING_QUESTIONS_3);
 const GRADE_FIGURATIVE: Record<
   Extract<GradeBand, 'k' | 'grade1' | 'grade2' | 'grade3' | 'grade4' | 'grade5' | 'grade6' | 'grade7' | 'grade8'>,
   Candidate[]
@@ -238,14 +246,28 @@ const GRADE_FIGURATIVE: Record<
 
 const BANDS: Record<GradeBand, Candidate[]> = {
   isee: ISEE_CANDIDATES,
-  k: [...templatesToCandidates(GRADE_K_TEMPLATES), ...GRADE_FIGURATIVE.k],
-  grade1: [...GRADE_1_CANDIDATES, ...GRADE_FIGURATIVE.grade1],
+  k: [
+    ...templatesToCandidates(GRADE_K_TEMPLATES),
+    ...ELEMENTARY_CANDIDATES.k,
+    ...GRADE_FIGURATIVE.k,
+  ],
+  grade1: [
+    ...GRADE_1_CANDIDATES,
+    ...ELEMENTARY_CANDIDATES.grade1,
+    ...GRADE_FIGURATIVE.grade1,
+  ],
   grade2: [
     ...GRADE_1_CANDIDATES.filter((candidate) => candidate.difficulty >= 2),
     ...GRADE_3_CANDIDATES.filter((candidate) => candidate.difficulty === 1),
+    ...ELEMENTARY_CANDIDATES.grade2,
     ...GRADE_FIGURATIVE.grade2,
   ],
-  grade3: [...GRADE_3_CANDIDATES, ...GRADE_FIGURATIVE.grade3],
+  grade3: [
+    ...GRADE_3_CANDIDATES,
+    ...ELEMENTARY_CANDIDATES.grade3,
+    ...GRADE_3_READING_CANDIDATES,
+    ...GRADE_FIGURATIVE.grade3,
+  ],
   grade4: [
     ...GRADE_3_CANDIDATES.filter((candidate) => candidate.difficulty >= 2),
     ...ISEE_EASY,
