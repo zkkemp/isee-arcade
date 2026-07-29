@@ -112,7 +112,7 @@ export default function GameLibrary() {
               if (nextQuery.trim()) setSectionId('all');
             }}
             placeholder="Search games — try “word,” “space,” or “puzzle”"
-            className="min-h-12 w-full rounded-xl bg-white/[0.055] pl-9 pr-4 text-sm font-bold text-white outline-none ring-1 ring-white/10 placeholder:text-white/45 focus:ring-2 focus:ring-cyan-200"
+            className="min-h-12 w-full rounded-xl bg-white/[0.055] pl-9 pr-4 text-base font-bold text-white outline-none ring-1 ring-white/10 placeholder:text-white/45 focus:ring-2 focus:ring-cyan-200 sm:text-sm"
           />
         </label>
         {(query || sectionId !== 'all') && (

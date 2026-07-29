@@ -64,7 +64,10 @@ export default async function OwnerPage() {
     <main className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-6 sm:px-8 sm:pt-10">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-5">
         <div>
-          <Link href="/parent" className="text-sm font-bold text-violet-200/75 hover:text-white">
+          <Link
+            href="/parent"
+            className="inline-flex min-h-11 items-center text-sm font-bold text-violet-200/75 hover:text-white"
+          >
             ← Parent center
           </Link>
           <div className="mt-5 inline-flex rounded-full bg-fuchsia-300/12 px-3 py-1 text-[10px] font-black uppercase tracking-[.17em] text-fuchsia-200">

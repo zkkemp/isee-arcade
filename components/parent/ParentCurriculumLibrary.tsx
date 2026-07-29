@@ -107,7 +107,7 @@ export default function ParentCurriculumLibrary({
               onChange={(event) => {
                 router.push(`/parent/curriculum?level=${event.target.value}`);
               }}
-              className="min-h-13 w-full rounded-xl border border-white/12 bg-[#181526] px-4 text-sm font-black text-white outline-none focus:border-violet-300"
+              className="min-h-13 w-full rounded-xl border border-white/12 bg-[#181526] px-4 text-base font-black text-white outline-none focus:border-violet-300 lg:text-sm"
             >
               {GRADE_BANDS.map((item) => (
                 <option key={item} value={item}>
@@ -121,7 +121,7 @@ export default function ParentCurriculumLibrary({
             <select
               value={scope}
               onChange={(event) => setScope(event.target.value)}
-              className="min-h-13 w-full rounded-xl border border-white/12 bg-[#181526] px-4 text-sm font-black text-white outline-none focus:border-violet-300"
+              className="min-h-13 w-full rounded-xl border border-white/12 bg-[#181526] px-4 text-base font-black text-white outline-none focus:border-violet-300 lg:text-sm"
             >
               <option value="family">Every child in this family</option>
               {profiles.map((profile) => (
@@ -143,14 +143,14 @@ export default function ParentCurriculumLibrary({
                 resetBatch();
               }}
               placeholder="Search a word, skill, question, or answer…"
-              className="min-h-13 w-full rounded-xl border border-white/12 bg-black/20 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyan-200"
+              className="min-h-13 w-full rounded-xl border border-white/12 bg-black/20 px-4 text-base text-white outline-none placeholder:text-white/30 focus:border-cyan-200 lg:text-sm"
             />
           </label>
           <select
             aria-label="Reason used when turning off content"
             value={reason}
             onChange={(event) => setReason(event.target.value as OverrideReason)}
-            className="min-h-13 rounded-xl border border-white/12 bg-[#181526] px-4 text-sm font-bold text-white outline-none"
+            className="min-h-13 rounded-xl border border-white/12 bg-[#181526] px-4 text-base font-bold text-white outline-none lg:text-sm"
           >
             {REASONS.map((item) => (
               <option key={item.id} value={item.id}>Turn-off reason: {item.label}</option>
@@ -208,7 +208,7 @@ export default function ParentCurriculumLibrary({
               type="button"
               disabled={safeBatch === 0}
               onClick={() => setBatch((value) => Math.max(0, value - 1))}
-              className="min-h-10 rounded-xl bg-white/[0.06] px-3 text-xs font-black text-white disabled:opacity-25"
+              className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-black text-white disabled:opacity-25"
             >
               ← Previous
             </button>
@@ -217,7 +217,7 @@ export default function ParentCurriculumLibrary({
               <select
                 value={safeBatch}
                 onChange={(event) => setBatch(Number(event.target.value))}
-                className="rounded-lg bg-[#181526] px-2 py-2 font-bold text-white"
+                className="min-h-11 rounded-lg bg-[#181526] px-2 py-2 font-bold text-white"
               >
                 {Array.from({ length: batchCount }, (_, index) => (
                   <option key={index} value={index}>{index + 1}</option>
@@ -229,7 +229,7 @@ export default function ParentCurriculumLibrary({
               type="button"
               disabled={safeBatch >= batchCount - 1}
               onClick={() => setBatch((value) => Math.min(batchCount - 1, value + 1))}
-              className="min-h-10 rounded-xl bg-white/[0.06] px-3 text-xs font-black text-white disabled:opacity-25"
+              className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-black text-white disabled:opacity-25"
             >
               Next →
             </button>

@@ -277,7 +277,7 @@ export default function ParentChildren() {
                       <button
                         type="button"
                         onClick={() => setRemoveId(null)}
-                        className="min-h-10 rounded-lg bg-white/[0.07] px-3 text-xs font-black text-white/65"
+                        className="min-h-11 rounded-lg bg-white/[0.07] px-3 text-xs font-black text-white/65"
                       >
                         Keep child
                       </button>
@@ -303,7 +303,7 @@ export default function ParentChildren() {
                           setRemoveId(null);
                           setNotice({ tone: 'success', message: `${profile.name}’s account was removed.` });
                         }}
-                        className="min-h-10 rounded-lg bg-rose-200 px-3 text-xs font-black text-[#2a0b12]"
+                        className="min-h-11 rounded-lg bg-rose-200 px-3 text-xs font-black text-[#2a0b12]"
                       >
                         Yes, remove
                       </button>

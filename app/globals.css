@@ -90,6 +90,19 @@ summary:focus-visible {
   outline-offset: 3px;
 }
 
+/*
+ * iOS zooms the page when a focused form control renders below 16px. Keep
+ * forms stable under the on-screen keyboard on the app's primary phone/tablet
+ * viewports, while leaving compact non-text controls alone.
+ */
+@media (max-width: 1024px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 .arcade-action {
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 0.85rem;

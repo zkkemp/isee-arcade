@@ -90,7 +90,10 @@ export default function ParentShell({
     <main className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-5 sm:px-8 sm:pt-9">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/?play=parent" className="text-sm font-bold text-violet-200/75 hover:text-white">
+          <Link
+            href="/?play=parent"
+            className="inline-flex min-h-11 items-center text-sm font-bold text-violet-200/75 hover:text-white"
+          >
             ← Parent free play
           </Link>
           <div className="mt-4 inline-flex rounded-full bg-amber-300/12 px-3 py-1 text-[10px] font-black uppercase tracking-[.16em] text-amber-200">
@@ -118,7 +121,7 @@ export default function ParentShell({
 
       <nav
         aria-label="Parent center"
-        className={`mb-7 grid grid-cols-3 gap-1 rounded-2xl bg-black/25 p-1.5 ${
+        className={`mb-7 grid grid-cols-3 gap-1 rounded-2xl bg-black/25 p-1.5 sm:grid-cols-4 ${
           isOwner ? 'lg:grid-cols-7' : 'lg:grid-cols-6'
         }`}
       >
@@ -130,7 +133,7 @@ export default function ParentShell({
               key={item.href}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-black transition sm:gap-2 sm:px-3 sm:text-sm ${
+              className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[11px] font-black leading-none transition sm:flex-row sm:gap-2 sm:px-3 sm:text-sm ${
                 active
                   ? 'bg-violet-300 text-[#171226]'
                   : 'text-white/52 hover:bg-white/[0.06] hover:text-white'

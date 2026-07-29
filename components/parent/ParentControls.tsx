@@ -107,7 +107,7 @@ export default function ParentControls({
                           onClick={() =>
                             setContentDisabled(item.contentKey, item.learnerId, false)
                           }
-                          className="min-h-10 rounded-xl bg-emerald-300/12 px-3 text-xs font-black text-emerald-100"
+                          className="min-h-11 rounded-xl bg-emerald-300/12 px-3 text-xs font-black text-emerald-100"
                         >
                           Restore
                         </button>
@@ -151,7 +151,7 @@ export default function ParentControls({
                   <button
                     type="button"
                     onClick={() => toggleBookmark(key)}
-                    className="min-h-10 rounded-xl bg-white/[0.06] px-3 text-xs font-black text-white/60"
+                    className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-black text-white/60"
                   >
                     Remove
                   </button>

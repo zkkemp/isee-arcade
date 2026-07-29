@@ -274,7 +274,7 @@ export default function OwnerAccountManager({
                 <button
                   type="button"
                   onClick={() => setPassword(makePassword())}
-                  className="normal-case tracking-normal text-cyan-200 hover:text-cyan-100"
+                  className="-mr-2 inline-flex min-h-11 items-center px-2 normal-case tracking-normal text-cyan-200 hover:text-cyan-100"
                 >
                   Make one
                 </button>
@@ -364,7 +364,7 @@ export default function OwnerAccountManager({
                 value={parentSearch}
                 onChange={(event) => setParentSearch(event.target.value)}
                 placeholder="Find a parent by username"
-                className="min-h-11 w-full rounded-xl bg-white/[0.06] px-4 text-sm text-white outline-none ring-1 ring-white/10 placeholder:text-white/32 focus:ring-2 focus:ring-violet-200"
+                className="min-h-11 w-full rounded-xl bg-white/[0.06] px-4 text-base text-white outline-none ring-1 ring-white/10 placeholder:text-white/32 focus:ring-2 focus:ring-violet-200 md:text-sm"
               />
             </label>
             <div className="grid grid-cols-4 gap-1 rounded-xl bg-black/20 p-1" aria-label="Filter parents">
@@ -374,7 +374,7 @@ export default function OwnerAccountManager({
                   type="button"
                   onClick={() => setStatusFilter(status)}
                   aria-pressed={statusFilter === status}
-                  className={`min-h-9 rounded-lg px-2 text-[11px] font-black capitalize transition ${
+                  className={`min-h-11 rounded-lg px-2 text-[11px] font-black capitalize transition ${
                     statusFilter === status
                       ? 'bg-violet-200 text-[#171226]'
                       : 'text-white/48 hover:bg-white/[0.06] hover:text-white'
@@ -406,7 +406,7 @@ export default function OwnerAccountManager({
                 setParentSearch('');
                 setStatusFilter('all');
               }}
-              className="mt-3 min-h-10 rounded-xl bg-white/[0.07] px-4 text-xs font-black text-violet-100"
+              className="mt-3 min-h-11 rounded-xl bg-white/[0.07] px-4 text-xs font-black text-violet-100"
             >
               Show every parent
             </button>
@@ -451,7 +451,7 @@ export default function OwnerAccountManager({
                             setConfirmRemove(null);
                           }}
                           disabled={rowBusy}
-                          className="min-h-10 rounded-xl bg-white/[0.07] px-3 text-xs font-black text-white/70 hover:bg-white/10"
+                          className="min-h-11 rounded-xl bg-white/[0.07] px-3 text-xs font-black text-white/70 hover:bg-white/10"
                         >
                           Reset password
                         </button>
@@ -464,7 +464,7 @@ export default function OwnerAccountManager({
                             )
                           }
                           disabled={rowBusy}
-                          className="min-h-10 rounded-xl bg-amber-200/10 px-3 text-xs font-black text-amber-100 hover:bg-amber-200/15"
+                          className="min-h-11 rounded-xl bg-amber-200/10 px-3 text-xs font-black text-amber-100 hover:bg-amber-200/15"
                         >
                           {parent.status === 'active' ? 'Suspend' : 'Restore'}
                         </button>
@@ -475,7 +475,7 @@ export default function OwnerAccountManager({
                             setResetting(null);
                           }}
                           disabled={rowBusy}
-                          className="min-h-10 rounded-xl bg-rose-300/10 px-3 text-xs font-black text-rose-100 hover:bg-rose-300/15"
+                          className="min-h-11 rounded-xl bg-rose-300/10 px-3 text-xs font-black text-rose-100 hover:bg-rose-300/15"
                         >
                           Remove
                         </button>
@@ -494,7 +494,7 @@ export default function OwnerAccountManager({
                         }
                         autoComplete="new-password"
                         placeholder="New temporary password"
-                        className="min-h-11 min-w-56 flex-1 rounded-lg bg-white/[0.07] px-3 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-cyan-300"
+                        className="min-h-11 min-w-56 flex-1 rounded-lg bg-white/[0.07] px-3 text-base text-white outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-cyan-300 md:text-sm"
                       />
                       <button
                         type="button"
@@ -526,7 +526,7 @@ export default function OwnerAccountManager({
                         <button
                           type="button"
                           onClick={() => setConfirmRemove(null)}
-                          className="min-h-10 rounded-lg px-3 text-xs font-black text-white/60"
+                          className="min-h-11 rounded-lg px-3 text-xs font-black text-white/60"
                         >
                           Keep account
                         </button>
@@ -534,7 +534,7 @@ export default function OwnerAccountManager({
                           type="button"
                           onClick={() => void removeAccess(parent)}
                           disabled={rowBusy}
-                          className="min-h-10 rounded-lg bg-rose-300 px-3 text-xs font-black text-[#2a1018]"
+                          className="min-h-11 rounded-lg bg-rose-300 px-3 text-xs font-black text-[#2a1018]"
                         >
                           Remove access
                         </button>

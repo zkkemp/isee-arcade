@@ -35,7 +35,7 @@ export default function ParentSyncStatus({
         type="button"
         onClick={onRefresh}
         disabled={refreshing}
-        className="min-h-9 rounded-lg bg-white/[0.07] px-3 font-black text-white transition hover:bg-white/12 disabled:opacity-45"
+        className="min-h-11 rounded-lg bg-white/[0.07] px-3 font-black text-white transition hover:bg-white/12 disabled:opacity-45"
       >
         {refreshing ? 'Refreshing…' : 'Refresh now'}
       </button>

@@ -77,7 +77,7 @@ export default function AvatarPicker({
             value={query}
             onChange={(event) => setQuery(event.target.value.slice(0, 32))}
             placeholder="Search avatar styles"
-            className="min-h-11 w-full rounded-xl bg-white/[0.055] pl-9 pr-4 text-sm font-bold text-white outline-none ring-1 ring-white/10 placeholder:text-white/42 focus:ring-2 focus:ring-cyan-200"
+            className="min-h-11 w-full rounded-xl bg-white/[0.055] pl-9 pr-4 text-base font-bold text-white outline-none ring-1 ring-white/10 placeholder:text-white/42 focus:ring-2 focus:ring-cyan-200 sm:text-sm"
           />
         </label>
       )}

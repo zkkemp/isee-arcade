@@ -122,7 +122,10 @@ export default async function Home({
       </section>
 
       <p className="mt-7 text-center sm:hidden">
-        <Link href="/progress" className="text-sm font-bold text-violet-300 hover:underline">
+        <Link
+          href="/progress"
+          className="inline-flex min-h-11 items-center text-sm font-bold text-violet-300 hover:underline"
+        >
           View progress by subject →
         </Link>
       </p>

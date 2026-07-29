@@ -53,7 +53,10 @@ export default function ParentOverview({ isOwner = false }: { isOwner?: boolean 
             <h2 className="text-xl font-black text-white">Your children</h2>
             <p className="mt-1 text-xs text-white/45">A quick read before opening the full report.</p>
           </div>
-          <Link href="/parent/children" className="text-xs font-black text-cyan-200">
+          <Link
+            href="/parent/children"
+            className="inline-flex min-h-11 items-center text-xs font-black text-cyan-200"
+          >
             Manage children →
           </Link>
         </div>
