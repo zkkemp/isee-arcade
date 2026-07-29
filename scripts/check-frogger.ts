@@ -32,6 +32,7 @@ import {
   HITBOX_INSET,
   MAX_RIVER_SPEED,
   MAX_ROAD_SPEED,
+  ROAD_VEHICLES,
   ROWS,
   START_ROW,
   advanceLevel,
@@ -40,6 +41,7 @@ import {
   laneAt,
   rideObstacle,
   type LevelPlan,
+  type RoadVehicle,
 } from '../components/games/Frogger';
 import { DIFFICULTIES } from '../lib/difficulty';
 
@@ -158,6 +160,9 @@ let coinsTotal = 0;
 let turtleLanes = 0;
 let lilypadLanes = 0;
 let restStops = 0;
+const vehicleCounts = Object.fromEntries(
+  ROAD_VEHICLES.map((vehicle) => [vehicle, 0]),
+) as Record<RoadVehicle, number>;
 
 for (const d of DIFFICULTIES) {
   for (let level = 1; level <= LEVELS; level += 1) {
@@ -173,6 +178,14 @@ for (const d of DIFFICULTIES) {
       for (const lane of plan.lanes) {
         if (lane.kind === 'car' && lane.speed > MAX_ROAD_SPEED + 1e-6) {
           fail(`${at}: road lane at row ${lane.row} exceeds MAX_ROAD_SPEED (${lane.speed.toFixed(2)})`);
+        }
+        if (lane.kind === 'car') {
+          const vehicle = lane.vehicle ?? 'car';
+          if (!ROAD_VEHICLES.includes(vehicle)) {
+            fail(`${at}: unknown road vehicle "${vehicle}" at row ${lane.row}`);
+          } else {
+            vehicleCounts[vehicle] += 1;
+          }
         }
         if (lane.kind !== 'car' && lane.kind !== 'lilypad' && lane.speed > MAX_RIVER_SPEED + 1e-6) {
           fail(`${at}: river lane at row ${lane.row} exceeds MAX_RIVER_SPEED (${lane.speed.toFixed(2)})`);
@@ -215,6 +228,12 @@ for (const d of DIFFICULTIES) {
   // reproduce.
   if (JSON.stringify(buildLevel(5, d, 7)) !== JSON.stringify(buildLevel(5, d, 7))) {
     fail(`${d}: buildLevel is not deterministic`);
+  }
+}
+
+for (const vehicle of ROAD_VEHICLES) {
+  if (vehicleCounts[vehicle] === 0) {
+    fail(`traffic variety check never generated a ${vehicle}`);
   }
 }
 
@@ -336,6 +355,9 @@ console.log(
 console.log(
   `across all checks: ${turtleLanes} turtle lanes, ${lilypadLanes} lilypad lanes, ` +
     `${restStops} rest stops, ${coinsTotal} coins`,
+);
+console.log(
+  `traffic roster: ${ROAD_VEHICLES.map((vehicle) => `${vehicle} ${vehicleCounts[vehicle]}`).join(', ')}`,
 );
 
 if (errors.length > 0) {

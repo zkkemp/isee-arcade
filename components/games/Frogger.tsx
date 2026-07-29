@@ -88,6 +88,55 @@ export type RowKind = 'goal' | 'start' | 'safe' | 'river' | 'road';
 /** What buildRowPlan actually produces for an interior row - a subset of RowKind. */
 type BlockKind = 'safe' | 'river' | 'road';
 
+export const ROAD_VEHICLES = [
+  'car',
+  'motorcycle',
+  'scooter',
+  'cityBus',
+  'schoolBus',
+  'deliveryVan',
+  'fireTruck',
+  'ambulance',
+  'pickup',
+  'taxi',
+] as const;
+export type RoadVehicle = (typeof ROAD_VEHICLES)[number];
+
+/**
+ * Turns the same random value that already selected the old car colour into a
+ * vehicle silhouette as well. Keeping this pure - and consuming no extra RNG
+ * values - means lane timing, gaps, obstacle positions and coins stay exactly
+ * where the proven level generator put them before the traffic art expanded.
+ */
+export function roadVehicleFor(len: number, roll: number): RoadVehicle {
+  const r = clamp(roll, 0, 0.999999);
+  if (len <= 1) {
+    if (r < 0.3) return 'motorcycle';
+    if (r < 0.47) return 'scooter';
+    if (r < 0.67) return 'taxi';
+    if (r < 0.79) return 'pickup';
+    return 'car';
+  }
+  if (len === 2) {
+    if (r < 0.16) return 'cityBus';
+    if (r < 0.3) return 'schoolBus';
+    if (r < 0.42) return 'deliveryVan';
+    if (r < 0.54) return 'fireTruck';
+    if (r < 0.65) return 'ambulance';
+    if (r < 0.75) return 'pickup';
+    if (r < 0.84) return 'taxi';
+    return 'car';
+  }
+  if (r < 0.26) return 'schoolBus';
+  if (r < 0.48) return 'cityBus';
+  if (r < 0.64) return 'fireTruck';
+  if (r < 0.77) return 'ambulance';
+  if (r < 0.87) return 'deliveryVan';
+  if (r < 0.94) return 'pickup';
+  if (r < 0.98) return 'taxi';
+  return 'car';
+}
+
 export type Obstacle = {
   x: number;
   len: number;
@@ -107,6 +156,8 @@ export type LaneSpec = {
   gap: number;
   /** Car sprite name, for road lanes. */
   car?: string;
+  /** Visual-only traffic style. It never participates in collision checks. */
+  vehicle?: RoadVehicle;
   /** Turtle duty cycle, seconds. Present only for kind 'turtle'. */
   subUp?: number;
   subDown?: number;
@@ -261,8 +312,10 @@ function buildLane(
     const gap = len + 2 + Math.floor(rng() * 3);
     const base = 1.2 + rng() * 1.0;
     const speed = Math.min(MAX_ROAD_SPEED, base * speedRamp * SPEED_SCALE[difficulty]);
-    const car = CAR_NAMES[Math.floor(rng() * CAR_NAMES.length)];
-    return finishLane({ row, kind: 'car', dir, speed, len, gap, car }, rng);
+    const vehicleRoll = rng();
+    const car = CAR_NAMES[Math.floor(vehicleRoll * CAR_NAMES.length)];
+    const vehicle = roadVehicleFor(len, vehicleRoll);
+    return finishLane({ row, kind: 'car', dir, speed, len, gap, car, vehicle }, rng);
   }
 
   // River lane: log (rideable, drifts), lilypad (rideable, drifts slowly -
@@ -781,6 +834,239 @@ function drawTurtle(
   ctx.fill();
 }
 
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function fillRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  color: string,
+): void {
+  ctx.fillStyle = color;
+  roundedRectPath(ctx, x, y, width, height, radius);
+  ctx.fill();
+}
+
+function drawVehicleWheels(ctx: CanvasRenderingContext2D, left: number, right: number): void {
+  ctx.fillStyle = '#10131d';
+  for (const x of [left, right]) {
+    fillRoundedRect(ctx, x - 3, 1, 7, 5, 2, '#10131d');
+    fillRoundedRect(ctx, x - 3, CELL - 6, 7, 5, 2, '#10131d');
+  }
+}
+
+function drawVehicleWindows(
+  ctx: CanvasRenderingContext2D,
+  left: number,
+  right: number,
+  color = '#9ee8ff',
+): void {
+  const width = Math.max(7, right - left);
+  fillRoundedRect(ctx, left, 7, width, 7, 2, color);
+  fillRoundedRect(ctx, left, CELL - 14, width, 7, 2, color);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(left + 2, 8, Math.max(2, width * 0.35), 1.5);
+  ctx.fillRect(left + 2, CELL - 13, Math.max(2, width * 0.35), 1.5);
+}
+
+/**
+ * Code-native top-down traffic. Everything is drawn inside the original
+ * obstacle rectangle, so a bus looks substantial and a motorcycle looks
+ * nimble without either changing the collision area the player already knows.
+ */
+function drawRoadVehicle(
+  ctx: CanvasRenderingContext2D,
+  vehicle: Exclude<RoadVehicle, 'car'>,
+  px: number,
+  y: number,
+  pw: number,
+  dir: 1 | -1,
+  t: number,
+): void {
+  const left = -pw / 2 + 4;
+  const right = pw / 2 - 4;
+  const bodyWidth = right - left;
+  ctx.save();
+  ctx.translate(px + pw / 2, y);
+  ctx.scale(dir, 1);
+
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 2;
+
+  if (vehicle === 'motorcycle' || vehicle === 'scooter') {
+    const isScooter = vehicle === 'scooter';
+    const nose = right - 3;
+    const tail = left + 3;
+    ctx.strokeStyle = '#161925';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(tail + 4, CELL / 2);
+    ctx.lineTo(nose - 4, CELL / 2);
+    ctx.stroke();
+    ctx.fillStyle = '#090b10';
+    for (const x of [tail, nose]) {
+      ctx.beginPath();
+      ctx.ellipse(x, CELL / 2, 4, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    fillRoundedRect(
+      ctx,
+      left + bodyWidth * 0.26,
+      CELL / 2 - 4,
+      bodyWidth * 0.5,
+      8,
+      4,
+      isScooter ? '#4ee0bd' : '#ff4d6d',
+    );
+    fillRoundedRect(ctx, -4, 9, 10, 14, 5, isScooter ? '#f7e8a3' : '#ffcf4a');
+    ctx.fillStyle = '#25314a';
+    ctx.beginPath();
+    ctx.arc(1, CELL / 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+    if (isScooter) {
+      ctx.strokeStyle = '#d8fff5';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(nose - 5, 10);
+      ctx.lineTo(nose - 2, CELL / 2);
+      ctx.lineTo(nose - 5, CELL - 10);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = '#d8e5ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(nose - 5, 10);
+      ctx.lineTo(nose - 2, CELL / 2);
+      ctx.lineTo(nose - 5, CELL - 10);
+      ctx.stroke();
+    }
+  } else {
+    drawVehicleWheels(ctx, left + bodyWidth * 0.2, right - bodyWidth * 0.2);
+
+    const palette: Record<
+      Exclude<RoadVehicle, 'car' | 'motorcycle' | 'scooter'>,
+      { body: string; trim: string; window: string }
+    > = {
+      cityBus: { body: '#6957e8', trim: '#31d4c4', window: '#bcecff' },
+      schoolBus: { body: '#f5b82e', trim: '#252937', window: '#9cd5e8' },
+      deliveryVan: { body: '#f2eee2', trim: '#34b9ae', window: '#a7dceb' },
+      fireTruck: { body: '#e33f4f', trim: '#fff0b8', window: '#a9def0' },
+      ambulance: { body: '#f7f9fb', trim: '#e84d5b', window: '#a9def0' },
+      pickup: { body: '#3c8ee8', trim: '#172b49', window: '#acdff2' },
+      taxi: { body: '#f4c531', trim: '#292d37', window: '#a9def0' },
+    };
+    const colors = palette[vehicle];
+    fillRoundedRect(ctx, left, 4, bodyWidth, CELL - 8, 6, colors.body);
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    if (vehicle === 'cityBus' || vehicle === 'schoolBus') {
+      drawVehicleWindows(ctx, left + 9, right - 7, colors.window);
+      ctx.fillStyle = colors.trim;
+      ctx.fillRect(left + 5, 4, 4, CELL - 8);
+      ctx.fillRect(right - 8, 4, 3, CELL - 8);
+      const paneCount = Math.max(2, Math.floor(bodyWidth / 18));
+      ctx.fillStyle = 'rgba(25,35,55,0.55)';
+      for (let i = 1; i < paneCount; i += 1) {
+        const x = left + 9 + ((right - left - 16) * i) / paneCount;
+        ctx.fillRect(x, 7, 1.5, 7);
+        ctx.fillRect(x, CELL - 14, 1.5, 7);
+      }
+      if (vehicle === 'schoolBus') {
+        ctx.fillStyle = '#242834';
+        ctx.fillRect(left + 7, CELL / 2 - 2, bodyWidth - 14, 4);
+      }
+    } else if (vehicle === 'pickup') {
+      drawVehicleWindows(ctx, right - bodyWidth * 0.34, right - 6, colors.window);
+      fillRoundedRect(ctx, left + 4, 7, bodyWidth * 0.48, CELL - 14, 3, '#193a63');
+      ctx.strokeStyle = '#78b9fa';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(left + 7, 10, Math.max(4, bodyWidth * 0.48 - 6), CELL - 20);
+    } else {
+      drawVehicleWindows(ctx, right - bodyWidth * 0.36, right - 6, colors.window);
+      ctx.fillStyle = colors.trim;
+      ctx.fillRect(left + 5, CELL / 2 - 2, bodyWidth - 10, 4);
+
+      if (vehicle === 'deliveryVan') {
+        fillRoundedRect(ctx, left + 8, 9, 10, 14, 2, '#34b9ae');
+        ctx.fillStyle = '#f7fffd';
+        ctx.fillRect(left + 11, 12, 4, 8);
+      } else if (vehicle === 'ambulance') {
+        ctx.fillStyle = '#e84d5b';
+        ctx.fillRect(left + 12, 10, 4, 12);
+        ctx.fillRect(left + 8, 14, 12, 4);
+      } else if (vehicle === 'fireTruck') {
+        ctx.strokeStyle = '#fff0b8';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(left + 6, 7, Math.max(10, bodyWidth * 0.45), CELL - 14);
+        for (let x = left + 10; x < left + bodyWidth * 0.45; x += 6) {
+          ctx.beginPath();
+          ctx.moveTo(x, 8);
+          ctx.lineTo(x, CELL - 8);
+          ctx.stroke();
+        }
+      } else if (vehicle === 'taxi') {
+        const tile = 3;
+        for (let x = left + 6; x < right - 6; x += tile * 2) {
+          ctx.fillStyle = '#292d37';
+          ctx.fillRect(x, CELL / 2 - tile, tile, tile);
+          ctx.fillRect(x + tile, CELL / 2, tile, tile);
+        }
+        fillRoundedRect(ctx, -4, 2, 9, 5, 2, '#fff3a5');
+      }
+    }
+
+    if (vehicle === 'fireTruck' || vehicle === 'ambulance') {
+      const flash = Math.sin(t * 9) > 0;
+      fillRoundedRect(ctx, -7, 2, 7, 4, 1, flash ? '#ff3857' : '#782339');
+      fillRoundedRect(ctx, 0, 2, 7, 4, 1, flash ? '#195b89' : '#44c7ff');
+    }
+  }
+  ctx.restore();
+}
+
+function drawTrafficLights(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  y: number,
+  pw: number,
+  dir: 1 | -1,
+): void {
+  const nose = dir > 0 ? px + pw - 4 : px + 4;
+  const tail = dir > 0 ? px + 4 : px + pw - 4;
+  ctx.fillStyle = 'rgba(255,244,168,.9)';
+  ctx.shadowColor = '#fff0a0';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(nose, y + CELL * 0.32, 1.8, 0, Math.PI * 2);
+  ctx.arc(nose, y + CELL * 0.68, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,80,90,.8)';
+  ctx.fillRect(tail - 1.5, y + CELL * 0.27, 3, 3);
+  ctx.fillRect(tail - 1.5, y + CELL * 0.64, 3, 3);
+}
+
 function drawLane(ctx: CanvasRenderingContext2D, s: State, lane: Lane, sp: SpriteSet): void {
   const y = lane.row * CELL;
   for (const o of lane.obstacles) {
@@ -789,27 +1075,19 @@ function drawLane(ctx: CanvasRenderingContext2D, s: State, lane: Lane, sp: Sprit
     if (px > W || px + pw < 0) continue;
 
     if (lane.kind === 'car') {
-      const img = lane.car ? sp.cars[lane.car] : undefined;
-      if (img) {
+      const vehicle = lane.vehicle ?? 'car';
+      if (vehicle === 'car') {
+        const img = lane.car ? sp.cars[lane.car] : undefined;
+        if (!img) continue;
         // Car art points up; a quarter turn makes it face along the lane.
         const angle = lane.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
         drawRotated(ctx, img, px + pw / 2, y + CELL / 2, CELL - 6, pw - 6, angle);
-        // Headlights/tail lights make direction readable before the car reaches
-        // the player, especially on the darker stone and purple roads.
-        const nose = lane.dir > 0 ? px + pw - 4 : px + 4;
-        const tail = lane.dir > 0 ? px + 4 : px + pw - 4;
-        ctx.fillStyle = 'rgba(255,244,168,.9)';
-        ctx.shadowColor = '#fff0a0';
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(nose, y + CELL * 0.32, 1.8, 0, Math.PI * 2);
-        ctx.arc(nose, y + CELL * 0.68, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(255,80,90,.8)';
-        ctx.fillRect(tail - 1.5, y + CELL * 0.27, 3, 3);
-        ctx.fillRect(tail - 1.5, y + CELL * 0.64, 3, 3);
+      } else {
+        drawRoadVehicle(ctx, vehicle, px, y, pw, lane.dir, s.animTime);
       }
+      // Headlights and tail lights keep lane direction readable on every
+      // silhouette, especially on the darker stone and purple roads.
+      drawTrafficLights(ctx, px, y, pw, lane.dir);
     } else if (lane.kind === 'log') {
       drawLog(ctx, px, y, pw);
     } else if (lane.kind === 'lilypad') {
