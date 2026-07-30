@@ -1,16 +1,11 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import CharacterFace from '@/components/CharacterFace';
 import { normalizeAccountUsername } from '@/lib/accountUsername';
-
-export type ParentAccount = {
-  user_id: string;
-  username: string;
-  account_role: 'parent';
-  status: 'active' | 'suspended' | 'removed';
-  created_at: string;
-  updated_at: string;
-};
+import { getCharacter } from '@/lib/characters';
+import type { OwnerParentAccount } from '@/lib/ownerParentTypes';
+import { GRADE_BAND_LABELS } from '@/lib/questions';
 
 type Notice = {
   tone: 'success' | 'error';
@@ -40,6 +35,11 @@ async function requestJson<T extends { error?: string }>(
 }
 
 const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 
 function makePassword(length = 8): string {
   const bytes = new Uint32Array(length);
@@ -47,16 +47,24 @@ function makePassword(length = 8): string {
   return Array.from(bytes, (value) => PASSWORD_CHARS[value % PASSWORD_CHARS.length]).join('');
 }
 
-function statusLabel(status: ParentAccount['status']) {
+function statusLabel(status: OwnerParentAccount['status']) {
   if (status === 'active') return 'Active';
   if (status === 'suspended') return 'Suspended';
   return 'Removed';
 }
 
-function statusClass(status: ParentAccount['status']) {
+function statusClass(status: OwnerParentAccount['status']) {
   if (status === 'active') return 'bg-emerald-300/12 text-emerald-100 ring-emerald-200/15';
   if (status === 'suspended') return 'bg-amber-300/12 text-amber-100 ring-amber-200/15';
   return 'bg-white/[0.06] text-white/45 ring-white/10';
+}
+
+function formatDate(value: string): string {
+  return DATE_FORMATTER.format(new Date(value));
+}
+
+function formatActivityDate(value: string | null): string {
+  return value ? formatDate(value) : 'Never used';
 }
 
 export default function OwnerAccountManager({
@@ -65,10 +73,10 @@ export default function OwnerAccountManager({
   initialLoadError = '',
 }: {
   adminConfigured: boolean;
-  initialParents: ParentAccount[];
+  initialParents: OwnerParentAccount[];
   initialLoadError?: string;
 }) {
-  const [parents, setParents] = useState<ParentAccount[]>(initialParents);
+  const [parents, setParents] = useState<OwnerParentAccount[]>(initialParents);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -79,27 +87,45 @@ export default function OwnerAccountManager({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [parentSearch, setParentSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | ParentAccount['status']>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | OwnerParentAccount['status']>('all');
+  const [sortBy, setSortBy] = useState<'recent' | 'least' | 'newest'>('recent');
+  const [expandedParent, setExpandedParent] = useState<string | null>(null);
   const [directoryError, setDirectoryError] = useState(initialLoadError);
 
   const activeCount = useMemo(
     () => parents.filter((parent) => parent.status === 'active').length,
     [parents],
   );
+  const neverUsedCount = useMemo(
+    () => parents.filter((parent) => !parent.last_used_at).length,
+    [parents],
+  );
   const visibleParents = useMemo(() => {
     const query = normalizeAccountUsername(parentSearch);
-    return parents.filter(
+    const filtered = parents.filter(
       (parent) =>
         (statusFilter === 'all' || parent.status === statusFilter) &&
-        (!query || parent.username.includes(query)),
+        (!query ||
+          parent.username.includes(query) ||
+          parent.children.some(
+            (child) =>
+              normalizeAccountUsername(child.display_name).includes(query) ||
+              child.username.includes(query),
+          )),
     );
-  }, [parentSearch, parents, statusFilter]);
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'newest') return Date.parse(b.created_at) - Date.parse(a.created_at);
+      const aActivity = a.last_used_at ? Date.parse(a.last_used_at) : 0;
+      const bActivity = b.last_used_at ? Date.parse(b.last_used_at) : 0;
+      return sortBy === 'recent' ? bActivity - aActivity : aActivity - bActivity;
+    });
+  }, [parentSearch, parents, sortBy, statusFilter]);
 
   const loadParents = useCallback(async () => {
     if (!adminConfigured) return;
     setBusy('load');
     const { ok, payload } = await requestJson<{
-      parents?: ParentAccount[];
+      parents?: OwnerParentAccount[];
       error?: string;
     }>('/api/owner/parents', { cache: 'no-store' });
     if (ok) {
@@ -126,7 +152,7 @@ export default function OwnerAccountManager({
     setBusy('create');
     setNotice(null);
     const { ok, payload } = await requestJson<{
-      parent?: ParentAccount;
+      parent?: OwnerParentAccount;
       error?: string;
     }>('/api/owner/parents', {
       method: 'POST',
@@ -152,14 +178,14 @@ export default function OwnerAccountManager({
   }
 
   async function runAction(
-    parent: ParentAccount,
+    parent: OwnerParentAccount,
     action: 'suspend' | 'activate' | 'reset_password',
     nextPassword?: string,
   ) {
     setBusy(`${action}:${parent.user_id}`);
     setNotice(null);
     const { ok, payload } = await requestJson<{
-      parent?: ParentAccount;
+      parent?: OwnerParentAccount;
       error?: string;
       message?: string;
     }>(`/api/owner/parents/${parent.user_id}`, {
@@ -169,7 +195,9 @@ export default function OwnerAccountManager({
     });
     if (payload.parent) {
       setParents((current) =>
-        current.map((item) => (item.user_id === payload.parent!.user_id ? payload.parent! : item)),
+        current.map((item) =>
+          item.user_id === payload.parent!.user_id ? { ...item, ...payload.parent! } : item,
+        ),
       );
     }
     if (ok && payload.parent) {
@@ -185,7 +213,7 @@ export default function OwnerAccountManager({
     setBusy(null);
   }
 
-  async function deleteParent(parent: ParentAccount) {
+  async function deleteParent(parent: OwnerParentAccount) {
     setBusy(`delete:${parent.user_id}`);
     setNotice(null);
     const { ok, payload } = await requestJson<{
@@ -199,6 +227,7 @@ export default function OwnerAccountManager({
     });
     if (ok && payload.deletedUserId === parent.user_id) {
       setParents((current) => current.filter((item) => item.user_id !== parent.user_id));
+      if (expandedParent === parent.user_id) setExpandedParent(null);
       setConfirmDelete(null);
       setDeleteConfirmation('');
       setNotice({ tone: 'success', message: payload.message ?? 'Parent account deleted.' });
@@ -264,10 +293,10 @@ export default function OwnerAccountManager({
               <p className="text-[10px] font-black uppercase tracking-[.14em] text-white/38">
                 parents added
               </p>
-              <p className="mt-1 text-[11px] font-bold text-emerald-100/65">
+              <p className="mt-1 text-[11px] font-bold text-emerald-100/80">
                 {directoryError && parents.length === 0
                   ? 'List unavailable'
-                  : `${activeCount} active`}
+                  : `${activeCount} active · ${neverUsedCount} never used`}
               </p>
             </div>
           </div>
@@ -359,8 +388,8 @@ export default function OwnerAccountManager({
             </p>
             <h2 className="mt-2 text-2xl font-black text-white">Parents you have added</h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/50">
-              Every parent sign-in you issue appears here. Resetting a password does not expose or
-              change that parent’s children.
+              Open a parent to see whether they added children and the last date anyone in that
+              household used ISEE Arcade. Learning answers and passwords stay private.
             </p>
           </div>
           <button
@@ -374,14 +403,14 @@ export default function OwnerAccountManager({
         </div>
 
         {parents.length > 0 && (
-          <div className="mt-6 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(15rem,1fr)_auto_auto] lg:items-center">
             <label className="block">
-              <span className="sr-only">Find a parent by username</span>
+              <span className="sr-only">Find a parent or child</span>
               <input
                 type="search"
                 value={parentSearch}
                 onChange={(event) => setParentSearch(event.target.value)}
-                placeholder="Find a parent by username"
+                placeholder="Find a parent or child"
                 className="min-h-11 w-full rounded-xl bg-white/[0.06] px-4 text-base text-white outline-none ring-1 ring-white/10 placeholder:text-white/32 focus:ring-2 focus:ring-violet-200 md:text-sm"
               />
             </label>
@@ -402,6 +431,22 @@ export default function OwnerAccountManager({
                 </button>
               ))}
             </div>
+            <label className="flex min-h-11 items-center gap-2 rounded-xl bg-black/20 px-3 ring-1 ring-white/10">
+              <span className="text-xs font-bold text-white/70">Sort</span>
+              <select
+                value={sortBy}
+                onChange={(event) =>
+                  setSortBy(event.target.value as 'recent' | 'least' | 'newest')
+                }
+                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none"
+                style={{ colorScheme: 'dark' }}
+                aria-label="Sort parent accounts"
+              >
+                <option value="recent">Recently used</option>
+                <option value="least">Least used</option>
+                <option value="newest">Newest added</option>
+              </select>
+            </label>
           </div>
         )}
 
@@ -450,6 +495,8 @@ export default function OwnerAccountManager({
               const rowBusy = busy !== null;
               const resettingThis = resetting === parent.user_id;
               const deletingThis = confirmDelete === parent.user_id;
+              const expanded = expandedParent === parent.user_id;
+              const familyPanelId = `parent-family-${parent.user_id}`;
               return (
                 <article
                   key={parent.user_id}
@@ -460,7 +507,7 @@ export default function OwnerAccountManager({
                   }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-black text-white">@{parent.username}</h3>
                         <span
@@ -469,13 +516,61 @@ export default function OwnerAccountManager({
                           {statusLabel(parent.status)}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-white/38">
-                        Created {new Date(parent.created_at).toLocaleDateString()}
-                      </p>
+                      <div className="mt-3 grid max-w-xl grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3">
+                        <div>
+                          <p className="text-[11px] font-bold text-white/65">Children</p>
+                          <p className="mt-0.5 text-sm font-black text-white">
+                            {parent.children.length === 0
+                              ? 'None added'
+                              : `${parent.children.length} added`}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-white/65">Last used</p>
+                          <p
+                            className={`mt-0.5 text-sm font-black ${
+                              parent.last_used_at ? 'text-emerald-100' : 'text-amber-100'
+                            }`}
+                            title={
+                              parent.last_used_at
+                                ? new Date(parent.last_used_at).toLocaleString('en-US')
+                                : 'No parent sign-in or child activity recorded'
+                            }
+                          >
+                            {formatActivityDate(parent.last_used_at)}
+                          </p>
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <p className="text-[11px] font-bold text-white/65">Account created</p>
+                          <p className="mt-0.5 text-sm font-bold text-white/80">
+                            {formatDate(parent.created_at)}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedParent(expanded ? null : parent.user_id)
+                      }
+                      aria-expanded={expanded}
+                      aria-controls={familyPanelId}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-200/12 px-3 text-xs font-black text-violet-100 ring-1 ring-violet-200/15 transition hover:bg-violet-200/18"
+                    >
+                      {expanded ? 'Hide family' : 'View family'}
+                      <span
+                        aria-hidden="true"
+                        className={`text-sm transition-transform ${expanded ? 'rotate-180' : ''}`}
+                      >
+                        ↓
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-white/[0.07] pt-4">
                     {parent.status !== 'removed' && (
-                      <div className="flex flex-wrap gap-2">
+                      <>
                         <button
                           type="button"
                           onClick={() => {
@@ -514,7 +609,7 @@ export default function OwnerAccountManager({
                         >
                           Delete parent
                         </button>
-                      </div>
+                      </>
                     )}
                     {parent.status === 'removed' && (
                       <button
@@ -531,6 +626,77 @@ export default function OwnerAccountManager({
                       </button>
                     )}
                   </div>
+
+                  {expanded && (
+                    <section
+                      id={familyPanelId}
+                      aria-label={`Family details for ${parent.username}`}
+                      className="mt-4 border-t border-white/[0.08] pt-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h4 className="text-base font-black text-white">Family profiles</h4>
+                          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-white/70">
+                            This shows child names, levels, and household activity dates only.
+                            Answers and passwords are not visible.
+                          </p>
+                        </div>
+                        <p className="text-xs font-bold text-white/70">
+                          Household last used:{' '}
+                          <span className="text-white">
+                            {formatActivityDate(parent.last_used_at)}
+                          </span>
+                        </p>
+                      </div>
+
+                      {parent.children.length === 0 ? (
+                        <div className="mt-4 border-y border-white/[0.07] py-7 text-center">
+                          <p className="text-sm font-black text-white">No children added yet</p>
+                          <p className="mt-1 text-xs text-white/70">
+                            This parent has an account but has not created a child profile.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-4 divide-y divide-white/[0.07] border-y border-white/[0.07]">
+                          {parent.children.map((child) => {
+                            const character = getCharacter(child.avatar_id);
+                            return (
+                              <div
+                                key={child.id}
+                                className="flex flex-wrap items-center gap-3 py-3"
+                              >
+                                <div
+                                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl"
+                                  style={{ background: `${character.accent}18` }}
+                                >
+                                  <CharacterFace character={character} size={42} />
+                                </div>
+                                <div className="min-w-40 flex-1">
+                                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                    <p className="font-black text-white">{child.display_name}</p>
+                                    <p className="text-xs font-bold text-cyan-100">
+                                      @{child.username}
+                                    </p>
+                                  </div>
+                                  <p className="mt-0.5 text-xs text-white/70">
+                                    {GRADE_BAND_LABELS[child.grade_band]}
+                                  </p>
+                                </div>
+                                <div className="min-w-32 text-left sm:text-right">
+                                  <p className="text-[11px] font-bold text-white/65">
+                                    Last profile activity
+                                  </p>
+                                  <p className="mt-0.5 text-sm font-black text-white">
+                                    {formatActivityDate(child.last_used_at)}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </section>
+                  )}
 
                   {resettingThis && (
                     <div className="mt-4 flex flex-wrap gap-2 rounded-xl bg-black/18 p-3">

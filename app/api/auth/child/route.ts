@@ -119,6 +119,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // A successful child sign-in counts as household use even before the first
+  // answer or game event has had a chance to sync a snapshot.
+  try {
+    await sql`
+      update public.learners
+      set updated_at = now()
+      where id = ${learner.id}
+    `;
+  } catch {
+    // Activity is informational and must never block a successful child login.
+  }
+
   const response = NextResponse.json({
     role: 'child',
     profile: {

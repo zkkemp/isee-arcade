@@ -170,6 +170,8 @@ export async function POST(request: Request) {
       status: 'active',
       created_at: created.user.created_at ?? now,
       updated_at: now,
+      last_used_at: null,
+      children: [],
     };
 
   return NextResponse.json({ parent }, { status: 201 });

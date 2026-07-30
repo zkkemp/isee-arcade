@@ -39,6 +39,17 @@ export default function ParentShell({
 
     let checking = false;
     let disposed = false;
+    let lastActivityAt = 0;
+    async function markHouseholdActive() {
+      const now = Date.now();
+      if (now - lastActivityAt < 5 * 60 * 1000) return;
+      lastActivityAt = now;
+      try {
+        await fetch('/api/parent/activity', { method: 'POST' });
+      } catch {
+        // Activity is informational and must never block the parent center.
+      }
+    }
     async function validateCloudAccess() {
       if (checking || disposed) return;
       checking = true;
@@ -57,6 +68,7 @@ export default function ParentShell({
         return;
       }
       if (account.status === 'active') {
+        void markHouseholdActive();
         const accountChanged = prepareParentDeviceState(data.user.id);
         if (accountChanged) {
           await refreshCloudFamily();
@@ -94,7 +106,7 @@ export default function ParentShell({
     : NAV;
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-5 sm:px-8 sm:pt-9">
+    <main className="parent-readable mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-5 sm:px-8 sm:pt-9">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link

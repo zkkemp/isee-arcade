@@ -1,12 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import AccountSignOutButton from '@/components/AccountSignOutButton';
-import OwnerAccountManager, {
-  type ParentAccount,
-} from '@/components/owner/OwnerAccountManager';
+import OwnerAccountManager from '@/components/owner/OwnerAccountManager';
 import { usernameFromAuthEmail } from '@/lib/accountUsername';
 import { getOwnerSession } from '@/lib/ownerAccess';
 import { listOwnerParentAccounts } from '@/lib/ownerParentAccounts';
+import type { OwnerParentAccount } from '@/lib/ownerParentTypes';
 import { isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { getIseeDatabase } from '@/lib/supabase/database';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
@@ -28,7 +27,7 @@ export default async function OwnerPage() {
   const owner = await getOwnerSession();
   if (!owner) {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-xl items-center px-5 py-12">
+      <main className="parent-readable mx-auto flex min-h-dvh w-full max-w-xl items-center px-5 py-12">
         <section className="w-full rounded-3xl border border-rose-200/15 bg-[#151527] p-7 text-center shadow-[0_28px_80px_rgba(0,0,0,.45)]">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-300/10 text-2xl">
             ⛌
@@ -51,7 +50,7 @@ export default async function OwnerPage() {
 
   const adminConfigured = isSupabaseAdminConfigured() && Boolean(getIseeDatabase());
   const ownerUsername = usernameFromAuthEmail(owner.user.email) ?? 'owner';
-  let initialParents: ParentAccount[] = [];
+  let initialParents: OwnerParentAccount[] = [];
   let initialLoadError = '';
   if (adminConfigured) {
     try {
@@ -63,7 +62,7 @@ export default async function OwnerPage() {
   }
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-6 sm:px-8 sm:pt-10">
+    <main className="parent-readable mx-auto min-h-dvh w-full max-w-6xl px-4 pb-16 pt-6 sm:px-8 sm:pt-10">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-5">
         <div>
           <Link
@@ -79,8 +78,9 @@ export default async function OwnerPage() {
             Parents
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/58 sm:text-base">
-            Create parent usernames and passwords, see everyone you have added, and reset a forgotten password
-            without opening another family’s records.
+            Create parent usernames and passwords, see who has set up a family, and reset a
+            forgotten password. Family details show profiles and activity dates—not answers or
+            passwords.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">

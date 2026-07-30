@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { latestActivityDate } from '../lib/ownerParentTypes.js';
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -28,6 +29,14 @@ const ownerRoute = fs.readFileSync(
 );
 const ownerTargetRoute = fs.readFileSync(
   path.join(root, 'app', 'api', 'owner', 'parents', '[userId]', 'route.ts'),
+  'utf8',
+);
+const parentActivityRoute = fs.readFileSync(
+  path.join(root, 'app', 'api', 'parent', 'activity', 'route.ts'),
+  'utf8',
+);
+const childAuthRoute = fs.readFileSync(
+  path.join(root, 'app', 'api', 'auth', 'child', 'route.ts'),
   'utf8',
 );
 const adminClient = fs.readFileSync(
@@ -75,6 +84,10 @@ assert(
 assert(
   ownerManagerSource.includes('Parents you have added') &&
     ownerManagerSource.includes('visibleParents') &&
+    ownerManagerSource.includes('View family') &&
+    ownerManagerSource.includes('No children added yet') &&
+    ownerManagerSource.includes('Last used') &&
+    ownerManagerSource.includes('Least used') &&
     ownerManagerSource.includes("'reset_password'") &&
     ownerManagerSource.includes('Parent list didn’t load') &&
     ownerManagerSource.includes('Type {parent.username} to confirm') &&
@@ -87,9 +100,35 @@ assert(
 );
 assert(
   ownerRoute.includes('listOwnerParentAccounts()') &&
-    parentDirectory.includes("where account_role = 'parent'") &&
+    parentDirectory.includes("where account.account_role = 'parent'") &&
     !parentDirectory.includes("status = 'active'"),
   'the owner directory must use the pinned database and return active, suspended, and removed parents',
+);
+assert(
+  parentDirectory.includes('auth_user.last_sign_in_at') &&
+    parentDirectory.includes('public.learner_snapshots') &&
+    parentDirectory.includes('public.question_attempts') &&
+    parentDirectory.includes('public.parent_preferences') &&
+    parentDirectory.includes('childrenByHousehold'),
+  'owner family summaries must combine parent sign-in and child/household cloud activity',
+);
+assert(
+  parentShellSource.includes("fetch('/api/parent/activity'") &&
+    parentActivityRoute.includes('insert into public.parent_preferences') &&
+    parentActivityRoute.includes('on conflict (household_id) do update') &&
+    parentActivityRoute.includes('hasSameOrigin(request)') &&
+    childAuthRoute.includes('set updated_at = now()'),
+  'parent visits and successful child sign-ins must refresh household activity without blocking use',
+);
+assert(
+  latestActivityDate([
+    null,
+    '2026-07-01T12:00:00.000Z',
+    '2026-07-29T09:30:00.000Z',
+    'not-a-date',
+  ]) === '2026-07-29T09:30:00.000Z' &&
+    latestActivityDate([null, null]) === null,
+  'household activity must choose the newest valid date and preserve never-used accounts',
 );
 assert(
   ownerRoute.includes('hasSameOrigin(request)') &&
@@ -149,7 +188,7 @@ assert(
 );
 
 console.log(
-  'Owner access audit: self-service password changes, complete parent directory, owner resets, ' +
+  'Owner access audit: self-service password changes, family activity drill-ins, complete parent directory, owner resets, ' +
     'direct credential creation, no public signup, server-only authorization, same-origin mutations, database authorization gate, ' +
     'active-account RLS, and isolated-project boundary passed.',
 );
