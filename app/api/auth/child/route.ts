@@ -43,6 +43,8 @@ type LearnerRow = {
   password_salt: string;
   daily_limit_minutes: number;
   question_block_size: number;
+  play_window_minutes: number;
+  perfect_block_bonus_minutes: number;
   smart_practice: boolean;
 };
 
@@ -82,7 +84,8 @@ export async function POST(request: Request) {
 
   const learners = await sql<LearnerRow[]>`
     select id, household_id, local_profile_id, display_name, username, grade_band, avatar_id,
-      password_hash, password_salt, daily_limit_minutes, question_block_size, smart_practice
+      password_hash, password_salt, daily_limit_minutes, question_block_size,
+      play_window_minutes, perfect_block_bonus_minutes, smart_practice
     from public.learners
     where lower(username) = lower(${username})
     limit 2
@@ -143,6 +146,8 @@ export async function POST(request: Request) {
       passcodeSalt: learner.password_salt,
       dailyLimitMinutes: learner.daily_limit_minutes,
       questionBlockSize: learner.question_block_size,
+      playWindowMinutes: learner.play_window_minutes,
+      perfectBlockBonusMinutes: learner.perfect_block_bonus_minutes,
       smartPractice: learner.smart_practice,
     },
     snapshot: snapshot ?? null,

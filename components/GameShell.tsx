@@ -17,6 +17,11 @@ import {
   useGameDifficulty,
 } from '@/lib/difficulty';
 import { clearPendingGate, loadPendingGate, savePendingGate } from '@/lib/pendingGate';
+import {
+  foregroundElapsedMs,
+  newForegroundClock,
+  resetForegroundClock,
+} from '@/lib/foregroundTimer';
 import { InputController, bindKeyboard } from '@/lib/input';
 import { bandHasReading, bandNeedsNarration, pickQuestion } from '@/lib/questions';
 import type { Question, QuestionKind } from '@/lib/questions/types';
@@ -32,17 +37,13 @@ import {
   useMuted,
 } from '@/lib/sound';
 import {
-  COIN_BONUS_MS,
-  COIN_STEP,
-  LEVEL_BONUS_MS,
-  MAX_BONUS_MS,
   MAX_BLOCK_SIZE,
-  PLAY_WINDOW_MS,
   blockComplete,
   emptySession,
   formatClock,
   loadSession,
   newBlock,
+  playAwardMs,
   questionsLeft,
   saveSession,
   type PlaySession,
@@ -388,12 +389,16 @@ export default function GameShell({
    */
   useEffect(() => {
     if (paused || parentSandbox) return;
-    let last = Date.now();
+    const clock = newForegroundClock(Date.now(), document.visibilityState === 'visible');
+    const resetClock = () =>
+      resetForegroundClock(clock, Date.now(), document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', resetClock);
+    window.addEventListener('pageshow', resetClock);
+    window.addEventListener('focus', resetClock);
     const id = setInterval(() => {
       const now = Date.now();
-      const dt = now - last;
-      last = now;
-      if (document.visibilityState === 'hidden') return;
+      const dt = foregroundElapsedMs(clock, now, document.visibilityState === 'visible');
+      if (dt <= 0) return;
 
       const s = sessionRef.current;
       if (s.study && !blockComplete(s.study)) return;
@@ -412,46 +417,19 @@ export default function GameShell({
         persist();
       }
     }, TICK_MS);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', resetClock);
+      window.removeEventListener('pageshow', resetClock);
+      window.removeEventListener('focus', resetClock);
+    };
   }, [parentSandbox, paused, openStudy, persist]);
-
-  /** Adds play time, respecting the per-window bonus ceiling. Returns what was granted. */
-  const grantBonus = useCallback(
-    (ms: number): number => {
-      if (parentSandbox) return 0;
-      const s = sessionRef.current;
-      const room = Math.max(0, MAX_BONUS_MS - s.bonusMs);
-      const give = Math.min(ms, room);
-      if (give <= 0) return 0;
-      sessionRef.current = { ...s, msLeft: s.msLeft + give, bonusMs: s.bonusMs + give };
-      setMsLeft(sessionRef.current.msLeft);
-      persist();
-      return give;
-    },
-    [parentSandbox, persist],
-  );
 
   const api = useMemo<GameApi>(
     () => ({
       addScore: (delta) => {
         scoreRef.current += delta;
         setScore(scoreRef.current);
-
-        // Playing well buys time. This is the "more coins means more play" lever:
-        // every COIN_STEP points is another minute, capped per window.
-        const s = sessionRef.current;
-        if (scoreRef.current - s.bonusAtScore >= COIN_STEP && s.bonusMs < MAX_BONUS_MS) {
-          const steps = Math.floor((scoreRef.current - s.bonusAtScore) / COIN_STEP);
-          sessionRef.current = {
-            ...sessionRef.current,
-            bonusAtScore: s.bonusAtScore + steps * COIN_STEP,
-          };
-          const given = grantBonus(steps * COIN_BONUS_MS);
-          if (given > 0) {
-            playSound('powerup');
-            flashStatus(`+${Math.round(given / 60_000)} min of play time!`, 2200);
-          }
-        }
       },
       // Dying is free inside a window. That is the point of the redesign: a kid
       // who dies a lot used to face a question every few seconds.
@@ -465,7 +443,7 @@ export default function GameShell({
         playSound('gameOver');
         flashStatus(`${label} - keep going`, 1500);
       },
-      // Clearing a level tops the clock up instead of interrupting with a question.
+      // Clearing a level celebrates progress but never creates play time.
       requestGate: (label) => {
         if (parentSandbox) {
           playSound('levelClear');
@@ -474,12 +452,11 @@ export default function GameShell({
         }
         if (lockAtBoundary()) return;
         playSound('levelClear');
-        const given = grantBonus(LEVEL_BONUS_MS);
-        celebrate(label, given > 0 ? `+${Math.round(given / 1000)} seconds of play time` : null);
+        celebrate(label, null);
       },
       setStatus: (text) => flashStatus(text),
     }),
-    [celebrate, flashStatus, grantBonus, lockAtBoundary, parentSandbox],
+    [celebrate, flashStatus, lockAtBoundary, parentSandbox],
   );
 
   const handleAnswered = useCallback(
@@ -507,7 +484,7 @@ export default function GameShell({
         setCorrectStreak(0);
         wrongStreakRef.current += 1;
 
-        let next = b;
+        let next = { ...b, mistakes: b.mistakes + 1 };
         // Missing the reading passage is the expensive miss: it adds two
         // questions. This is what makes reading carefully worth it, in place of
         // the old "get it right and skip the block" shortcut.
@@ -576,14 +553,14 @@ export default function GameShell({
       setBest(banked.highScores[meta.id] ?? 0);
       saveProgress(banked);
 
+      const awardedMs = playAwardMs(next);
+      const earnedPerfectBonus = next.mistakes === 0 && next.perfectBlockBonusMinutes > 0;
       sessionRef.current = {
-        msLeft: PLAY_WINDOW_MS,
-        bonusMs: 0,
-        bonusAtScore: scoreRef.current,
+        msLeft: awardedMs,
         blocksDone: sessionRef.current.blocksDone + 1,
         study: null,
       };
-      setMsLeft(PLAY_WINDOW_MS);
+      setMsLeft(awardedMs);
       setBlock(null);
       persist();
 
@@ -593,7 +570,9 @@ export default function GameShell({
       if (lockAtBoundary()) return;
       playSound('pass');
       flashStatus(
-        `Study block done - ${Math.round(PLAY_WINDOW_MS / 60_000)} minutes of play!`,
+        earnedPerfectBonus
+          ? `Perfect block! ${Math.round(awardedMs / 60_000)} minutes of play.`
+          : `Study block done - ${Math.round(awardedMs / 60_000)} minutes of play.`,
         2800,
       );
     },
@@ -644,8 +623,13 @@ export default function GameShell({
       return `Read carefully. Miss it and ${READING_MISS_PENALTY} more questions get added to the block.`;
     }
     if (gate.isRetry) return 'Same kind again, since that one was missed.';
-    if (left === 1) return 'Last one, then 6 minutes of play.';
-    return `${left} more, then 6 minutes of play. They do not have to be in a row.`;
+    const base = `${block.playWindowMinutes} minute${block.playWindowMinutes === 1 ? '' : 's'} of play`;
+    const perfect =
+      block.perfectBlockBonusMinutes > 0 && block.mistakes === 0
+        ? ` A perfect block adds ${block.perfectBlockBonusMinutes} more.`
+        : '';
+    if (left === 1) return `Last one, then ${base}.${perfect}`;
+    return `${left} more, then ${base}. They do not have to be in a row.${perfect}`;
   })();
 
   const clockLow = msLeft > 0 && msLeft < 60_000;

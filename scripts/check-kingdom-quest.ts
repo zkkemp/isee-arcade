@@ -1,7 +1,7 @@
 /** Focused structural regression check for the original Kingdom Quest campaign. */
 import { readFileSync } from 'node:fs';
 import { KINGDOM_THEME } from '../lib/kingdomMusic.js';
-import { GROUND_Y, HERO_H, LEVELS, cameraTarget, cloneLevel, dampCamera, levelHasGoalRoute, newHero, overlaps, questPace, questViewport, reachableLanding, simulationSteps, stepEnemy, stepHero } from '../lib/kingdomQuest.js';
+import { GROUND_Y, HERO_H, HERO_W, LEVELS, cameraTarget, checkpointRespawn, cloneLevel, dampCamera, levelHasGoalRoute, newHero, overlaps, questPace, questViewport, reachableLanding, simulationSteps, stepEnemy, stepHero } from '../lib/kingdomQuest.js';
 
 const fail = (message: string): never => { throw new Error(`Kingdom Quest check failed: ${message}`); };
 
@@ -15,6 +15,23 @@ for (let i = 0; i < LEVELS.length; i += 1) {
   if (level.platforms.filter((v) => v.y < GROUND_Y).length < 5) fail(`${level.name} lacks platforming variety`);
   if (level.coins.length < 12 || level.runes.length < 2) fail(`${level.name} lacks collectible exploration rewards`);
   if (level.checkpoints.length < 1) fail(`${level.name} needs a checkpoint`);
+  for (const checkpoint of level.checkpoints) {
+    const markerSupported = level.platforms.some(
+      (platform) =>
+        platform.y === GROUND_Y &&
+        checkpoint.x >= platform.x &&
+        checkpoint.x + checkpoint.w <= platform.x + platform.w,
+    );
+    if (!markerSupported) fail(`${level.name} checkpoint is standing over a floor gap`);
+    const spawn = checkpointRespawn(level, checkpoint);
+    const spawnSupported = level.platforms.some(
+      (platform) =>
+        platform.y === GROUND_Y &&
+        spawn.x >= platform.x &&
+        spawn.x + HERO_W <= platform.x + platform.w,
+    );
+    if (!spawnSupported) fail(`${level.name} checkpoint respawn is not fully supported`);
+  }
   if (!level.powers.length) fail(`${level.name} needs an original power-up`);
   for (const enemy of level.enemies) {
     const copy = { ...enemy }; stepEnemy(copy, 1, 1); if (copy.x < copy.left || copy.x + copy.w > copy.right) fail(`${level.name} enemy escaped patrol bounds`);
@@ -23,6 +40,25 @@ for (let i = 0; i < LEVELS.length; i += 1) {
   for (let n = 1; n < ledges.length; n += 1) if (!reachableLanding(ledges[n - 1], ledges[n])) fail(`${level.name} has an authored ledge jump outside the conservative reach budget`);
 }
 if (!LEVELS.at(-1)?.boss || LEVELS.at(-1)?.goal.locked !== true) fail('final realm must keep the goal locked behind the original boss');
+
+// Runtime defense: even if a future authored lantern lands inside a gap, the
+// respawn resolver must move the hero onto fully supported ground.
+{
+  const level = cloneLevel(0);
+  const misplaced = { ...level.checkpoints[0], x: 650 };
+  const spawn = checkpointRespawn(level, misplaced);
+  if (spawn.x === misplaced.x - 14) fail('misplaced checkpoint did not move away from the gap');
+  if (
+    !level.platforms.some(
+      (platform) =>
+        platform.y === GROUND_Y &&
+        spawn.x >= platform.x &&
+        spawn.x + HERO_W <= platform.x + platform.w,
+    )
+  ) {
+    fail('misplaced checkpoint fallback is not supported');
+  }
+}
 
 // Exercise real integration: acceleration, coyote jump and floor collision all agree.
 const hero = newHero();

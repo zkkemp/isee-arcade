@@ -45,6 +45,8 @@ type RemoteLearner = {
   password_salt: string;
   daily_limit_minutes: number;
   question_block_size: number;
+  play_window_minutes: number;
+  perfect_block_bonus_minutes: number;
   smart_practice: boolean;
 };
 
@@ -84,6 +86,11 @@ function readProfiles(): Profile[] {
             passcodeSalt: profile.passcodeSalt ?? '',
             dailyLimitMinutes: Math.max(5, Math.min(240, profile.dailyLimitMinutes ?? 30)),
             questionBlockSize: Math.max(5, Math.min(20, profile.questionBlockSize ?? 8)),
+            playWindowMinutes: Math.max(1, Math.min(60, profile.playWindowMinutes ?? 6)),
+            perfectBlockBonusMinutes: Math.max(
+              0,
+              Math.min(60, profile.perfectBlockBonusMinutes ?? 0),
+            ),
             smartPractice: profile.smartPractice !== false,
           } satisfies Profile,
         ];
@@ -153,6 +160,8 @@ export async function uploadDeviceState(): Promise<CloudSyncResult> {
         password_salt: profile.passcodeSalt,
         daily_limit_minutes: profile.dailyLimitMinutes,
         question_block_size: profile.questionBlockSize,
+        play_window_minutes: profile.playWindowMinutes,
+        perfect_block_bonus_minutes: profile.perfectBlockBonusMinutes,
         smart_practice: profile.smartPractice,
         updated_at: new Date().toISOString(),
       }));
@@ -352,7 +361,7 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
     const { data: learners, error: learnerError } = await supabase
       .from('learners')
       .select(
-        'id,local_profile_id,display_name,username,grade_band,avatar_id,password_hash,password_salt,daily_limit_minutes,question_block_size,smart_practice',
+        'id,local_profile_id,display_name,username,grade_band,avatar_id,password_hash,password_salt,daily_limit_minutes,question_block_size,play_window_minutes,perfect_block_bonus_minutes,smart_practice',
       )
       .eq('household_id', familyId)
       .order('created_at');
@@ -389,6 +398,9 @@ export async function restoreCloudFamily(): Promise<CloudSyncResult> {
         passcodeSalt: learner.password_salt || prior?.passcodeSalt || '',
         dailyLimitMinutes: learner.daily_limit_minutes ?? prior?.dailyLimitMinutes ?? 30,
         questionBlockSize: learner.question_block_size ?? prior?.questionBlockSize ?? 8,
+        playWindowMinutes: learner.play_window_minutes ?? prior?.playWindowMinutes ?? 6,
+        perfectBlockBonusMinutes:
+          learner.perfect_block_bonus_minutes ?? prior?.perfectBlockBonusMinutes ?? 0,
         smartPractice: learner.smart_practice ?? prior?.smartPractice ?? true,
       });
       const snapshot = snapshotsByLearner.get(learner.id);

@@ -22,6 +22,8 @@ import { uploadDeviceState } from '@/lib/cloudSync';
 const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 const DAILY_LIMIT_MINUTES = { min: 5, max: 240 } as const;
 const QUESTION_BLOCK_SIZE = { min: 5, max: 20 } as const;
+const PLAY_WINDOW_MINUTES = { min: 1, max: 60 } as const;
+const PERFECT_BONUS_MINUTES = { min: 0, max: 60 } as const;
 
 function makePassword(length = 8): string {
   const bytes = new Uint32Array(length);
@@ -38,6 +40,8 @@ type EditorState = {
   avatarId: CharacterId;
   dailyLimitMinutes: string;
   questionBlockSize: string;
+  playWindowMinutes: string;
+  perfectBlockBonusMinutes: string;
   smartPractice: boolean;
 };
 
@@ -57,6 +61,8 @@ function editorFrom(profile?: Profile): EditorState {
     avatarId: profile?.avatarId ?? 'marty',
     dailyLimitMinutes: String(profile?.dailyLimitMinutes ?? 30),
     questionBlockSize: String(profile?.questionBlockSize ?? 8),
+    playWindowMinutes: String(profile?.playWindowMinutes ?? 6),
+    perfectBlockBonusMinutes: String(profile?.perfectBlockBonusMinutes ?? 0),
     smartPractice: profile?.smartPractice ?? true,
   };
 }
@@ -103,6 +109,16 @@ export default function ParentChildren() {
       QUESTION_BLOCK_SIZE.min,
       QUESTION_BLOCK_SIZE.max,
     );
+    const playWindowMinutes = parseBoundedInteger(
+      editor.playWindowMinutes,
+      PLAY_WINDOW_MINUTES.min,
+      PLAY_WINDOW_MINUTES.max,
+    );
+    const perfectBlockBonusMinutes = parseBoundedInteger(
+      editor.perfectBlockBonusMinutes,
+      PERFECT_BONUS_MINUTES.min,
+      PERFECT_BONUS_MINUTES.max,
+    );
 
     if (!name || username.length < 2) {
       setNotice({
@@ -129,6 +145,20 @@ export default function ParentChildren() {
       setNotice({
         tone: 'error',
         message: `Study block must be a whole number from ${QUESTION_BLOCK_SIZE.min} to ${QUESTION_BLOCK_SIZE.max} questions.`,
+      });
+      return;
+    }
+    if (playWindowMinutes === null) {
+      setNotice({
+        tone: 'error',
+        message: `Questions timer must be a whole number from ${PLAY_WINDOW_MINUTES.min} to ${PLAY_WINDOW_MINUTES.max} minutes.`,
+      });
+      return;
+    }
+    if (perfectBlockBonusMinutes === null) {
+      setNotice({
+        tone: 'error',
+        message: `Perfect-block reward must be a whole number from ${PERFECT_BONUS_MINUTES.min} to ${PERFECT_BONUS_MINUTES.max} minutes. Use 0 for no bonus.`,
       });
       return;
     }
@@ -169,6 +199,8 @@ export default function ParentChildren() {
         avatarId: editor.avatarId,
         dailyLimitMinutes,
         questionBlockSize,
+        playWindowMinutes,
+        perfectBlockBonusMinutes,
         smartPractice: editor.smartPractice,
       });
       if (editor.password) {
@@ -189,6 +221,8 @@ export default function ParentChildren() {
         avatarId: editor.avatarId,
         dailyLimitMinutes,
         questionBlockSize,
+        playWindowMinutes,
+        perfectBlockBonusMinutes,
         smartPractice: editor.smartPractice,
       });
       await actions.setPasscode(profile.id, editor.password);
@@ -278,7 +312,10 @@ export default function ParentChildren() {
                     </div>
                     <p className="mt-1 text-xs leading-relaxed text-white/45">
                       {GRADE_BAND_LABELS[profile.band]} · {profile.dailyLimitMinutes} min/day ·{' '}
-                      {profile.questionBlockSize} questions
+                      {profile.questionBlockSize} questions every {profile.playWindowMinutes} min
+                      {profile.perfectBlockBonusMinutes > 0
+                        ? ` · +${profile.perfectBlockBonusMinutes} min for a perfect block`
+                        : ' · no bonus time'}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -287,7 +324,7 @@ export default function ParentChildren() {
                       onClick={() => openEditor(profile)}
                       className="min-h-11 rounded-xl bg-violet-300/14 px-4 text-xs font-black text-violet-100 transition hover:bg-violet-300/20"
                     >
-                      Edit profile & sign-in
+                      Edit child & playtime
                     </button>
                     <button
                       type="button"
@@ -506,7 +543,31 @@ export default function ParentChildren() {
                   suffix="questions"
                   onChange={(value) => setEditor({ ...editor, questionBlockSize: value })}
                 />
+                <NumberField
+                  label="Questions timer"
+                  value={editor.playWindowMinutes}
+                  min={PLAY_WINDOW_MINUTES.min}
+                  max={PLAY_WINDOW_MINUTES.max}
+                  suffix="minutes"
+                  onChange={(value) => setEditor({ ...editor, playWindowMinutes: value })}
+                />
+                <NumberField
+                  label="Perfect-block reward"
+                  value={editor.perfectBlockBonusMinutes}
+                  min={PERFECT_BONUS_MINUTES.min}
+                  max={PERFECT_BONUS_MINUTES.max}
+                  suffix="minutes"
+                  onChange={(value) =>
+                    setEditor({ ...editor, perfectBlockBonusMinutes: value })
+                  }
+                />
               </div>
+
+              <p className="-mt-2 text-xs leading-relaxed text-white/58">
+                The questions timer controls how long they play before the next study block. Games,
+                scores, coins, and level wins never add time. Set the perfect-block reward to 0 for
+                no bonus; otherwise it is awarded only when every answer is right on the first try.
+              </p>
 
               <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-cyan-200/[0.055] p-4 ring-1 ring-cyan-200/15">
                 <input
@@ -591,7 +652,7 @@ function NumberField({
     <label className="rounded-xl bg-white/[0.045] p-3 ring-1 ring-white/10">
       <span className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-black text-white/58">{label}</span>
-        <span className="text-[10px] font-bold text-white/35">
+        <span className="shrink-0 whitespace-nowrap text-[10px] font-bold text-white/35">
           {min}–{max}
         </span>
       </span>

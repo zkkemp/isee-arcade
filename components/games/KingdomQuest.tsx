@@ -5,7 +5,7 @@ import { SPEED_SCALE } from '@/lib/difficulty';
 import type { GameCanvasProps } from '@/lib/games';
 import { playSound } from '@/lib/sound';
 import { useCanvasGame } from '@/lib/useCanvasGame';
-import { GROUND_Y, HERO_H, LEVELS, WORLD_H, cameraTarget, cloneLevel, dampCamera, newHero, overlaps, questPace, questViewport, simulationSteps, stepEnemy, stepHero, type Enemy, type Hero, type QuestLevel, type Rect } from '@/lib/kingdomQuest';
+import { GROUND_Y, HERO_H, LEVELS, WORLD_H, cameraTarget, checkpointRespawn, cloneLevel, dampCamera, newHero, overlaps, questPace, questViewport, simulationSteps, stepEnemy, stepHero, type Enemy, type Hero, type QuestLevel, type Rect } from '@/lib/kingdomQuest';
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
 type Phase = 'map' | 'playing' | 'finale';
@@ -231,7 +231,7 @@ export default function KingdomQuest({ paused, input, api, restartToken, difficu
     const threats = [...s.level.enemies, ...(s.level.boss ? [s.level.boss] : [])];
     for (const enemy of threats) if (enemy.alive && overlaps(h, enemy)) { if ((h.star > 0 || (h.vy > 70 && beforeBottom <= enemy.y + 10))) stomp(s, enemy, api); else damage(s, api, enemy.kind === 'sentinel' ? 'The Sentinel stopped the quest' : 'A realm creature bumped you'); }
     collectAll(s, api);
-    for (const cp of s.level.checkpoints) if (!cp.hit && overlaps(h, cp)) { cp.hit = true; s.respawn = { x: cp.x - 14, y: GROUND_Y - HERO_H }; api.setStatus('Lantern lit — checkpoint saved!'); playSound('powerup'); pushBurst(s, cp.x + 9, cp.y + 12, '#ffe16a', 14); }
+    for (const cp of s.level.checkpoints) if (!cp.hit && overlaps(h, cp)) { cp.hit = true; s.respawn = checkpointRespawn(s.level, cp); api.setStatus('Lantern lit — checkpoint saved!'); playSound('powerup'); pushBurst(s, cp.x + 9, cp.y + 12, '#ffe16a', 14); }
     if (h.y > WORLD_H + 60) damage(s, api, 'You fell beyond the realm');
     if (!s.level.goal.locked && overlaps(h, s.level.goal)) {
       pushBurst(s, s.level.goal.x + 17, s.level.goal.y + 18, '#ffe16a', 36); api.addScore(200 + s.level.coins.length * 5); playSound('levelClear');

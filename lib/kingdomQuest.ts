@@ -155,7 +155,7 @@ export const LEVELS: QuestLevel[] = [
     platforms: [...ground(2440, [[540, 632], [1200, 1294], [1850, 1940]]), p(180, 252, 104), p(365, 200, 94), p(640, 258, 102), p(820, 204, 114), p(1005, 150, 110), p(1300, 262, 115), p(1495, 205, 110), p(1670, 150, 108), p(1948, 260, 130), p(2140, 210, 138)],
     coins: [coin(200, 220), coin(244, 220), coin(388, 168), coin(430, 168), coin(500, 274), coin(660, 226), coin(710, 226), coin(845, 172), coin(900, 172), coin(1030, 118), coin(1080, 118), coin(1325, 230), coin(1375, 230), coin(1520, 173), coin(1568, 173), coin(1695, 118), coin(1740, 118), coin(1970, 228), coin(2025, 228), coin(2165, 178)],
     runes: [rune(1038, 112), rune(1702, 112), rune(2170, 172)], enemies: [foe('emberbat', 385, 140, 340, 480), foe('mossling', 760, 296, 660, 900), foe('emberbat', 1045, 110, 990, 1160), foe('mossling', 1435, 296, 1320, 1570), foe('emberbat', 1700, 110, 1640, 1810), foe('mossling', 2080, 296, 1980, 2220)],
-    powers: [{ x: 1345, y: 230, w: 20, h: 24, kind: 'star', used: false }], checkpoints: [{ x: 1885, y: 264, w: 18, h: 56, hit: false }], goal: { x: 2375, y: 238, w: 34, h: 82, locked: false }, tip: 'Scale Dawnkeep and carry the lantern to its summit.',
+    powers: [{ x: 1345, y: 230, w: 20, h: 24, kind: 'star', used: false }], checkpoints: [{ x: 1810, y: 264, w: 18, h: 56, hit: false }], goal: { x: 2375, y: 238, w: 34, h: 82, locked: false }, tip: 'Scale Dawnkeep and carry the lantern to its summit.',
   },
   {
     id: 'moonpetal-marsh', name: 'Moonpetal Marsh', biome: 'meadow', width: 2260,
@@ -176,7 +176,7 @@ export const LEVELS: QuestLevel[] = [
     platforms: [...ground(2380, [[480, 570], [1120, 1212], [1760, 1854]]), p(130, 254, 106), p(315, 204, 102), p(578, 264, 110), p(760, 214, 108), p(945, 162, 106), p(1220, 262, 116), p(1410, 212, 110), p(1595, 160, 108), p(1862, 262, 122), p(2065, 208, 136)],
     coins: [...coinsAt(222, 155, 200), ...coinsAt(172, 340, 385), ...coinsAt(232, 605, 650), ...coinsAt(182, 790, 835), ...coinsAt(130, 970, 1015), ...coinsAt(230, 1248, 1300), ...coinsAt(180, 1438, 1488), ...coinsAt(128, 1622, 1670), ...coinsAt(230, 1890, 1945), ...coinsAt(176, 2095, 2150)],
     runes: [rune(980, 124), rune(1632, 122), rune(2110, 170)], enemies: [foe('emberbat', 350, 146, 300, 445), foe('mossling', 720, 296, 600, 900), foe('emberbat', 990, 118, 930, 1100), foe('mossling', 1350, 296, 1230, 1570), foe('emberbat', 1630, 116, 1560, 1740), foe('mossling', 2010, 296, 1870, 2230)],
-    powers: [{ x: 1450, y: 182, w: 20, h: 24, kind: 'bloom', used: false }], checkpoints: [{ x: 1815, y: 264, w: 18, h: 56, hit: false }], goal: { x: 2295, y: 238, w: 34, h: 82, locked: false }, tip: 'The ramparts reward steady climbs more than rushed leaps.',
+    powers: [{ x: 1450, y: 182, w: 20, h: 24, kind: 'bloom', used: false }], checkpoints: [{ x: 1710, y: 264, w: 18, h: 56, hit: false }], goal: { x: 2295, y: 238, w: 34, h: 82, locked: false }, tip: 'The ramparts reward steady climbs more than rushed leaps.',
   },
   {
     id: 'cloverwind-vale', name: 'Cloverwind Vale', biome: 'meadow', width: 2200,
@@ -228,6 +228,29 @@ export const LEVELS: QuestLevel[] = [
     powers: [{ x: 1750, y: 176, w: 20, h: 24, kind: 'star', used: false }], checkpoints: [{ x: 2050, y: 264, w: 18, h: 56, hit: false }], boss: foe('sentinel', 2510, 278, 2460, 2635, 4), goal: { x: 2635, y: 238, w: 34, h: 82, locked: true }, tip: 'Four careful stomps restore the Sentinel and light the Aurora Crown.',
   },
 ];
+
+/**
+ * Resolve a checkpoint to a fully supported ground spawn. Authored coordinates
+ * are still validated, but this runtime guard prevents a future misplaced
+ * lantern from ever creating an unavoidable fall-and-respawn loop.
+ */
+export function checkpointRespawn(level: QuestLevel, checkpoint: Checkpoint): { x: number; y: number } {
+  const desiredX = checkpoint.x - 14;
+  const groundPlatforms = level.platforms.filter(
+    (platform) => platform.y === GROUND_Y && platform.w >= HERO_W,
+  );
+  let bestX = 76;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const platform of groundPlatforms) {
+    const candidate = Math.max(platform.x, Math.min(platform.x + platform.w - HERO_W, desiredX));
+    const distance = Math.abs(candidate - desiredX);
+    if (distance < bestDistance) {
+      bestX = candidate;
+      bestDistance = distance;
+    }
+  }
+  return { x: bestX, y: GROUND_Y - HERO_H };
+}
 
 export function cloneLevel(index: number): QuestLevel {
   const source = LEVELS[index];

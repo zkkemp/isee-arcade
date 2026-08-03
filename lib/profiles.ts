@@ -35,9 +35,16 @@ export type Profile = {
   dailyLimitMinutes: number;
   /** Correct answers required to earn a play window. Always 5–20. */
   questionBlockSize: number;
+  /** Minutes of uninterrupted play before the next study block. */
+  playWindowMinutes: number;
+  /** Extra minutes awarded only when a study block has no wrong answers. */
+  perfectBlockBonusMinutes: number;
   /** Gently gives weak skills a little more practice without taking over the mix. */
   smartPractice: boolean;
 };
+
+export const DEFAULT_PLAY_WINDOW_MINUTES = 6;
+export const DEFAULT_PERFECT_BLOCK_BONUS_MINUTES = 0;
 
 const PROFILES_KEY = 'isee-arcade:profiles';
 const ACTIVE_KEY = 'isee-arcade:active-profile';
@@ -77,6 +84,10 @@ function readProfiles(): Profile[] {
             passcodeSalt: profile.passcodeSalt ?? '',
             dailyLimitMinutes: clampDailyLimit(profile.dailyLimitMinutes),
             questionBlockSize: clampQuestionBlockSize(profile.questionBlockSize),
+            playWindowMinutes: clampPlayWindowMinutes(profile.playWindowMinutes),
+            perfectBlockBonusMinutes: clampPerfectBlockBonusMinutes(
+              profile.perfectBlockBonusMinutes,
+            ),
             smartPractice: profile.smartPractice !== false,
           }))
       : EMPTY;
@@ -168,6 +179,18 @@ export function clampQuestionBlockSize(value: unknown): number {
   return Math.max(5, Math.min(20, Math.round(number)));
 }
 
+export function clampPlayWindowMinutes(value: unknown): number {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return DEFAULT_PLAY_WINDOW_MINUTES;
+  return Math.max(1, Math.min(60, Math.round(number)));
+}
+
+export function clampPerfectBlockBonusMinutes(value: unknown): number {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return DEFAULT_PERFECT_BLOCK_BONUS_MINUTES;
+  return Math.max(0, Math.min(60, Math.round(number)));
+}
+
 // --- reads -------------------------------------------------------------------
 
 export function getProfiles(): Profile[] {
@@ -204,6 +227,8 @@ export function addProfile(input: {
   avatarId: CharacterId;
   dailyLimitMinutes?: number;
   questionBlockSize?: number;
+  playWindowMinutes?: number;
+  perfectBlockBonusMinutes?: number;
   smartPractice?: boolean;
 }): Profile {
   const baseUsername = cleanUsername(input.username || input.name) || 'player';
@@ -224,6 +249,10 @@ export function addProfile(input: {
     passcodeSalt: '',
     dailyLimitMinutes: clampDailyLimit(input.dailyLimitMinutes),
     questionBlockSize: clampQuestionBlockSize(input.questionBlockSize),
+    playWindowMinutes: clampPlayWindowMinutes(input.playWindowMinutes),
+    perfectBlockBonusMinutes: clampPerfectBlockBonusMinutes(
+      input.perfectBlockBonusMinutes,
+    ),
     smartPractice: input.smartPractice !== false,
   };
   writeProfiles([...readProfiles(), profile]);
@@ -253,6 +282,14 @@ export function updateProfile(id: string, patch: Partial<Omit<Profile, 'id'>>): 
               patch.questionBlockSize === undefined
                 ? profile.questionBlockSize
                 : clampQuestionBlockSize(patch.questionBlockSize),
+            playWindowMinutes:
+              patch.playWindowMinutes === undefined
+                ? profile.playWindowMinutes
+                : clampPlayWindowMinutes(patch.playWindowMinutes),
+            perfectBlockBonusMinutes:
+              patch.perfectBlockBonusMinutes === undefined
+                ? profile.perfectBlockBonusMinutes
+                : clampPerfectBlockBonusMinutes(patch.perfectBlockBonusMinutes),
           }
         : profile,
     ),

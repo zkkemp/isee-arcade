@@ -15,36 +15,29 @@
  * sends you back to studying, which means the incentives finally point the right
  * way: the kid wants more time, and the only way to get it is to answer.
  *
- * Two levers stretch a window without weakening the studying:
- *  - scoring well (every COIN_STEP points adds a minute, capped) so playing well
- *    is rewarded rather than just surviving
- *  - clearing a level (a smaller top-up)
- * Both are capped per window so the game can never become a perpetual-motion
- * machine that outruns the studying entirely.
+ * Games never create time. Parents choose the base play window, and may choose a
+ * separate perfect-block bonus. That bonus is earned only when every answer in
+ * the study block is correct on the first try.
  *
  * Everything here is persisted, for the same reason the question debt is: force
  * quitting the app must not refill the clock or shake off an owed study block.
  */
 
-import { clampQuestionBlockSize, getActiveProfile, profileStorageSuffix } from './profiles';
+import {
+  clampPerfectBlockBonusMinutes,
+  clampPlayWindowMinutes,
+  clampQuestionBlockSize,
+  DEFAULT_PERFECT_BLOCK_BONUS_MINUTES,
+  DEFAULT_PLAY_WINDOW_MINUTES,
+  getActiveProfile,
+  profileStorageSuffix,
+} from './profiles';
 
 /** Default questions in one study block. Parents can choose 5–20 per learner. */
 export const BLOCK_SIZE = 8;
 export const MAX_BLOCK_SIZE = 20;
 
-/**
- * Play granted by finishing a study block. Six minutes is long enough to reach a
- * few levels and actually get absorbed, which was the whole complaint.
- */
-export const PLAY_WINDOW_MS = 6 * 60_000;
-
-/** Points that earn a bonus minute, and how much each one is worth. */
-export const COIN_STEP = 150;
-export const COIN_BONUS_MS = 60_000;
-/** Clearing a level tops the clock up by this much. */
-export const LEVEL_BONUS_MS = 30_000;
-/** Ceiling on bonuses within one window, so play can never outrun study. */
-export const MAX_BONUS_MS = 5 * 60_000;
+export const MINUTE_MS = 60_000;
 
 /**
  * A study block in progress.
@@ -64,6 +57,8 @@ export type StudyBlock = {
   target: number;
   /** Correct answers so far in this block. */
   correct: number;
+  /** Wrong answers in this block. Any value above zero prevents a perfect bonus. */
+  mistakes: number;
   /**
    * Extra answers added to this block - two per missed reading question, one per
    * three-wrong streak. Kept on the block rather than in a ref so a force quit
@@ -72,15 +67,15 @@ export type StudyBlock = {
   penalty: number;
   /** The one reading question has been served. */
   readingServed: boolean;
+  /** Parent-selected play interval captured when this block begins. */
+  playWindowMinutes: number;
+  /** Parent-selected reward for a zero-mistake block. */
+  perfectBlockBonusMinutes: number;
 };
 
 export type PlaySession = {
   /** Play time remaining, in ms. */
   msLeft: number;
-  /** Bonus already granted in this window, against MAX_BONUS_MS. */
-  bonusMs: number;
-  /** Score at the last bonus minute, so bonuses are not paid twice. */
-  bonusAtScore: number;
   /** Study blocks finished, all time. Drives the "block 4" label. */
   blocksDone: number;
   /** Non-null while a block is owed. */
@@ -91,12 +86,32 @@ function activeBlockTarget(): number {
   return clampQuestionBlockSize(getActiveProfile()?.questionBlockSize ?? BLOCK_SIZE);
 }
 
-export function newBlock(target = activeBlockTarget()): StudyBlock {
+function activePlayRules(): Pick<StudyBlock, 'playWindowMinutes' | 'perfectBlockBonusMinutes'> {
+  const profile = getActiveProfile();
+  return {
+    playWindowMinutes: clampPlayWindowMinutes(
+      profile?.playWindowMinutes ?? DEFAULT_PLAY_WINDOW_MINUTES,
+    ),
+    perfectBlockBonusMinutes: clampPerfectBlockBonusMinutes(
+      profile?.perfectBlockBonusMinutes ?? DEFAULT_PERFECT_BLOCK_BONUS_MINUTES,
+    ),
+  };
+}
+
+export function newBlock(
+  target = activeBlockTarget(),
+  rules = activePlayRules(),
+): StudyBlock {
   return {
     target: clampQuestionBlockSize(target),
     correct: 0,
+    mistakes: 0,
     penalty: 0,
     readingServed: false,
+    playWindowMinutes: clampPlayWindowMinutes(rules.playWindowMinutes),
+    perfectBlockBonusMinutes: clampPerfectBlockBonusMinutes(
+      rules.perfectBlockBonusMinutes,
+    ),
   };
 }
 
@@ -107,8 +122,6 @@ export function newBlock(target = activeBlockTarget()): StudyBlock {
 export function emptySession(): PlaySession {
   return {
     msLeft: 0,
-    bonusMs: 0,
-    bonusAtScore: 0,
     blocksDone: 0,
     study: newBlock(),
   };
@@ -122,6 +135,16 @@ export function blockComplete(b: StudyBlock): boolean {
 /** Questions still to answer, for the "3 to go" line. */
 export function questionsLeft(b: StudyBlock): number {
   return Math.max(0, Math.min(MAX_BLOCK_SIZE, b.target + b.penalty) - b.correct);
+}
+
+/** The only possible play award: base minutes plus an optional perfect-block bonus. */
+export function playAwardMs(b: StudyBlock): number {
+  const base = clampPlayWindowMinutes(b.playWindowMinutes) * MINUTE_MS;
+  const perfect =
+    b.mistakes === 0
+      ? clampPerfectBlockBonusMinutes(b.perfectBlockBonusMinutes) * MINUTE_MS
+      : 0;
+  return base + perfect;
 }
 
 const BASE_KEY = 'isee-arcade:play-session';
@@ -138,12 +161,13 @@ export function loadSession(): PlaySession {
     if (!raw) return emptySession();
     const s = JSON.parse(raw) as PlaySession;
     if (!s || typeof s !== 'object' || typeof s.msLeft !== 'number') return emptySession();
+    const rules = activePlayRules();
+    const maximumWindowMs =
+      (rules.playWindowMinutes + rules.perfectBlockBonusMinutes) * MINUTE_MS;
     return {
       // Clamp rather than trust: a corrupted or hand-edited value should not hand
       // out an unbounded window.
-      msLeft: Math.max(0, Math.min(s.msLeft, PLAY_WINDOW_MS + MAX_BONUS_MS)),
-      bonusMs: Math.max(0, Math.min(s.bonusMs ?? 0, MAX_BONUS_MS)),
-      bonusAtScore: Math.max(0, s.bonusAtScore ?? 0),
+      msLeft: Math.max(0, Math.min(s.msLeft, maximumWindowMs)),
       blocksDone: Math.max(0, s.blocksDone ?? 0),
       // Rebuilt field by field rather than spread, so a stored block from an
       // older build (which carried a now-removed readingWon flag) is normalised
@@ -153,6 +177,12 @@ export function loadSession(): PlaySession {
           ? {
               target: clampQuestionBlockSize(s.study.target ?? activeBlockTarget()),
               correct: Math.max(0, s.study.correct),
+              // Older in-progress blocks did not track misses. Treat them as
+              // non-perfect so an upgrade can never manufacture bonus time.
+              mistakes:
+                typeof s.study.mistakes === 'number'
+                  ? Math.max(0, Math.round(s.study.mistakes))
+                  : 1,
               penalty: Math.max(
                 0,
                 Math.min(
@@ -162,6 +192,12 @@ export function loadSession(): PlaySession {
                 ),
               ),
               readingServed: s.study.readingServed === true,
+              playWindowMinutes: clampPlayWindowMinutes(
+                s.study.playWindowMinutes ?? rules.playWindowMinutes,
+              ),
+              perfectBlockBonusMinutes: clampPerfectBlockBonusMinutes(
+                s.study.perfectBlockBonusMinutes ?? rules.perfectBlockBonusMinutes,
+              ),
             }
           : null,
     };

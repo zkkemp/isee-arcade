@@ -12,6 +12,11 @@ import {
   type ReactNode,
 } from 'react';
 import { addDailyUsage, loadDailyUsage, syncDailyUsageSoon } from '@/lib/dailyUsage';
+import {
+  foregroundElapsedMs,
+  newForegroundClock,
+  resetForegroundClock,
+} from '@/lib/foregroundTimer';
 import { setActiveProfile, useActiveProfile } from '@/lib/profiles';
 import { usePlayerMode } from '@/lib/playerMode';
 
@@ -61,13 +66,17 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
 
   useEffect(() => {
     if (!profile || !countsAsLearningTime || blocked) return;
-    let last = Date.now();
+    const clock = newForegroundClock(Date.now(), document.visibilityState === 'visible');
     let sinceSync = 0;
+    const resetClock = () =>
+      resetForegroundClock(clock, Date.now(), document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', resetClock);
+    window.addEventListener('pageshow', resetClock);
+    window.addEventListener('focus', resetClock);
     const interval = window.setInterval(() => {
       const now = Date.now();
-      const elapsed = now - last;
-      last = now;
-      if (document.visibilityState !== 'visible') return;
+      const elapsed = foregroundElapsedMs(clock, now, document.visibilityState === 'visible');
+      if (elapsed <= 0) return;
       const next = addDailyUsage(profile.id, elapsed);
       sinceSync += elapsed;
       if (sinceSync >= 30_000) {
@@ -81,6 +90,9 @@ export default function DailyLimitProvider({ children }: { children: ReactNode }
     }, 1000);
     return () => {
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', resetClock);
+      window.removeEventListener('pageshow', resetClock);
+      window.removeEventListener('focus', resetClock);
       if (sinceSync > 0) syncDailyUsageSoon();
     };
   }, [blocked, countsAsLearningTime, profile]);

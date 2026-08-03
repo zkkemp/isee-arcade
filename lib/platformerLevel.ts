@@ -2198,6 +2198,7 @@ export function buildLevel(level: number, difficulty: Difficulty = 'normal'): Le
   guaranteeUpperAir(g, flagCol);
 
   scatterDecor(g, biome);
+  checkpointX = safeCheckpointX(g.tiles, checkpointX);
 
   return {
     tiles: g.tiles,
@@ -2217,6 +2218,35 @@ export function buildLevel(level: number, difficulty: Difficulty = 'normal'): Le
     structures: g.structures,
     lesson: lesson.name,
   };
+}
+
+/**
+ * Move a generated checkpoint to the nearest three-tile stretch of clear,
+ * ordinary ground. The wider pad keeps both the marker and a respawning player
+ * away from a pit edge even when the checkpoint was requested in a random gap
+ * between structures.
+ */
+export function safeCheckpointX(tiles: TileCode[][], desiredX: number): number {
+  const desiredCol = Math.max(START_PAD, Math.min(COLS - END_PAD, Math.round(desiredX / TILE)));
+  const safeAt = (col: number) => {
+    if (col < START_PAD || col >= COLS - END_PAD) return false;
+    for (let tx = col - 1; tx <= col + 1; tx += 1) {
+      if (!solidAt(tiles, tx, GROUND_TOP)) return false;
+      if (hazardAt(tiles, tx, GROUND_TOP - 1)) return false;
+      for (let ty = GROUND_TOP - 3; ty < GROUND_TOP; ty += 1) {
+        if (solidAt(tiles, tx, ty)) return false;
+      }
+    }
+    return true;
+  };
+
+  for (let distance = 0; distance < COLS; distance += 1) {
+    const left = desiredCol - distance;
+    if (safeAt(left)) return left * TILE;
+    const right = desiredCol + distance;
+    if (right !== left && safeAt(right)) return right * TILE;
+  }
+  return START_PAD * TILE;
 }
 
 /** Pit runs along the ground row, as `[startX, width]`. Used by the validators. */

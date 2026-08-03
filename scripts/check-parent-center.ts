@@ -166,8 +166,9 @@ const playtimeCardSource = fs.readFileSync(
 );
 assert(
   playtimeCardSource.includes('profile?.questionBlockSize') &&
-    playtimeCardSource.includes('6 minutes') &&
-    playtimeCardSource.includes('5 bonus minutes'),
+    playtimeCardSource.includes('profile?.playWindowMinutes') &&
+    playtimeCardSource.includes('profile?.perfectBlockBonusMinutes') &&
+    playtimeCardSource.includes('never add time'),
   'the arcade must explain the learner-specific practice-to-play exchange clearly',
 );
 
@@ -177,6 +178,8 @@ const childEditorSource = fs.readFileSync(
 );
 assert(
   childEditorSource.includes('dailyLimitMinutes: string') &&
+    childEditorSource.includes('playWindowMinutes: string') &&
+    childEditorSource.includes('perfectBlockBonusMinutes: string') &&
     childEditorSource.includes('parseBoundedInteger') &&
     childEditorSource.includes("onChange(event.target.value.replace(/\\D/g, ''))"),
   'parent number fields must allow a blank editing state before validating whole numbers',

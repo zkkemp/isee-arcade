@@ -89,15 +89,15 @@ export type GameMeta = {
 /**
  * What a game can tell the shell. The shell owns score and all question gating.
  *
- * Note there is no mid-play gate: a game asks only when the player dies or
- * clears a level. Interrupting mid-run was the single worst thing about the
- * first version.
+ * Games report milestones, but the shell's parent-selected clock is the only
+ * thing that opens a study block. Dying, scores, coins, and level clears never
+ * create or remove play time.
  */
 export type GameApi = {
   addScore: (delta: number) => void;
-  /** Player died. Opens a question; answering correctly puts them back in. */
+  /** Player died. The game handles its respawn; the shell only records the boundary. */
   died: (label?: string) => void;
-  /** Level cleared. Opens a question before the next level. */
+  /** Level cleared. Celebrates the milestone without changing play time. */
   requestGate: (label: string) => void;
   /** Transient banner over the canvas. */
   setStatus: (text: string | null) => void;

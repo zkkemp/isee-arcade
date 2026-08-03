@@ -69,6 +69,7 @@ import {
   moverX,
   moverY,
   overlapsSolid,
+  safeCheckpointX,
   solidAt,
   stepBody,
   stepEnemy,
@@ -728,12 +729,15 @@ function checkLevel(level: number, d: Difficulty, tally: Tally) {
     fail(`${at}: the checkpoint respawn at x=${L.checkpointX} is on spikes`);
   }
   {
-    let floor = false;
     const col = Math.floor(cpSpawn.x / TILE);
-    for (let y = Math.floor(cpSpawn.y / TILE); y < ROWS; y += 1) {
-      if (solidAt(L.tiles, col, y)) floor = true;
+    for (let tx = col - 1; tx <= col + 1; tx += 1) {
+      if (!solidAt(L.tiles, tx, GROUND_TOP)) {
+        fail(`${at}: the checkpoint at x=${L.checkpointX} is too close to a pit edge`);
+      }
+      if (hazardAt(L.tiles, tx, GROUND_TOP - 1)) {
+        fail(`${at}: the checkpoint at x=${L.checkpointX} has spikes on its landing pad`);
+      }
     }
-    if (!floor) fail(`${at}: the checkpoint respawn at x=${L.checkpointX} is over a pit`);
   }
   const cp = explore(L, { from: cpSpawn });
   if (!cp.flag) fail(`${at}: FLAG is unreachable from the checkpoint at x=${L.checkpointX}`);
@@ -1149,6 +1153,28 @@ if (JSON.stringify(buildLevel(4, 'easy')) === JSON.stringify(buildLevel(4, 'hard
   } else {
     console.log(`self-test: an emptied sky correctly reports ${empty} empty air rows`);
   }
+}
+{
+  // 5. A requested checkpoint inside a deliberately carved pit must be moved
+  // onto a three-tile landing pad.
+  const L: Level = JSON.parse(JSON.stringify(buildLevel(5, 'normal')));
+  const desiredCol = Math.floor(L.checkpointX / TILE);
+  for (let tx = desiredCol - 1; tx <= desiredCol + 1; tx += 1) {
+    for (let ty = GROUND_TOP; ty < ROWS; ty += 1) L.tiles[ty][tx] = '.';
+  }
+  const moved = safeCheckpointX(L.tiles, L.checkpointX);
+  const movedCol = Math.floor(moved / TILE);
+  if (moved === L.checkpointX) {
+    fail('self-test: a checkpoint requested inside a pit was not moved');
+  }
+  if (
+    [movedCol - 1, movedCol, movedCol + 1].some(
+      (tx) => !solidAt(L.tiles, tx, GROUND_TOP),
+    )
+  ) {
+    fail('self-test: the moved checkpoint did not land on a three-tile pad');
+  }
+  console.log('self-test: a checkpoint requested inside a pit moves to a safe landing pad');
 }
 
 console.log(
