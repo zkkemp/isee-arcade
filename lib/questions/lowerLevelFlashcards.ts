@@ -272,6 +272,49 @@ export const LOWER_LEVEL_FLASHCARDS: LowerLevelFlashcard[] = seeds.map((seed) =>
   questionId: existingByWord.get(normalizedWord(seed.word))?.id ?? seed.id,
 }));
 
+export const LOWER_LEVEL_FLASHCARD_QUESTION_IDS = new Set(
+  LOWER_LEVEL_FLASHCARDS.map((card) => card.questionId),
+);
+
+/**
+ * Most short questions inside an ISEE Lower Level game block come from this
+ * source deck until the learner knows it. Reading passages keep their own lane,
+ * and the remaining draws preserve a broad curriculum mix.
+ */
+export const LOWER_LEVEL_GAME_PRIORITY_RATE = 0.72;
+
+/**
+ * Returns one source-deck question that needs attention, or null when every
+ * available source word is mastered/not yet due. Missed words beat unseen
+ * words, which beat once-known words whose short spacing delay has elapsed.
+ */
+export function pickLowerLevelGameQuestionId(
+  availableQuestionIds: ReadonlySet<string>,
+  vocabulary: Record<string, VocabularyMastery>,
+  vocabularyClock: number,
+  recentQuestionIds: string[] = [],
+  random: () => number = Math.random,
+): string | null {
+  const available = LOWER_LEVEL_FLASHCARDS.filter((card) =>
+    availableQuestionIds.has(card.questionId),
+  );
+  const mastery = (card: LowerLevelFlashcard) => vocabulary[card.questionId];
+  const tiers = [
+    available.filter((card) => (mastery(card)?.misses ?? 0) > 0),
+    available.filter((card) => !mastery(card)),
+    available.filter((card) => {
+      const state = mastery(card);
+      return state && state.correctStreak < 2 && state.dueAt <= vocabularyClock;
+    }),
+  ];
+  const recent = new Set(recentQuestionIds.slice(-3));
+  const tier = tiers
+    .map((candidates) => candidates.filter((card) => !recent.has(card.questionId)))
+    .find((candidates) => candidates.length > 0);
+  if (!tier) return null;
+  return tier[Math.floor(random() * tier.length)].questionId;
+}
+
 function distractorsFor(index: number): string[] {
   const seed = seeds[index];
   const samePart = seeds.filter(

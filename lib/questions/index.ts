@@ -13,7 +13,11 @@ import { VOCAB_EH } from './vocab/eh';
 import { VOCAB_IM } from './vocab/im';
 import { VOCAB_NR } from './vocab/nr';
 import { VOCAB_SZ } from './vocab/sz';
-import { LOWER_LEVEL_FLASHCARD_QUESTIONS } from './lowerLevelFlashcards';
+import {
+  LOWER_LEVEL_FLASHCARD_QUESTIONS,
+  LOWER_LEVEL_GAME_PRIORITY_RATE,
+  pickLowerLevelGameQuestionId,
+} from './lowerLevelFlashcards';
 import { MATH_TEMPLATES } from './mathTemplates';
 import { MATH_TEMPLATES_2 } from './mathTemplates2';
 import { MATH_TEMPLATES_3 } from './mathTemplates3';
@@ -406,6 +410,8 @@ export type PickArgs = {
   focusTopic?: string | null;
   /** Optional lane-specific target; otherwise recent overall accuracy decides. */
   targetDifficulty?: 1 | 2 | 3;
+  /** Make the supplied 200-word deck dominate ISEE Lower Level game breaks until mastered. */
+  prioritizeLowerLevelFlashcards?: boolean;
 };
 
 export function pickQuestion(args: PickArgs = {}): Question {
@@ -424,6 +430,7 @@ export function pickQuestion(args: PickArgs = {}): Question {
     excludedContentKeys = [],
     focusTopic = null,
     targetDifficulty,
+    prioritizeLowerLevelFlashcards = false,
   } = args;
 
   // The band's pool is the whole universe this call draws from.
@@ -454,6 +461,18 @@ export function pickQuestion(args: PickArgs = {}): Question {
     const recent = new Set(recentIds);
     const usedPassages = new Set(recentPassageIds);
     const sameKind = CANDIDATES.filter((c) => c.kind === sameKindAs.kind);
+    if (prioritizeLowerLevelFlashcards && sameKindAs.kind === 'synonym') {
+      const prioritizedId = pickLowerLevelGameQuestionId(
+        new Set(sameKind.map((candidate) => candidate.id)),
+        vocabulary,
+        vocabularyClock,
+        recentIds,
+      );
+      const prioritized = prioritizedId
+        ? sameKind.find((candidate) => candidate.id === prioritizedId)
+        : null;
+      if (prioritized) return prioritized.materialize();
+    }
     const fresh = sameKind.filter(
       (c) => !recent.has(c.id) && (!c.passageId || !usedPassages.has(c.passageId)),
     );
@@ -463,6 +482,27 @@ export function pickQuestion(args: PickArgs = {}): Question {
   }
 
   // --- normal path ---
+  // Game study breaks use the supplied 200-word deck as a deliberate learning
+  // lane. It wins most short draws while a word is missed, unseen, or due for a
+  // second successful encounter. Explicit reading draws stay untouched, and a
+  // fully mastered/not-yet-due deck naturally falls through to the full bank.
+  if (
+    prioritizeLowerLevelFlashcards &&
+    forceKind !== 'reading' &&
+    Math.random() < LOWER_LEVEL_GAME_PRIORITY_RATE
+  ) {
+    const prioritizedId = pickLowerLevelGameQuestionId(
+      new Set(CANDIDATES.map((candidate) => candidate.id)),
+      vocabulary,
+      vocabularyClock,
+      recentIds,
+    );
+    const prioritized = prioritizedId
+      ? CANDIDATES.find((candidate) => candidate.id === prioritizedId)
+      : null;
+    if (prioritized) return prioritized.materialize();
+  }
+
   const allowed = subjects && subjects.length > 0 ? new Set(subjects) : null;
   let inScope = CANDIDATES.filter((c) => !allowed || allowed.has(c.subject));
   if (inScope.length === 0) return pickRandom(CANDIDATES).materialize();

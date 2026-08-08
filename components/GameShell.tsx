@@ -275,6 +275,10 @@ export default function GameShell({
             ? 1
             : 2
           : undefined,
+      // The source-deck words should dominate the short game questions until
+      // this Lower Level learner has demonstrated mastery. The picker keeps
+      // reading passages and spacing intact and stops boosting mastered words.
+      prioritizeLowerLevelFlashcards: band === 'isee',
       avoidKind: avoid.length > 0 ? avoid : null,
       excludedContentKeys,
     });

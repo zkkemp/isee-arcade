@@ -1,9 +1,12 @@
 import {
   LOWER_LEVEL_FLASHCARDS,
   LOWER_LEVEL_FLASHCARD_QUESTIONS,
+  LOWER_LEVEL_FLASHCARD_QUESTION_IDS,
+  LOWER_LEVEL_GAME_PRIORITY_RATE,
+  pickLowerLevelGameQuestionId,
   pickLowerLevelFlashcard,
 } from '../lib/questions/lowerLevelFlashcards';
-import { STATIC_QUESTIONS, questionById } from '../lib/questions';
+import { STATIC_QUESTIONS, pickQuestion, questionById } from '../lib/questions';
 import type { VocabularyMastery } from '../lib/progress';
 
 function assert(value: unknown, message: string): asserts value {
@@ -67,7 +70,110 @@ assert(
   'the last card must not repeat immediately',
 );
 
+assert(
+  LOWER_LEVEL_GAME_PRIORITY_RATE > 0.5,
+  'source-deck words must be the majority lane in eligible Lower Level game draws',
+);
+assert(
+  pickLowerLevelGameQuestionId(
+    LOWER_LEVEL_FLASHCARD_QUESTION_IDS,
+    urgentVocabulary,
+    100,
+    [],
+    () => 0,
+  ) === urgent.questionId,
+  'a missed source-deck word must lead the game priority lane',
+);
+assert(
+  pickLowerLevelGameQuestionId(
+    LOWER_LEVEL_FLASHCARD_QUESTION_IDS,
+    oneUnseen,
+    100,
+    [],
+    () => 0,
+  ) === unseen.questionId,
+  'an unseen source-deck word must lead mastered words in game questions',
+);
+assert(
+  pickLowerLevelGameQuestionId(
+    LOWER_LEVEL_FLASHCARD_QUESTION_IDS,
+    allMastered,
+    100,
+    [],
+    () => 0,
+  ) === null,
+  'fully mastered source-deck words must stop dominating game questions',
+);
+assert(
+  pickLowerLevelGameQuestionId(
+    LOWER_LEVEL_FLASHCARD_QUESTION_IDS,
+    oneUnseen,
+    100,
+    [unseen.questionId],
+    () => 0,
+  ) === null,
+  'the game priority lane must not repeat its only eligible word immediately',
+);
+
+const originalRandom = Math.random;
+Math.random = () => 0;
+const prioritizedGameQuestion = pickQuestion({
+  band: 'isee',
+  vocabulary: oneUnseen,
+  vocabularyClock: 100,
+  prioritizeLowerLevelFlashcards: true,
+});
+Math.random = originalRandom;
+assert(
+  prioritizedGameQuestion.id === unseen.questionId,
+  'the live Lower Level game picker must route an eligible draw into the source deck',
+);
+const retryVocabulary = { ...urgentVocabulary };
+delete retryVocabulary[unseen.questionId];
+const sourceRetry = pickQuestion({
+  band: 'isee',
+  recentIds: [urgent.questionId],
+  vocabulary: retryVocabulary,
+  vocabularyClock: 100,
+  sameKindAs: questionById(urgent.questionId),
+  prioritizeLowerLevelFlashcards: true,
+});
+assert(
+  LOWER_LEVEL_FLASHCARD_QUESTION_IDS.has(sourceRetry.id) && sourceRetry.id !== urgent.questionId,
+  'a missed source word must stay in the source-deck lane without repeating immediately',
+);
+
+let randomState = 0x51ee1234;
+const seededRandom = () => {
+  randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
+  return randomState / 0x100000000;
+};
+let sourceGameDraws = 0;
+const simulatedRecent: string[] = [];
+Math.random = seededRandom;
+try {
+  for (let draw = 0; draw < 600; draw += 1) {
+    const question = pickQuestion({
+      band: 'isee',
+      recentIds: simulatedRecent,
+      vocabulary: {},
+      vocabularyClock: draw,
+      prioritizeLowerLevelFlashcards: true,
+    });
+    if (LOWER_LEVEL_FLASHCARD_QUESTION_IDS.has(question.id)) sourceGameDraws += 1;
+    simulatedRecent.push(question.id);
+  }
+} finally {
+  Math.random = originalRandom;
+}
+assert(
+  sourceGameDraws > 300,
+  `source-deck words must be most game draws while unseen (saw ${sourceGameDraws}/600)`,
+);
+
 console.log(
   `Lower Level Word Lab verified: 200 PDF words, ${LOWER_LEVEL_FLASHCARD_QUESTIONS.length} additions, ` +
-    'complete curriculum coverage, missed-first spacing, search-ready metadata, and no immediate repeats.',
+    `complete curriculum and game coverage, ${sourceGameDraws}/600 unseen-game draws, ` +
+    'majority game priority until mastery, missed-first spacing, ' +
+    'search-ready metadata, and no immediate repeats.',
 );
