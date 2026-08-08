@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import {
   LOWER_LEVEL_FLASHCARDS,
   pickLowerLevelFlashcard,
   type LowerLevelFlashcard,
 } from '@/lib/questions/lowerLevelFlashcards';
-import { loadProgress, recordAnswer, saveProgress, type Progress } from '@/lib/progress';
+import { emptyProgress, loadProgress, recordAnswer, saveProgress, type Progress } from '@/lib/progress';
 
 type DeckView = 'study' | 'library';
 type LibraryFilter = 'all' | 'new' | 'learning' | 'mastered';
@@ -24,16 +25,23 @@ function statusLabel(status: LibraryFilter): string {
 }
 
 export default function LowerLevelFlashcards({ onExit }: { onExit: () => void }) {
-  const [progress, setProgress] = useState(loadProgress);
+  const [progress, setProgress] = useState(emptyProgress);
   const [recentIds, setRecentIds] = useState<string[]>([]);
-  const [card, setCard] = useState(() =>
-    pickLowerLevelFlashcard(progress.vocabulary, progress.totalSeen),
-  );
+  const [card, setCard] = useState(LOWER_LEVEL_FLASHCARDS[0]);
   const [revealed, setRevealed] = useState(false);
   const [view, setView] = useState<DeckView>('study');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [query, setQuery] = useState('');
   const [session, setSession] = useState({ reviewed: 0, known: 0 });
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const saved = loadProgress();
+      setProgress(saved);
+      setCard(pickLowerLevelFlashcard(saved.vocabulary, saved.totalSeen));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   function scrollToWordLab() {
     document.getElementById('lower-level-word-lab')?.scrollIntoView({
@@ -144,6 +152,12 @@ export default function LowerLevelFlashcards({ onExit }: { onExit: () => void })
             </button>
           ))}
         </div>
+        <Link
+          href="/prep/lower-level-vocabulary"
+          className="mt-2 flex min-h-11 items-center justify-center rounded-xl border border-white/12 bg-white/[.045] px-4 text-sm font-black text-white/72 transition hover:bg-white/[.08] hover:text-white"
+        >
+          Open the complete 200-word curriculum →
+        </Link>
       </header>
 
       {view === 'study' ? (

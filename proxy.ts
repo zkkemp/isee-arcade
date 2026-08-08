@@ -9,7 +9,7 @@ export async function proxy(request: NextRequest) {
   const response = await refreshSupabaseSession(request);
   const protectedArcade =
     request.nextUrl.pathname.startsWith('/play/') ||
-    request.nextUrl.pathname === '/prep' ||
+    request.nextUrl.pathname.startsWith('/prep') ||
     request.nextUrl.pathname === '/progress';
   if (!protectedArcade) return response;
 

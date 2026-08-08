@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -133,6 +134,22 @@ export default function ParentCurriculumLibrary({
 
   return (
     <div>
+      {band === 'isee' && (
+        <Link
+          href="/prep/lower-level-vocabulary"
+          className="mb-5 flex min-h-16 items-center justify-between gap-4 rounded-2xl border border-amber-200/20 bg-amber-200/[.07] px-4 py-3 transition hover:bg-amber-200/[.11] sm:px-5"
+        >
+          <span>
+            <strong className="block text-base font-black text-white">
+              Lower Level 200-Word Curriculum
+            </strong>
+            <span className="mt-0.5 block text-sm text-white/68">
+              Open the complete source-deck word list, meanings, and learner mastery.
+            </span>
+          </span>
+          <span className="shrink-0 font-black text-amber-200" aria-hidden="true">→</span>
+        </Link>
+      )}
       <section className="mb-5 rounded-2xl bg-[#151527] p-4 sm:p-5">
         <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
           <label>

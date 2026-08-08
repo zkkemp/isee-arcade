@@ -7,7 +7,12 @@ export const metadata = {
     'Realistic Lower, Middle, and Upper Level ISEE section practice, diagnostics, and essay preparation.',
 };
 
-export default function PrepPage() {
+export default async function PrepPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view } = await searchParams;
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6 sm:px-8 sm:pt-10">
       <header className="mb-7 flex items-start gap-4">
@@ -32,7 +37,7 @@ export default function PrepPage() {
           </p>
         </div>
       </header>
-      <TestPrepClient />
+      <TestPrepClient initialFlashcards={view === 'word-lab'} />
 
       <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[.03] p-5 sm:p-8">
         <div className="text-[10px] font-black uppercase tracking-[.22em] text-sky-300/65">

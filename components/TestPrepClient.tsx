@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { ScratchPaper, shouldOfferScratch } from '@/components/QuestionGate';
 import { useDailyLimit } from '@/components/DailyLimitProvider';
@@ -67,7 +68,7 @@ function sectionColor(section: PracticeSectionId): string {
   }[section];
 }
 
-export default function TestPrepClient() {
+export default function TestPrepClient({ initialFlashcards = false }: { initialFlashcards?: boolean }) {
   const { deferLock } = useDailyLimit();
   const activeProfile = useActiveProfile();
   const parentContent = useParentContentState();
@@ -86,7 +87,7 @@ export default function TestPrepClient() {
   const [result, setResult] = useState<SectionResult | null>(null);
   const [fullResults, setFullResults] = useState<SectionResult[]>([]);
   const [essay, setEssay] = useState<{ prompt: string; remaining: number; text: string } | null>(null);
-  const [flashcards, setFlashcards] = useState(false);
+  const [flashcards, setFlashcards] = useState(initialFlashcards);
   const recordedPrepAnswers = useRef(new Set<string>());
   const hasActivePrep = Boolean(active || essay);
 
@@ -552,21 +553,29 @@ export default function TestPrepClient() {
                 Level practice.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setFlashcards(true);
-                window.requestAnimationFrame(() => {
-                  document.getElementById('lower-level-word-lab')?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start',
+            <div className="grid gap-2 sm:grid-cols-2 md:w-72 md:grid-cols-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setFlashcards(true);
+                  window.requestAnimationFrame(() => {
+                    document.getElementById('lower-level-word-lab')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
                   });
-                });
-              }}
-              className="min-h-14 rounded-xl bg-amber-200 px-6 text-base font-black text-[#35260c] transition hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-100"
-            >
-              Study flashcards →
-            </button>
+                }}
+                className="min-h-14 rounded-xl bg-amber-200 px-5 text-base font-black text-[#35260c] transition hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-100"
+              >
+                Study flashcards →
+              </button>
+              <Link
+                href="/prep/lower-level-vocabulary"
+                className="flex min-h-12 items-center justify-center rounded-xl border border-white/15 bg-white/[.055] px-5 text-sm font-black text-white/78 transition hover:bg-white/[.09] hover:text-white"
+              >
+                View all 200 words
+              </Link>
+            </div>
           </div>
           <div className="grid grid-cols-3 border-t border-white/10 bg-black/15 text-center text-xs font-bold text-white/48">
             <span className="px-2 py-3">Unseen first</span>
