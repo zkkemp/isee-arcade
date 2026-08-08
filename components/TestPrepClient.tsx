@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { ScratchPaper, shouldOfferScratch } from '@/components/QuestionGate';
 import { useDailyLimit } from '@/components/DailyLimitProvider';
+import LowerLevelFlashcards from '@/components/LowerLevelFlashcards';
 import {
   buildPracticeSection,
   essayPrompt,
@@ -85,6 +86,7 @@ export default function TestPrepClient() {
   const [result, setResult] = useState<SectionResult | null>(null);
   const [fullResults, setFullResults] = useState<SectionResult[]>([]);
   const [essay, setEssay] = useState<{ prompt: string; remaining: number; text: string } | null>(null);
+  const [flashcards, setFlashcards] = useState(false);
   const recordedPrepAnswers = useRef(new Set<string>());
   const hasActivePrep = Boolean(active || essay);
 
@@ -219,6 +221,10 @@ export default function TestPrepClient() {
         onExit={() => setEssay(null)}
       />
     );
+  }
+
+  if (flashcards) {
+    return <LowerLevelFlashcards onExit={() => setFlashcards(false)} />;
   }
 
   if (active) {
@@ -533,6 +539,42 @@ export default function TestPrepClient() {
           </span>
         </button>
       </section>
+
+      {level === 'lower' && (
+        <section className="overflow-hidden rounded-[2rem] border border-amber-200/20 bg-[#1b1827] shadow-[0_20px_55px_rgba(0,0,0,.25)]">
+          <div className="grid gap-5 p-5 sm:p-7 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <div className="text-xs font-black text-amber-200/72">Lower Level Word Lab</div>
+              <h2 className="mt-1 text-2xl font-black text-white">Master all 200 flashcard words</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/62">
+                Start with unfamiliar words, bring missed words back quickly, and move a word to
+                Mastered after two successful reviews. Every word also appears in regular Lower
+                Level practice.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setFlashcards(true);
+                window.requestAnimationFrame(() => {
+                  document.getElementById('lower-level-word-lab')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                  });
+                });
+              }}
+              className="min-h-14 rounded-xl bg-amber-200 px-6 text-base font-black text-[#35260c] transition hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-100"
+            >
+              Study flashcards →
+            </button>
+          </div>
+          <div className="grid grid-cols-3 border-t border-white/10 bg-black/15 text-center text-xs font-bold text-white/48">
+            <span className="px-2 py-3">Unseen first</span>
+            <span className="border-x border-white/10 px-2 py-3">Misses repeat</span>
+            <span className="px-2 py-3">Progress saves</span>
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="mb-4">

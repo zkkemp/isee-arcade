@@ -13,6 +13,7 @@ import { VOCAB_EH } from './vocab/eh';
 import { VOCAB_IM } from './vocab/im';
 import { VOCAB_NR } from './vocab/nr';
 import { VOCAB_SZ } from './vocab/sz';
+import { LOWER_LEVEL_FLASHCARD_QUESTIONS } from './lowerLevelFlashcards';
 import { MATH_TEMPLATES } from './mathTemplates';
 import { MATH_TEMPLATES_2 } from './mathTemplates2';
 import { MATH_TEMPLATES_3 } from './mathTemplates3';
@@ -135,6 +136,7 @@ export const STATIC_QUESTIONS: Question[] = [
   ...VOCAB_IM,
   ...VOCAB_NR,
   ...VOCAB_SZ,
+  ...LOWER_LEVEL_FLASHCARD_QUESTIONS,
 ];
 
 export const ALL_TEMPLATES: QuestionTemplate[] = [
