@@ -55,7 +55,13 @@ export default function LowerLevelCurriculumDocument() {
     return sorted.filter((card) => {
       if (status !== 'all' && cardStatus(card, progress) !== status) return false;
       if (letter !== 'all' && card.word[0].toUpperCase() !== letter) return false;
-      return !needle || card.word.includes(needle) || card.meaning.includes(needle);
+      return !needle || [
+        card.word,
+        card.meaning,
+        card.definition,
+        card.example,
+        ...card.synonyms,
+      ].some((text) => text.toLowerCase().includes(needle));
     });
   }, [letter, progress, query, sorted, status]);
   const groups = useMemo(() => {
@@ -186,7 +192,15 @@ export default function LowerLevelCurriculumDocument() {
                             <strong className="text-lg font-black text-white">{card.word}</strong>
                             <span className="text-xs font-bold text-white/50">{card.partOfSpeech}</span>
                           </div>
-                          <p className="mt-1 text-base leading-relaxed text-white/72">{card.meaning}</p>
+                          <p className="mt-1 text-sm font-bold leading-relaxed text-violet-100/78">
+                            {card.synonyms.join(' · ')}
+                          </p>
+                          <p className="mt-1 text-base leading-relaxed text-white/72">
+                            {card.definition}
+                          </p>
+                          <p className="mt-1.5 text-sm leading-relaxed text-white/56">
+                            {card.example}
+                          </p>
                         </div>
                         <span
                           className={`text-xs font-black ${

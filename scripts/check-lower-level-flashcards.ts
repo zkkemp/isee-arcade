@@ -22,9 +22,14 @@ assert(
   'all 200 source words must be unique',
 );
 assert(
-  LOWER_LEVEL_FLASHCARD_QUESTIONS.length === 165,
-  'exactly 165 source words should extend the original 550-word bank',
+  LOWER_LEVEL_FLASHCARD_QUESTIONS.length === 169,
+  '165 absent words plus four conflicting legacy senses need source-deck questions',
 );
+
+for (const word of ['decline', 'dispute', 'exhaust', 'jumble']) {
+  const card = LOWER_LEVEL_FLASHCARDS.find((candidate) => candidate.word === word);
+  assert(card?.questionId.startsWith('llfc-'), `${word} must not reuse its conflicting legacy sense`);
+}
 
 const curriculumWords = new Set(
   STATIC_QUESTIONS.filter((question) => question.kind === 'synonym').map((question) => normalize(question.prompt)),
@@ -32,7 +37,24 @@ const curriculumWords = new Set(
 for (const card of LOWER_LEVEL_FLASHCARDS) {
   assert(curriculumWords.has(normalize(card.word)), `${card.word} is missing from Lower Level curriculum`);
   assert(card.word.length >= 3 && card.meaning.length >= 2, `${card.id} is incomplete`);
-  assert(questionById(card.questionId)?.id === card.questionId, `${card.word} has no routed question`);
+  const normalizedSynonyms = card.synonyms.map(normalize);
+  assert(new Set(normalizedSynonyms).size >= 3, `${card.word} needs at least three distinct synonyms`);
+  assert(normalizedSynonyms.includes(normalize(card.meaning)), `${card.word} lost its source-deck answer`);
+  assert(card.definition.split(/\s+/).length >= 2, `${card.word} needs a child-readable definition`);
+  assert(
+    normalize(card.example).includes(normalize(card.word)),
+    `${card.word} is not used in its example sentence`,
+  );
+  assert(/[.!?]$/.test(card.example), `${card.word} example needs sentence punctuation`);
+  const routed = questionById(card.questionId);
+  assert(routed?.id === card.questionId, `${card.word} has no routed question`);
+  assert(
+    routed.explain.includes(routed.choices[routed.answer]) &&
+    routed.explain.includes(card.definition) &&
+      card.synonyms.every((synonym) => routed.explain.includes(synonym)) &&
+      routed.explain.includes(card.example),
+    `${card.word} game explanation is missing its answer, synonyms, definition, or example`,
+  );
 }
 
 for (const question of LOWER_LEVEL_FLASHCARD_QUESTIONS) {
@@ -172,8 +194,8 @@ assert(
 );
 
 console.log(
-  `Lower Level Word Lab verified: 200 PDF words, ${LOWER_LEVEL_FLASHCARD_QUESTIONS.length} additions, ` +
+  `Lower Level Word Lab verified: 200 PDF words, ${LOWER_LEVEL_FLASHCARD_QUESTIONS.length} source-specific questions, ` +
     `complete curriculum and game coverage, ${sourceGameDraws}/600 unseen-game draws, ` +
     'majority game priority until mastery, missed-first spacing, ' +
-    'search-ready metadata, and no immediate repeats.',
+    'three-plus synonyms, definitions, sentence examples, full answer explanations, and no immediate repeats.',
 );

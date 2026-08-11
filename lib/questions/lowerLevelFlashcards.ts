@@ -7,6 +7,7 @@ import { VOCAB_EH } from './vocab/eh';
 import { VOCAB_IM } from './vocab/im';
 import { VOCAB_NR } from './vocab/nr';
 import { VOCAB_SZ } from './vocab/sz';
+import { LOWER_LEVEL_FLASHCARD_DETAILS } from './lowerLevelFlashcardDetails';
 import type { Question } from './types';
 
 export type FlashcardPartOfSpeech = 'noun' | 'verb' | 'adjective' | 'adverb' | 'word';
@@ -18,7 +19,14 @@ export type LowerLevelFlashcard = {
   questionId: string;
   word: string;
   partOfSpeech: FlashcardPartOfSpeech;
+  /** The source deck's single closest synonym, retained as the quiz answer. */
   meaning: string;
+  /** Several same-sense memory links shown after the card is revealed. */
+  synonyms: string[];
+  /** Plain-language meaning for a Lower Level learner. */
+  definition: string;
+  /** Natural sentence using this exact sense of the word. */
+  example: string;
 };
 
 /**
@@ -248,22 +256,37 @@ const EXISTING_SYNONYMS = [
   ...VOCAB_SZ,
 ].filter((question) => question.kind === 'synonym');
 
+// These words already existed by spelling, but their older question teaches a
+// different sense or part of speech than the supplied deck. Reusing that id
+// would make the correct choice contradict the new flashcard explanation.
+const SOURCE_SENSE_REQUIRES_OWN_QUESTION = new Set([
+  'decline',
+  'dispute',
+  'exhaust',
+  'jumble',
+]);
+
 function normalizedWord(value: string): string {
   return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 const existingByWord = new Map(
-  EXISTING_SYNONYMS.map((question) => [normalizedWord(question.prompt), question]),
+  EXISTING_SYNONYMS
+    .filter((question) => !SOURCE_SENSE_REQUIRES_OWN_QUESTION.has(normalizedWord(question.prompt)))
+    .map((question) => [normalizedWord(question.prompt), question]),
 );
 
 const seeds = SOURCE_DECK.split('\n').map((row, index) => {
   const [word, pos, meaning] = row.split('|');
   if (!word || !meaning) throw new Error(`Broken Lower Level flashcard row ${index + 1}`);
+  const detail = LOWER_LEVEL_FLASHCARD_DETAILS.get(word);
+  if (!detail) throw new Error(`Missing learning detail for Lower Level flashcard “${word}”`);
   return {
     id: `llfc-${String(index + 1).padStart(3, '0')}`,
     word,
     partOfSpeech: POS[pos] ?? 'word',
     meaning,
+    ...detail,
   };
 });
 
@@ -271,6 +294,27 @@ export const LOWER_LEVEL_FLASHCARDS: LowerLevelFlashcard[] = seeds.map((seed) =>
   ...seed,
   questionId: existingByWord.get(normalizedWord(seed.word))?.id ?? seed.id,
 }));
+
+const flashcardByQuestionId = new Map(
+  LOWER_LEVEL_FLASHCARDS.map((card) => [card.questionId, card]),
+);
+
+function teachingExplanation(card: LowerLevelFlashcard, correctAnswer: string): string {
+  return [
+    `1. The best answer is “${correctAnswer}.”`,
+    `2. “${card.word}” means ${card.definition}.`,
+    `3. Similar words: ${card.synonyms.join(', ')}.`,
+    `4. Example: ${card.example}`,
+  ].join('\n');
+}
+
+/** Adds the full teaching answer to both new and previously existing source words. */
+export function enrichLowerLevelFlashcardQuestion(question: Question): Question {
+  const card = flashcardByQuestionId.get(question.id);
+  return card
+    ? { ...question, explain: teachingExplanation(card, question.choices[question.answer]) }
+    : question;
+}
 
 export const LOWER_LEVEL_FLASHCARD_QUESTION_IDS = new Set(
   LOWER_LEVEL_FLASHCARDS.map((card) => card.questionId),
@@ -334,7 +378,10 @@ function distractorsFor(index: number): string[] {
   return picked;
 }
 
-/** Only the 165 source words that were absent from the protected 550-word bank. */
+/**
+ * The 165 absent words plus four words whose legacy question uses another
+ * sense/part of speech. Those four need a dedicated source-deck question.
+ */
 export const LOWER_LEVEL_FLASHCARD_QUESTIONS: Question[] = seeds.flatMap((seed, index) => {
   if (existingByWord.has(normalizedWord(seed.word))) return [];
   const answer = index % 4;
@@ -350,7 +397,10 @@ export const LOWER_LEVEL_FLASHCARD_QUESTIONS: Question[] = seeds.flatMap((seed, 
       prompt: seed.word.toUpperCase(),
       choices,
       answer,
-      explain: `“${seed.word}” most nearly means “${seed.meaning}.” Both words can express the same core idea in this question.`,
+      explain: teachingExplanation({
+        ...seed,
+        questionId: seed.id,
+      }, seed.meaning),
       difficulty: seed.word.length >= 10 ? 3 : seed.word.length >= 7 ? 2 : 1,
     },
   ];

@@ -62,7 +62,13 @@ export default function LowerLevelFlashcards({ onExit }: { onExit: () => void })
     const needle = query.trim().toLowerCase();
     return LOWER_LEVEL_FLASHCARDS.filter((candidate) => {
       if (filter !== 'all' && cardStatus(candidate, progress) !== filter) return false;
-      return !needle || candidate.word.includes(needle) || candidate.meaning.includes(needle);
+      return !needle || [
+        candidate.word,
+        candidate.meaning,
+        candidate.definition,
+        candidate.example,
+        ...candidate.synonyms,
+      ].some((text) => text.toLowerCase().includes(needle));
     });
   }, [filter, progress, query]);
 
@@ -177,8 +183,8 @@ export default function LowerLevelFlashcards({ onExit }: { onExit: () => void })
               type="button"
               onClick={() => setRevealed(true)}
               disabled={revealed}
-              aria-label={revealed ? `${card.word} means ${card.meaning}` : `Reveal the meaning of ${card.word}`}
-              className={`relative flex min-h-[340px] w-full flex-col items-center justify-center overflow-hidden rounded-2xl px-6 py-10 text-center shadow-[0_18px_45px_rgba(0,0,0,.28)] transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-200 sm:min-h-[410px] ${
+              aria-label={revealed ? `${card.word} means ${card.definition}` : `Reveal the meaning of ${card.word}`}
+              className={`relative flex min-h-[400px] w-full flex-col items-center justify-center overflow-hidden rounded-2xl px-5 py-9 text-center shadow-[0_18px_45px_rgba(0,0,0,.28)] transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-200 sm:min-h-[440px] sm:px-8 ${
                 revealed
                   ? 'bg-[#f7f0cf] text-[#2b2540]'
                   : 'bg-violet-200 text-[#231a3b] hover:bg-violet-100'
@@ -191,9 +197,19 @@ export default function LowerLevelFlashcards({ onExit }: { onExit: () => void })
                 {card.word}
               </strong>
               {revealed ? (
-                <span className="mt-9 border-t border-current/15 pt-7">
-                  <span className="block text-xs font-black text-current/48">Closest meaning</span>
-                  <span className="mt-2 block text-3xl font-black sm:text-4xl">{card.meaning}</span>
+                <span className="mt-7 w-full max-w-xl border-t border-current/15 pt-5">
+                  <span className="block text-xs font-black text-current/55">Similar words</span>
+                  <span className="mt-1.5 block text-xl font-black leading-snug sm:text-2xl">
+                    {card.synonyms.join(' · ')}
+                  </span>
+                  <span className="mt-5 block text-xs font-black text-current/55">Meaning</span>
+                  <span className="mt-1 block text-base font-bold leading-relaxed sm:text-lg">
+                    {card.definition}
+                  </span>
+                  <span className="mt-5 block border-t border-current/12 pt-4 text-left text-[15px] font-semibold leading-relaxed text-current/78 sm:text-base">
+                    <span className="font-black text-current/55">In a sentence: </span>
+                    {card.example}
+                  </span>
                 </span>
               ) : (
                 <span className="mt-8 text-sm font-bold text-current/58">Tap to reveal the meaning</span>
@@ -269,8 +285,11 @@ export default function LowerLevelFlashcards({ onExit }: { onExit: () => void })
                   >
                     <span>
                       <strong className="block text-base font-black text-white">{candidate.word}</strong>
-                      <span className="mt-0.5 block text-xs text-white/48">
-                        {candidate.partOfSpeech} · {candidate.meaning}
+                      <span className="mt-0.5 block text-xs leading-relaxed text-white/58">
+                        {candidate.partOfSpeech} · {candidate.synonyms.join(', ')}
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-white/48">
+                        {candidate.definition}
                       </span>
                     </span>
                     <span

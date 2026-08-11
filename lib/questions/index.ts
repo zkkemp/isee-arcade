@@ -16,6 +16,7 @@ import { VOCAB_SZ } from './vocab/sz';
 import {
   LOWER_LEVEL_FLASHCARD_QUESTIONS,
   LOWER_LEVEL_GAME_PRIORITY_RATE,
+  enrichLowerLevelFlashcardQuestion,
   pickLowerLevelGameQuestionId,
 } from './lowerLevelFlashcards';
 import { MATH_TEMPLATES } from './mathTemplates';
@@ -141,7 +142,7 @@ export const STATIC_QUESTIONS: Question[] = [
   ...VOCAB_NR,
   ...VOCAB_SZ,
   ...LOWER_LEVEL_FLASHCARD_QUESTIONS,
-];
+].map(enrichLowerLevelFlashcardQuestion);
 
 export const ALL_TEMPLATES: QuestionTemplate[] = [
   ...MATH_TEMPLATES,

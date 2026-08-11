@@ -39,8 +39,8 @@ const lowerVocabulary = familyCountForKind('isee', 'synonym');
 const middleVocabulary = familyCountForKind('iseeMiddle', 'synonym');
 const upperVocabulary = familyCountForKind('iseeUpper', 'synonym');
 assert(
-  lowerVocabulary === 715,
-  'the protected 550-word Lower Level bank plus 165 source-deck additions must total 715 words',
+  lowerVocabulary === 719,
+  'the protected 550-word Lower Level bank plus 169 source-sense questions must total 719 words',
 );
 assert(
   middleVocabulary === lowerVocabulary && upperVocabulary === lowerVocabulary,
