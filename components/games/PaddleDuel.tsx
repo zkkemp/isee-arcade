@@ -26,7 +26,7 @@ type DuelState = {
 type Touch = { side: TouchSide; x: number };
 
 const CPU_SPEED: Record<Difficulty, number> = { easy: 125, normal: 180, hard: 245 };
-export const DUEL_SPEED_SCALE: Record<DuelSpeed, number> = { chill: 0.78, classic: 1, turbo: 1.34 };
+export const DUEL_SPEED_SCALE: Record<DuelSpeed, number> = { chill: 1.08, classic: 1.28, turbo: 1.58 };
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 export function touchSide(y: number): TouchSide { return y < 0.5 ? 'top' : 'bottom'; }

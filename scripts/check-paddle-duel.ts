@@ -16,5 +16,9 @@ assert(markServeReady(duel, 'duo', 'bottom') && !duel.awaitingServe, 'both playe
 const soloServe = freshDuel();
 assert(markServeReady(soloServe, 'solo', 'bottom'), 'one human ready must start a solo serve');
 assert(DUEL_SPEED_SCALE.chill < DUEL_SPEED_SCALE.classic && DUEL_SPEED_SCALE.classic < DUEL_SPEED_SCALE.turbo, 'speed choices must be ordered');
+const openingSpeed = Math.abs(freshDuel().vy);
+assert(openingSpeed * DUEL_SPEED_SCALE.chill >= 190, 'even Chill must open at a lively pace');
+assert(openingSpeed * DUEL_SPEED_SCALE.classic >= 225, 'Classic must be clearly faster than the old baseline');
+assert(openingSpeed * DUEL_SPEED_SCALE.turbo >= 280, 'Turbo must feel immediately fast');
 
 console.log('Paddle Duel verified: opening setup, ordered speeds, two-touch sides, both-player readiness, human-only solo returns, angled returns, and safe rally speed.');

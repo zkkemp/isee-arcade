@@ -7,6 +7,21 @@ export type WordCard = {
   picture?: string;
 };
 
+export type HangmanWordLayout = {
+  columns: number;
+  gapPx: number;
+  fontSizePx: number;
+};
+
+/** Keeps every Hangman word on one readable row, including 14-letter words on a phone. */
+export function hangmanWordLayout(length: number): HangmanWordLayout {
+  const columns = Math.max(1, Math.floor(length));
+  if (columns >= 13) return { columns, gapPx: 2, fontSizePx: 16 };
+  if (columns >= 10) return { columns, gapPx: 3, fontSizePx: 18 };
+  if (columns >= 8) return { columns, gapPx: 4, fontSizePx: 21 };
+  return { columns, gapPx: 8, fontSizePx: 28 };
+}
+
 const BASE_WORD_BANKS = {
   k: [
     { word: 'CAT', hint: 'A pet that says meow', picture: '🐱' },
@@ -86,6 +101,63 @@ const BASE_WORD_BANKS = {
   ],
 } satisfies Record<'k' | 'grade1' | 'grade3' | 'isee', WordCard[]>;
 
+const GRADE_2_WORDS: WordCard[] = [
+  { word: 'BRAVE', hint: 'Ready to face something difficult', picture: '🦁' },
+  { word: 'CHEER', hint: 'To shout encouragement or show happiness', picture: '📣' },
+  { word: 'CLOUD', hint: 'A white or gray shape made of tiny drops in the sky', picture: '☁️' },
+  { word: 'DANCE', hint: 'To move your body to music', picture: '💃' },
+  { word: 'DREAM', hint: 'A story your mind makes while you sleep', picture: '💭' },
+  { word: 'EARTH', hint: 'The planet where we live', picture: '🌎' },
+  { word: 'FLOAT', hint: 'To stay on top of water or move gently through air', picture: '🎈' },
+  { word: 'FOREST', hint: 'A large area filled with trees', picture: '🌲' },
+  { word: 'GENTLE', hint: 'Kind, calm, and not rough', picture: '🪶' },
+  { word: 'GROWTH', hint: 'The process of becoming bigger or developing', picture: '🌱' },
+  { word: 'INSECT', hint: 'A small animal with six legs', picture: '🐞' },
+  { word: 'LEARN', hint: 'To gain knowledge or a new skill', picture: '📚' },
+  { word: 'NATURE', hint: 'Plants, animals, weather, and the outdoor world', picture: '🌿' },
+  { word: 'QUICK', hint: 'Moving or happening fast', picture: '⚡' },
+  { word: 'REASON', hint: 'A fact that explains why something happens', picture: '💡' },
+  { word: 'SHADOW', hint: 'A dark shape made when light is blocked', picture: '👤' },
+];
+
+const GRADE_4_WORDS: WordCard[] = [
+  { word: 'ACCURATE', hint: 'Correct and free from mistakes' },
+  { word: 'APPROACH', hint: 'A way of doing something or moving closer' },
+  { word: 'CONCLUDE', hint: 'To decide after thinking about the evidence' },
+  { word: 'CONSIDER', hint: 'To think carefully about something' },
+  { word: 'CONTEXT', hint: 'The words or situation around an idea that help explain it' },
+  { word: 'DESCRIBE', hint: 'To tell what someone or something is like' },
+  { word: 'EVIDENCE', hint: 'Facts or details that support an answer' },
+  { word: 'FREQUENT', hint: 'Happening often' },
+  { word: 'INCREASE', hint: 'To become or make something greater' },
+  { word: 'METHOD', hint: 'A planned way of doing something' },
+  { word: 'OBSERVE', hint: 'To watch carefully and notice details' },
+  { word: 'PATTERN', hint: 'Something that repeats in a predictable way' },
+  { word: 'PURPOSE', hint: 'The reason something exists or is done' },
+  { word: 'RESULT', hint: 'What happens because of an action or event' },
+  { word: 'SIMILAR', hint: 'Alike in important ways but not exactly the same' },
+  { word: 'SUMMARY', hint: 'A short statement of the most important ideas' },
+];
+
+const GRADE_5_WORDS: WordCard[] = [
+  { word: 'ACCOMPLISH', hint: 'To finish something successfully' },
+  { word: 'ADAPT', hint: 'To change so something works in a new situation' },
+  { word: 'CONSEQUENCE', hint: 'A result that follows an action or decision' },
+  { word: 'CONTRIBUTE', hint: 'To give or add something to a shared effort' },
+  { word: 'EMPHASIZE', hint: 'To give special importance or attention to something' },
+  { word: 'ESSENTIAL', hint: 'Completely necessary or very important' },
+  { word: 'ESTIMATE', hint: 'A close calculation made without exact information' },
+  { word: 'FORMULATE', hint: 'To develop an idea or plan carefully' },
+  { word: 'INFLUENCE', hint: 'The power to affect what happens or how someone thinks' },
+  { word: 'INTERPRET', hint: 'To explain the meaning of something' },
+  { word: 'PERSPECTIVE', hint: 'A particular way of seeing or thinking about something' },
+  { word: 'PRIORITY', hint: 'Something important that should be handled first' },
+  { word: 'RECOGNIZE', hint: 'To identify something because you have seen or learned it before' },
+  { word: 'REQUIRE', hint: 'To need or make necessary' },
+  { word: 'STRUCTURE', hint: 'The way parts are organized to form a whole' },
+  { word: 'SUMMARIZE', hint: 'To state the main ideas briefly' },
+];
+
 const MIDDLE_WORDS: WordCard[] = [
   { word: 'ANALYZE', hint: 'To examine something carefully and explain its parts' },
   { word: 'COHERENT', hint: 'Logical, connected, and easy to understand' },
@@ -103,6 +175,44 @@ const MIDDLE_WORDS: WordCard[] = [
   { word: 'SIGNIFICANT', hint: 'Important enough to matter' },
   { word: 'SYNTHESIZE', hint: 'To combine ideas into a new understanding' },
   { word: 'VALID', hint: 'Well-supported or logically sound' },
+];
+
+const GRADE_7_WORDS: WordCard[] = [
+  { word: 'ACCUMULATE', hint: 'To gather or build up over time' },
+  { word: 'ALTERNATIVE', hint: 'Another choice or possibility' },
+  { word: 'ANTICIPATE', hint: 'To expect and prepare for something' },
+  { word: 'COMPONENT', hint: 'One part of a larger system or whole' },
+  { word: 'CONVENTION', hint: 'A commonly accepted practice or way of doing something' },
+  { word: 'CRITERIA', hint: 'Standards used to judge or decide something' },
+  { word: 'DEMONSTRATE', hint: 'To show clearly through evidence or an example' },
+  { word: 'DISTINGUISH', hint: 'To recognize or explain the difference between things' },
+  { word: 'EVALUATE', hint: 'To judge quality or importance using evidence' },
+  { word: 'FUNCTION', hint: 'The purpose or job of something' },
+  { word: 'INTEGRATE', hint: 'To combine parts into a complete whole' },
+  { word: 'MAINTAIN', hint: 'To keep something in a particular condition' },
+  { word: 'OBJECTIVE', hint: 'A goal, or a view based on facts rather than feelings' },
+  { word: 'PRINCIPLE', hint: 'A basic rule, truth, or belief' },
+  { word: 'PROPORTION', hint: 'A relationship showing how quantities compare' },
+  { word: 'VARIABLE', hint: 'A quantity or factor that can change' },
+];
+
+const GRADE_8_WORDS: WordCard[] = [
+  { word: 'ABSTRACT', hint: 'Based on ideas rather than a physical object' },
+  { word: 'ADVOCATE', hint: 'To publicly support a cause or idea' },
+  { word: 'ANALOGY', hint: 'A comparison used to explain a relationship' },
+  { word: 'ASSUMPTION', hint: 'Something accepted as true without complete proof' },
+  { word: 'CAPACITY', hint: 'The ability or maximum amount something can hold or do' },
+  { word: 'COMPREHENSIVE', hint: 'Including nearly every important part or detail' },
+  { word: 'CONTRADICTION', hint: 'A statement or fact that conflicts with another' },
+  { word: 'DISTRIBUTE', hint: 'To divide and give out among several people or places' },
+  { word: 'EQUIVALENT', hint: 'Equal in value, meaning, or effect' },
+  { word: 'INNOVATE', hint: 'To introduce a useful new idea or method' },
+  { word: 'INTERPRETATION', hint: 'An explanation of what something means' },
+  { word: 'PRELIMINARY', hint: 'Coming before the main or final part' },
+  { word: 'REINFORCE', hint: 'To strengthen an idea, structure, or behavior' },
+  { word: 'SUBSEQUENT', hint: 'Coming after something else in time or order' },
+  { word: 'VALIDATE', hint: 'To confirm that something is accurate or reasonable' },
+  { word: 'SYNTHESIS', hint: 'A new whole formed by combining several ideas' },
 ];
 
 const UPPER_WORDS: WordCard[] = [
@@ -127,13 +237,13 @@ const UPPER_WORDS: WordCard[] = [
 export const WORD_BANKS: Record<GradeBand, WordCard[]> = {
   k: BASE_WORD_BANKS.k,
   grade1: BASE_WORD_BANKS.grade1,
-  grade2: [...BASE_WORD_BANKS.grade1, ...BASE_WORD_BANKS.grade3.slice(0, 8)],
+  grade2: GRADE_2_WORDS,
   grade3: BASE_WORD_BANKS.grade3,
-  grade4: [...BASE_WORD_BANKS.grade3, ...BASE_WORD_BANKS.isee.slice(0, 8)],
-  grade5: [...BASE_WORD_BANKS.grade3.slice(8), ...BASE_WORD_BANKS.isee],
-  grade6: [...BASE_WORD_BANKS.isee, ...MIDDLE_WORDS.slice(0, 8)],
-  grade7: [...BASE_WORD_BANKS.isee, ...MIDDLE_WORDS],
-  grade8: [...MIDDLE_WORDS, ...UPPER_WORDS.slice(0, 8)],
+  grade4: GRADE_4_WORDS,
+  grade5: GRADE_5_WORDS,
+  grade6: MIDDLE_WORDS,
+  grade7: GRADE_7_WORDS,
+  grade8: GRADE_8_WORDS,
   isee: BASE_WORD_BANKS.isee,
   iseeMiddle: [...BASE_WORD_BANKS.isee, ...MIDDLE_WORDS],
   iseeUpper: [...MIDDLE_WORDS, ...UPPER_WORDS],

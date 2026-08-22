@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { GameCanvasProps } from '@/lib/games';
-import { ALPHABET, wordForRound, type WordCard } from '@/lib/wordGames';
+import { ALPHABET, hangmanWordLayout, wordForRound, type WordCard } from '@/lib/wordGames';
 import { useActiveProfile } from '@/lib/profiles';
 import type { GradeBand } from '@/lib/questions';
 import { playSound } from '@/lib/sound';
@@ -47,6 +47,7 @@ function HangmanGame({
   const lost = misses.length >= MAX_MISSES;
   const finished = solved || lost;
   const shown = card.word.split('').map((letter) => (guessed.includes(letter) || lost ? letter : ''));
+  const wordLayout = hangmanWordLayout(shown.length);
 
   function guess(letter: string) {
     if (paused || finished || guessed.includes(letter)) return;
@@ -90,11 +91,20 @@ function HangmanGame({
               <div className="mt-1 text-[10px] font-black uppercase tracking-[.2em] text-violet-200/60">Clue</div>
               <div className="mt-1 text-sm font-bold text-white/75 sm:text-base">{card.hint}</div>
             </div>
-            <div className="mt-5 flex flex-wrap justify-center gap-1.5 sm:gap-2">
+            <div
+              className="mt-5 grid w-full items-end"
+              role="group"
+              aria-label={`${shown.filter(Boolean).length} of ${card.word.length} letters revealed`}
+              style={{
+                gridTemplateColumns: `repeat(${wordLayout.columns}, minmax(0, 1fr))`,
+                gap: wordLayout.gapPx,
+                fontSize: wordLayout.fontSizePx,
+              }}
+            >
               {shown.map((letter, index) => (
                 <span
                   key={index}
-                  className="flex h-10 min-w-8 items-center justify-center border-b-4 border-cyan-200/70 text-2xl font-black text-white sm:h-12 sm:min-w-10 sm:text-3xl"
+                  className="flex h-10 min-w-0 items-center justify-center border-b-4 border-cyan-200/70 text-[1em] font-black text-white sm:h-12 sm:text-[1.15em]"
                 >
                   {letter}
                 </span>
